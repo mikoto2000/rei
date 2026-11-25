@@ -1,7 +1,12 @@
 package dev.mikoto2000.rei.application.run;
 
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.Mockito.any;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.verify;
 
 import dev.mikoto2000.rei.application.session.SessionLifecycle;
 import dev.mikoto2000.rei.conversation.ConversationAdmissionStore;
@@ -42,7 +47,19 @@ class ChatSubmitPinnedAdmissionTest {
     exercise(AgentRunContext.Mode.EXCLUSIVE, false, true);
   }
 
+  @ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(booleans = {false, true})
+  void dispatchFailureReleasesOnlyTheAcquiredPinAndRegisteredRun(boolean mcp) throws Exception {
+    exercise(AgentRunContext.Mode.READ_ONLY, mcp, false, true);
+  }
+
   private void exercise(AgentRunContext.Mode mode, boolean mcp, boolean reject) throws Exception {
+    exercise(mode, mcp, reject, false);
+  }
+
+  private void exercise(
+      AgentRunContext.Mode mode, boolean mcp, boolean reject, boolean failDispatch)
+      throws Exception {
     new StorageMigrationCoordinator(directory).prepare();
     var projects = new ProjectRegistry(directory.resolve("projects.json"));
     var project = projects.resolve(Files.createDirectory(directory.resolve("project")));
@@ -55,37 +72,62 @@ class ChatSubmitPinnedAdmissionTest {
       var acquired = new AtomicInteger();
       var released = new AtomicInteger();
       var dispatched = new AtomicInteger();
-      var service = new ChatSubmitService(projects, new SessionRegistry(clock), runs, lifecycle,
-          (owner, prompt) -> {
-            assertEquals(1, acquired.get());
-            assertNotNull(runs.get(owner.runId()));
-            dispatched.incrementAndGet();
-          }, true);
-      service.setChatRunAdmission(new ChatRunAdmission() {
-        public void accept(AgentRunContext owner, String prompt) {
-          assertEquals("hello", prompt);
-          assertThrows(RunNotFoundException.class, () -> runs.get(owner.runId()), "must pin before durable admission becomes visible");
-          verify(runs, never()).register(any());
-          if (reject) throw new IllegalStateException("unavailable profile");
-          acquired.incrementAndGet();
-        }
-        public void release(AgentRunContext owner) { released.incrementAndGet(); }
-      });
-      java.util.function.Supplier<AgentRunContext> submit = () -> mcp
-          ? service.submitMcp("hello", project.id(), null,
-              new McpAdmission("a".repeat(64), "b".repeat(64), Duration.ofHours(1), 0, java.util.List.of()))
-          : service.submit("hello", project.id(), null, mode, "same-request");
-      if (reject) {
+      var service =
+          new ChatSubmitService(
+              projects,
+              new SessionRegistry(clock),
+              runs,
+              lifecycle,
+              (owner, prompt) -> {
+                assertEquals(1, acquired.get());
+                assertNotNull(runs.get(owner.runId()));
+                dispatched.incrementAndGet();
+                if (failDispatch) throw new IllegalStateException("fixture dispatcher unavailable");
+              },
+              true);
+      service.setChatRunAdmission(
+          new ChatRunAdmission() {
+            public void accept(AgentRunContext owner, String prompt) {
+              assertEquals("hello", prompt);
+              assertThrows(
+                  RunNotFoundException.class,
+                  () -> runs.get(owner.runId()),
+                  "must pin before durable admission becomes visible");
+              verify(runs, never()).register(any());
+              if (reject) throw new IllegalStateException("unavailable profile");
+              acquired.incrementAndGet();
+            }
+
+            public void release(AgentRunContext owner) {
+              released.incrementAndGet();
+            }
+          });
+      java.util.function.Supplier<AgentRunContext> submit =
+          () ->
+              mcp
+                  ? service.submitMcp(
+                      "hello",
+                      project.id(),
+                      null,
+                      new McpAdmission(
+                          "a".repeat(64),
+                          "b".repeat(64),
+                          Duration.ofHours(1),
+                          0,
+                          java.util.List.of()))
+                  : service.submit("hello", project.id(), null, mode, "same-request");
+      if (reject || failDispatch) {
         assertThrows(IllegalStateException.class, submit::get);
-        verify(runs, never()).register(any());
-        assertEquals(0, dispatched.get());
+        if (reject) verify(runs, never()).register(any());
+        else verify(runs).forget(org.mockito.ArgumentMatchers.anyString());
+        assertEquals(failDispatch ? 1 : 0, dispatched.get());
       } else {
         var first = submit.get();
         assertEquals(first, submit.get());
         assertEquals(1, acquired.get());
         assertEquals(1, dispatched.get());
       }
-      assertEquals(0, released.get());
+      assertEquals(failDispatch ? 1 : 0, released.get());
     }
   }
 }

@@ -19,22 +19,29 @@ import org.springframework.ai.openai.responses.OpenAiResponsesChatOptions;
 class PinnedResponsesTransportTest {
   @ParameterizedTest
   @ValueSource(booleans = {false, true})
-  void existingResponsesBoundaryUsesTheExplicitSdkForBothCallTypes(boolean streaming) throws Exception {
+  void existingResponsesBoundaryUsesTheExplicitSdkForBothCallTypes(boolean streaming)
+      throws Exception {
     try (var fixture = new Fixture(streaming)) {
       var pin = fixture.pin();
       var options = (OpenAiResponsesChatOptions) RunNativeOptions.options(pin);
-      var adapter = ResponsesAdapter.createWithClient(pin.endpoint(), options, fixture.client(pin), false);
+      var adapter =
+          ResponsesAdapter.createWithClient(pin.endpoint(), options, fixture.client(pin), false);
       var prompt = new Prompt("fixture", options);
       if (streaming) {
         var chunks = adapter.stream(prompt).collectList().block(Duration.ofSeconds(5));
         assertThat(chunks).isNotEmpty();
-        assertThat(chunks.stream().flatMap(chunk -> chunk.getResults().stream())
-            .map(result -> result.getOutput().getText()).filter(java.util.Objects::nonNull)
-            .collect(java.util.stream.Collectors.joining())).contains("done");
+        assertThat(
+                chunks.stream()
+                    .flatMap(chunk -> chunk.getResults().stream())
+                    .map(result -> result.getOutput().getText())
+                    .filter(java.util.Objects::nonNull)
+                    .collect(java.util.stream.Collectors.joining()))
+            .contains("done");
       } else assertThat(adapter.call(prompt).getResult().getOutput().getText()).isEqualTo("done");
       assertThat(fixture.requests).hasSize(1);
       assertThat(fixture.authorizations).containsExactly("<none>");
-      var sent = new com.fasterxml.jackson.databind.ObjectMapper().readTree(fixture.requests.getFirst());
+      var sent =
+          new com.fasterxml.jackson.databind.ObjectMapper().readTree(fixture.requests.getFirst());
       assertThat(sent.path("model").asText()).isEqualTo("fixture-model");
       assertThat(sent.path("max_output_tokens").asInt()).isEqualTo(64);
       assertThat(sent.path("store").asBoolean(true)).isFalse();
@@ -51,9 +58,11 @@ class PinnedResponsesTransportTest {
       var builder = ((OpenAiResponsesChatOptions) RunNativeOptions.options(pin)).mutate();
       if (change.equals("credential")) builder.apiKey("PRIVATE_FOREIGN");
       else builder.baseUrl("http://foreign.invalid/v1");
-      assertThatThrownBy(() -> ResponsesAdapter.createWithClient(
-          pin.endpoint(), builder.build(), fixture.client(pin), false))
-          .isInstanceOf(IllegalArgumentException.class).hasMessageNotContaining("PRIVATE_FOREIGN");
+      assertThatThrownBy(() ->
+              ResponsesAdapter.createWithClient(
+                  pin.endpoint(), builder.build(), fixture.client(pin), false))
+          .isInstanceOf(IllegalArgumentException.class)
+          .hasMessageNotContaining("PRIVATE_FOREIGN");
       assertThat(fixture.requests).isEmpty();
     }
   }
@@ -62,8 +71,12 @@ class PinnedResponsesTransportTest {
   void anInjectedClientDoesNotUnlockTheClosedProductionProfile() throws Exception {
     try (var fixture = new Fixture(false)) {
       var pin = fixture.pin();
-      assertThatThrownBy(() -> ResponsesAdapter.createWithClient(pin.endpoint(),
-          (OpenAiResponsesChatOptions) RunNativeOptions.options(pin), fixture.client(pin), true))
+      assertThatThrownBy(() ->
+              ResponsesAdapter.createWithClient(
+                  pin.endpoint(),
+                  (OpenAiResponsesChatOptions) RunNativeOptions.options(pin),
+                  fixture.client(pin),
+                  true))
           .isInstanceOf(IllegalStateException.class);
       assertThat(fixture.requests).isEmpty();
     }
@@ -71,52 +84,98 @@ class PinnedResponsesTransportTest {
 
   private static final class Fixture implements AutoCloseable {
     final com.sun.net.httpserver.HttpServer server;
-    final okhttp3.OkHttpClient transport = new okhttp3.OkHttpClient.Builder().followRedirects(false)
-        .followSslRedirects(false).retryOnConnectionFailure(false).build();
+    final okhttp3.OkHttpClient transport =
+        new okhttp3.OkHttpClient.Builder()
+            .followRedirects(false)
+            .followSslRedirects(false)
+            .retryOnConnectionFailure(false)
+            .build();
     final List<com.openai.client.OpenAIClient> clients = new java.util.ArrayList<>();
     final List<String> requests = new CopyOnWriteArrayList<>();
     final List<String> authorizations = new CopyOnWriteArrayList<>();
 
     Fixture(boolean streaming) throws Exception {
       server = com.sun.net.httpserver.HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
-      server.createContext("/v1/responses", exchange -> {
-        requests.add(new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
-        authorizations.add(java.util.Objects.toString(exchange.getRequestHeaders().getFirst("Authorization"), "<none>"));
-        var completed = """
-            {"id":"resp_fixture","object":"response","created_at":0,"status":"completed",
-             "model":"fixture-model","output":[{"type":"message","id":"msg_fixture",
-             "role":"assistant","status":"completed","phase":"final_answer",
-             "content":[{"type":"output_text","text":"done","annotations":[]}]}],
-             "usage":{"input_tokens":3,"output_tokens":2,"total_tokens":5}}
-            """;
-        String reply = streaming
-            ? event("response.output_text.delta", "\"item_id\":\"msg_fixture\",\"output_index\":0,\"content_index\":0,\"delta\":\"done\",\"logprobs\":[]")
-                + event("response.completed", "\"response\":" + completed.replace("\n", ""))
-            : completed;
-        var body = reply.getBytes(StandardCharsets.UTF_8);
-        exchange.getResponseHeaders().set("Content-Type", streaming ? "text/event-stream" : "application/json");
-        exchange.sendResponseHeaders(200, body.length);
-        try (var output = exchange.getResponseBody()) { output.write(body); }
-        finally { exchange.close(); }
-      });
+      server.createContext(
+          "/v1/responses",
+          exchange -> {
+            requests.add(
+                new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
+            authorizations.add(
+                java.util.Objects.toString(
+                    exchange.getRequestHeaders().getFirst("Authorization"), "<none>"));
+            var completed =
+                """
+                {"id":"resp_fixture","object":"response","created_at":0,"status":"completed",
+                 "model":"fixture-model","output":[{"type":"message","id":"msg_fixture",
+                 "role":"assistant","status":"completed","phase":"final_answer",
+                 "content":[{"type":"output_text","text":"done","annotations":[]}]}],
+                 "usage":{"input_tokens":3,"output_tokens":2,"total_tokens":5}}
+                """;
+            String reply =
+                streaming
+                    ? event(
+                            "response.output_text.delta",
+                            "\"item_id\":\"msg_fixture\",\"output_index\":0,\"content_index\":0,\"delta\":\"done\",\"logprobs\":[]")
+                        + event("response.completed", "\"response\":" + completed.replace("\n", ""))
+                    : completed;
+            var body = reply.getBytes(StandardCharsets.UTF_8);
+            exchange
+                .getResponseHeaders()
+                .set("Content-Type", streaming ? "text/event-stream" : "application/json");
+            exchange.sendResponseHeaders(200, body.length);
+            try (var output = exchange.getResponseBody()) {
+              output.write(body);
+            } finally {
+              exchange.close();
+            }
+          });
       server.start();
     }
 
     private String event(String type, String fields) {
-      return "event: " + type + "\ndata: {\"type\":\"" + type + "\",\"sequence_number\":1," + fields + "}\n\n";
+      return "event: "
+          + type
+          + "\ndata: {\"type\":\""
+          + type
+          + "\",\"sequence_number\":1,"
+          + fields
+          + "}\n\n";
     }
 
     RunLlmConnection pin() {
-      return new RunLlmConnection("fixture", true, LlmProvider.OPENAI_COMPATIBLE, LlmAuthentication.NONE,
-          null, null, new ResolvedLlmEndpoint("fixture", 1, LlmApiType.RESPONSES,
-              "http://127.0.0.1:" + server.getAddress().getPort() + "/v1", "fixture", "fixture-model",
-              new LlmCapabilities(ReasoningReplayMode.NONE, 36, Set.of()), 64, null, Duration.ofSeconds(5)),
-          Map.of(), Map.of("max_output_tokens", 64));
+      return new RunLlmConnection(
+          "fixture",
+          true,
+          LlmProvider.OPENAI_COMPATIBLE,
+          LlmAuthentication.NONE,
+          null,
+          null,
+          new ResolvedLlmEndpoint(
+              "fixture",
+              1,
+              LlmApiType.RESPONSES,
+              "http://127.0.0.1:" + server.getAddress().getPort() + "/v1",
+              "fixture",
+              "fixture-model",
+              new LlmCapabilities(ReasoningReplayMode.NONE, 36, Set.of()),
+              64,
+              null,
+              Duration.ofSeconds(5)),
+          Map.of(),
+          Map.of("max_output_tokens", 64));
     }
 
     com.openai.client.OpenAIClient client(RunLlmConnection pin) {
-      var client = PinnedOpenAiClients.open(pin, () -> { throw new AssertionError("No-auth read credentials"); },
-          transport, List.of(), () -> {});
+      var client =
+          PinnedOpenAiClients.open(
+              pin,
+              () -> {
+                throw new AssertionError("No-auth read credentials");
+              },
+              transport,
+              List.of(),
+              () -> {});
       clients.add(client);
       return client;
     }

@@ -13,7 +13,8 @@ class LegacyRunBindingTest {
   @Test
   void capturesResolvedAuthenticationAndTransportWithoutCredentials() {
     var mode = new AtomicReference<>(LlmAuthentication.NONE);
-    var transport = new AtomicReference<>(Map.of("organization_id", "org-fixture", "request_timeout", "PT2M"));
+    var transport =
+        new AtomicReference<>(Map.of("organization_id", "org-fixture", "request_timeout", "PT2M"));
     var accepted = factory(mode, transport).capture("default", "model");
     assertThat(accepted.authentication()).isEqualTo(LlmAuthentication.NONE);
     assertThat(accepted.transport()).containsEntry("organization_id", "org-fixture");
@@ -28,7 +29,8 @@ class LegacyRunBindingTest {
     var accepted = factory.capture("default", "model");
     mode.set(LlmAuthentication.API_KEY);
     assertThatThrownBy(() -> factory.verifyBinding(accepted))
-        .isInstanceOf(IllegalStateException.class).hasMessageContaining("authentication");
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("authentication");
   }
 
   @Test
@@ -39,7 +41,8 @@ class LegacyRunBindingTest {
     var accepted = factory.capture("default", "model");
     transport.set(Map.of("organization_id", "second"));
     assertThatThrownBy(() -> factory.verifyBinding(accepted))
-        .isInstanceOf(IllegalStateException.class).hasMessageContaining("binding");
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("binding");
   }
 
   @Test
@@ -53,14 +56,28 @@ class LegacyRunBindingTest {
     assertThat(accepted.requestTimeout()).isEqualTo(Duration.ofMinutes(2));
   }
 
-  private RunLlmConnectionFactory factory(AtomicReference<LlmAuthentication> mode,
-      AtomicReference<Map<String, String>> transport) {
+  private RunLlmConnectionFactory factory(
+      AtomicReference<LlmAuthentication> mode, AtomicReference<Map<String, String>> transport) {
     var properties = new LlmProperties();
-    return RunLlmConnectionFactory.withLegacySettings(new ChatEndpointCatalog(properties), properties,
-        model -> new RunLlmConnectionFactory.LegacySettings(
-            new ResolvedLlmEndpoint("chat", 1, LlmApiType.CHAT_COMPLETIONS,
-                "http://legacy.invalid/v1", "legacy-chat", "model",
-                new LlmCapabilities(ReasoningReplayMode.NONE, 36, Set.of()), null, null,
-                Duration.ofSeconds(5)), Map.of(), mode.get(), transport.get()), ignored -> null);
+    return RunLlmConnectionFactory.withLegacySettings(
+        new ChatEndpointCatalog(properties),
+        properties,
+        model ->
+            new RunLlmConnectionFactory.LegacySettings(
+                new ResolvedLlmEndpoint(
+                    "chat",
+                    1,
+                    LlmApiType.CHAT_COMPLETIONS,
+                    "http://legacy.invalid/v1",
+                    "legacy-chat",
+                    "model",
+                    new LlmCapabilities(ReasoningReplayMode.NONE, 36, Set.of()),
+                    null,
+                    null,
+                    Duration.ofSeconds(5)),
+                Map.of(),
+                mode.get(),
+                transport.get()),
+        ignored -> null);
   }
 }

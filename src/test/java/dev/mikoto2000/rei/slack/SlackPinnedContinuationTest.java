@@ -1,9 +1,19 @@
 package dev.mikoto2000.rei.slack;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import dev.mikoto2000.rei.core.chat.AgentRunContext;
-import dev.mikoto2000.rei.llm.*;
+import dev.mikoto2000.rei.llm.LlmApiType;
+import dev.mikoto2000.rei.llm.LlmAuthentication;
+import dev.mikoto2000.rei.llm.LlmCapabilities;
+import dev.mikoto2000.rei.llm.LlmProvider;
+import dev.mikoto2000.rei.llm.OutputLimitRunBudget;
+import dev.mikoto2000.rei.llm.ReasoningReplayMode;
+import dev.mikoto2000.rei.llm.ResolvedLlmEndpoint;
+import dev.mikoto2000.rei.llm.RunLlmConnection;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.List;
@@ -19,8 +29,8 @@ class SlackPinnedContinuationTest {
   @TempDir Path directory;
 
   SlackAgentContinuationStore store() {
-    return new SlackAgentContinuationStore(new DriverManagerDataSource(
-        "jdbc:sqlite:" + directory.resolve("continuations.db")));
+    return new SlackAgentContinuationStore(
+        new DriverManagerDataSource("jdbc:sqlite:" + directory.resolve("continuations.db")));
   }
 
   AgentRunContext owner() {
@@ -29,14 +39,37 @@ class SlackPinnedContinuationTest {
 
   @Test
   void restartAndHumanGuidanceRetainTheAcceptedConnection() {
-    var endpoint = new ResolvedLlmEndpoint("local", 1, LlmApiType.CHAT_COMPLETIONS,
-        "http://local.invalid/v1", "chat-endpoint:local", "model",
-        new LlmCapabilities(ReasoningReplayMode.NONE, 36, Set.of()), 512, null,
-        Duration.ofSeconds(30));
-    var pin = new RunLlmConnection("local", true, LlmProvider.OPENAI_COMPATIBLE,
-        LlmAuthentication.NONE, null, null, endpoint, Map.of(), Map.of("max_tokens", 512));
-    store().save(owner(), "request", List.of(new UserMessage("request")),
-        new OutputLimitRunBudget.Snapshot(1, 2, 100, false), true, pin);
+    var endpoint =
+        new ResolvedLlmEndpoint(
+            "local",
+            1,
+            LlmApiType.CHAT_COMPLETIONS,
+            "http://local.invalid/v1",
+            "chat-endpoint:local",
+            "model",
+            new LlmCapabilities(ReasoningReplayMode.NONE, 36, Set.of()),
+            512,
+            null,
+            Duration.ofSeconds(30));
+    var pin =
+        new RunLlmConnection(
+            "local",
+            true,
+            LlmProvider.OPENAI_COMPATIBLE,
+            LlmAuthentication.NONE,
+            null,
+            null,
+            endpoint,
+            Map.of(),
+            Map.of("max_tokens", 512));
+    store()
+        .save(
+            owner(),
+            "request",
+            List.of(new UserMessage("request")),
+            new OutputLimitRunBudget.Snapshot(1, 2, 100, false),
+            true,
+            pin);
     var reopened = store();
     assertEquals(pin, reopened.get(owner()).connection());
     reopened.appendGuidance(owner(), List.of(new UserMessage("continue")));
@@ -44,7 +77,8 @@ class SlackPinnedContinuationTest {
     assertEquals(2, store().get(owner()).messages().size());
     assertEquals(2, store().get(owner()).budget().llmCalls());
     assertTrue(store().document("run").managedParent());
-    assertThrows(IllegalArgumentException.class,
+    assertThrows(
+        IllegalArgumentException.class,
         () -> store().get(new AgentRunContext("run", "foreign", directory, "project")));
   }
 

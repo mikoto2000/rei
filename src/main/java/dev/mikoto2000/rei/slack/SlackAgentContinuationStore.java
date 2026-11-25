@@ -69,12 +69,21 @@ public final class SlackAgentContinuationStore {
       List<StoredMessage> messages,
       OutputLimitRunBudget.Snapshot budget,
       boolean managedParent,
-      @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
-      dev.mikoto2000.rei.llm.RunLlmConnection connection) {
-    public Document(String run, String project, String root, String session, String request,
-        List<StoredMessage> messages, OutputLimitRunBudget.Snapshot budget, boolean managedParent) {
+      @com.fasterxml.jackson.annotation.JsonInclude(
+              com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+          dev.mikoto2000.rei.llm.RunLlmConnection connection) {
+    public Document(
+        String run,
+        String project,
+        String root,
+        String session,
+        String request,
+        List<StoredMessage> messages,
+        OutputLimitRunBudget.Snapshot budget,
+        boolean managedParent) {
       this(run, project, root, session, request, messages, budget, managedParent, null);
     }
+
     public Document {
       messages = messages == null ? null : Collections.unmodifiableList(new ArrayList<>(messages));
     }
@@ -108,8 +117,12 @@ public final class SlackAgentContinuationStore {
   }
 
   /** Persist the accepted run connection together with the suspended tool history. */
-  public void save(AgentRunContext o, String request, List<Message> history,
-      OutputLimitRunBudget.Snapshot budget, boolean managedParent,
+  public void save(
+      AgentRunContext o,
+      String request,
+      List<Message> history,
+      OutputLimitRunBudget.Snapshot budget,
+      boolean managedParent,
       dev.mikoto2000.rei.llm.RunLlmConnection connection) {
     var messages =
         history.stream()
@@ -148,7 +161,8 @@ public final class SlackAgentContinuationStore {
                   SlackReplies.safe(request),
                   messages,
                   budget,
-                  managedParent, connection));
+                  managedParent,
+                  connection));
       // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
       if (document.length() > 524288 || messages.size() > 256)
         throw new IllegalArgumentException("Continuation capacity exceeded");
@@ -195,7 +209,8 @@ public final class SlackAgentContinuationStore {
                       default -> throw new IllegalStateException("Invalid saved message kind");
                     })
             .toList();
-    return new RunContinuation.Saved(d.request(), messages, d.budget(), null, null, null, d.connection());
+    return new RunContinuation.Saved(
+        d.request(), messages, d.budget(), null, null, null, d.connection());
   }
 
   /** Slackとの連携で用いる状態を返す。 */
@@ -228,7 +243,8 @@ public final class SlackAgentContinuationStore {
                   d.request(),
                   messages,
                   d.budget(),
-                  d.managedParent(), d.connection()));
+                  d.managedParent(),
+                  d.connection()));
       // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
       if (value.length() > 524288 || messages.size() > 256)
         throw new IllegalArgumentException("Continuation capacity exceeded");

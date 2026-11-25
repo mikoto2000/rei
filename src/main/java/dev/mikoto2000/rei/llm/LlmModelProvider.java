@@ -257,9 +257,16 @@ public class LlmModelProvider implements dev.mikoto2000.rei.secretary.SecretaryP
 
   /** 用途に応じたモデル利用で用いる応答生成に使うモデルを返す。 */
   ChatModel decorateRunChatModel(ChatModel model) {
-    return eventFactory == null || eventPublisher == null ? model : new AgentEventChatModel(
-        LlmFeature.CHAT, model, eventFactory, eventPublisher, timing, runCancellation,
-        new ModelOutageGuard(java.time.Clock.systemUTC(), outageCooldown));
+    return eventFactory == null || eventPublisher == null
+        ? model
+        : new AgentEventChatModel(
+            LlmFeature.CHAT,
+            model,
+            eventFactory,
+            eventPublisher,
+            timing,
+            runCancellation,
+            new ModelOutageGuard(java.time.Clock.systemUTC(), outageCooldown));
   }
 
   /** 用途に応じたモデル利用で用いる応答生成に使うモデルを返す。 */

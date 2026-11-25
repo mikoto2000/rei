@@ -37,14 +37,16 @@ class ChatConnectionServiceTest {
   @EnumSource(AgentRunContext.Mode.class)
   void acceptedOptionsKeepTheirProfileAfterTheGlobalSelectionChanges(AgentRunContext.Mode mode) {
     var properties = named("http://first.invalid/v1", "http://second.invalid/v1");
-    try (var service = service(properties, new ModelHolderService("holder-model"), new ArrayList<>())) {
+    try (var service =
+        service(properties, new ModelHolderService("holder-model"), new ArrayList<>())) {
       var owner = owner("first", mode);
       var pin = service.accept(owner);
       service.select("second");
       assertThat(service.accept(owner)).isSameAs(pin);
       assertThat(service.options(owner).getModel()).isEqualTo("first-model");
-      assertThat(service.options(owner).getToolContext()).containsEntry(
-          dev.mikoto2000.rei.modeloptions.ModelOptions.RUN_CONNECTION_CONTEXT_KEY, pin);
+      assertThat(service.options(owner).getToolContext())
+          .containsEntry(
+              dev.mikoto2000.rei.modeloptions.ModelOptions.RUN_CONNECTION_CONTEXT_KEY, pin);
       assertThat(pin.generation()).isEmpty();
       assertThat(pin.authentication()).isEqualTo(LlmAuthentication.NONE);
       assertThat(service.accept(owner("next", mode)).profileId()).isEqualTo("second");
@@ -57,7 +59,8 @@ class ChatConnectionServiceTest {
     var feature = new LlmProperties.Server();
     feature.setModel("feature-model");
     properties.setFeature(LlmFeature.CHAT, feature);
-    try (var service = service(properties, new ModelHolderService("holder-model"), new ArrayList<>())) {
+    try (var service =
+        service(properties, new ModelHolderService("holder-model"), new ArrayList<>())) {
       var pin = service.accept(owner("legacy", AgentRunContext.Mode.EXCLUSIVE));
       assertThat(pin.endpoint().model()).isEqualTo("feature-model");
       assertThat(pin.endpoint().baseUrl()).isEqualTo("http://actual-global.invalid/v1");
@@ -67,7 +70,8 @@ class ChatConnectionServiceTest {
 
   @Test
   void flatSharedConnectionRetainsTheExistingGlobalModelSelection() {
-    try (var service = service(new LlmProperties(), new ModelHolderService("holder-model"), new ArrayList<>())) {
+    try (var service =
+        service(new LlmProperties(), new ModelHolderService("holder-model"), new ArrayList<>())) {
       assertThat(service.accept(owner("legacy", AgentRunContext.Mode.EXCLUSIVE)).endpoint().model())
           .isEqualTo("holder-model");
     }
@@ -76,7 +80,9 @@ class ChatConnectionServiceTest {
   @Test
   void chatModelChoiceDoesNotMutateTheHolderUsedByHelpers() {
     var holder = new ModelHolderService("helper-model");
-    try (var service = service(named("http://first.invalid", "http://second.invalid"), holder, new ArrayList<>())) {
+    try (var service =
+        service(
+            named("http://first.invalid", "http://second.invalid"), holder, new ArrayList<>())) {
       service.selectModel("chat-only-model");
       assertThat(service.accept(owner("new", AgentRunContext.Mode.EXCLUSIVE)).endpoint().model())
           .isEqualTo("chat-only-model");
@@ -105,14 +111,23 @@ class ChatConnectionServiceTest {
     try (var fixture = new PinnedChatModelsTest.Fixture()) {
       var url = fixture.pin("first", "first-model", LlmAuthentication.NONE).endpoint().baseUrl();
       var events = new ArrayList<AgentEvent>();
-      try (var service = service(named(url, "http://second.invalid"), new ModelHolderService("root"), events)) {
+      try (var service =
+          service(named(url, "http://second.invalid"), new ModelHolderService("root"), events)) {
         var owner = owner("owned", AgentRunContext.Mode.CONVERSATION);
         service.accept(owner);
-        assertThat(service.model().call(new Prompt("fixture", service.options(owner)))
-            .getResult().getOutput().getText()).isEqualTo("fixture-answer");
+        assertThat(
+                service
+                    .model()
+                    .call(new Prompt("fixture", service.options(owner)))
+                    .getResult()
+                    .getOutput()
+                    .getText())
+            .isEqualTo("fixture-answer");
         assertThat(fixture.headers).containsExactly("<none>");
-        assertThat(events).extracting(AgentEvent::type)
-            .containsExactly(AgentEventType.LLM_REQUEST_STARTED, AgentEventType.LLM_RESPONSE_COMPLETED);
+        assertThat(events)
+            .extracting(AgentEvent::type)
+            .containsExactly(
+                AgentEventType.LLM_REQUEST_STARTED, AgentEventType.LLM_RESPONSE_COMPLETED);
         assertThat(events).allSatisfy(event -> assertThat(event.runId()).isEqualTo(owner.runId()));
       }
     }
@@ -120,8 +135,11 @@ class ChatConnectionServiceTest {
 
   @Test
   void releasedConnectionsCannotBeRecreatedByRequestingOptions() {
-    try (var service = service(named("http://first.invalid", "http://second.invalid"),
-        new ModelHolderService("root"), new ArrayList<>())) {
+    try (var service =
+        service(
+            named("http://first.invalid", "http://second.invalid"),
+            new ModelHolderService("root"),
+            new ArrayList<>())) {
       var owner = owner("released", AgentRunContext.Mode.READ_ONLY);
       service.accept(owner);
       service.release(owner);
@@ -130,18 +148,35 @@ class ChatConnectionServiceTest {
     }
   }
 
-  private ChatConnectionService service(LlmProperties properties, ModelHolderService holder, List<AgentEvent> events) {
+  private ChatConnectionService service(
+      LlmProperties properties, ModelHolderService holder, List<AgentEvent> events) {
     var nativeModel = mock(ChatModel.class);
     if (new ChatEndpointCatalog(properties).hasNamedProfiles())
-      when(nativeModel.getOptions()).thenThrow(new AssertionError("Named chat read ambient model settings"));
-    else when(nativeModel.getOptions()).thenReturn(OpenAiChatOptions.builder().model("native-default")
-        .baseUrl("http://unrelated-native.invalid/v1").apiKey("PRIVATE_NATIVE").topP(0.4).maxRetries(0).build());
-    var models = new LlmModelProvider(nativeModel, properties, new AgentEventFactory(Clock.systemUTC()), events::add);
+      when(nativeModel.getOptions())
+          .thenThrow(new AssertionError("Named chat read ambient model settings"));
+    else
+      when(nativeModel.getOptions())
+          .thenReturn(
+              OpenAiChatOptions.builder()
+                  .model("native-default")
+                  .baseUrl("http://unrelated-native.invalid/v1")
+                  .apiKey("PRIVATE_NATIVE")
+                  .topP(0.4)
+                  .maxRetries(0)
+                  .build());
+    var models =
+        new LlmModelProvider(
+            nativeModel, properties, new AgentEventFactory(Clock.systemUTC()), events::add);
     var common = new OpenAiCommonProperties();
     common.setBaseUrl("http://actual-global.invalid");
     common.setApiKey("PRIVATE_GLOBAL");
-    return new ChatConnectionService(new ChatEndpointCatalog(properties), properties, models, holder,
-        provider(OpenAiConnectionDetails.class, null), provider(OpenAiCommonProperties.class, common),
+    return new ChatConnectionService(
+        new ChatEndpointCatalog(properties),
+        properties,
+        models,
+        holder,
+        provider(OpenAiConnectionDetails.class, null),
+        provider(OpenAiCommonProperties.class, common),
         provider(OpenAiChatProperties.class, new OpenAiChatProperties()),
         provider(dev.mikoto2000.rei.llm.capture.CaptureStore.class, null));
   }
@@ -153,18 +188,22 @@ class ChatConnectionServiceTest {
   }
 
   private LlmProperties named(String first, String second) {
-    return new Binder(new MapConfigurationPropertySource(Map.of(
-        "rei.llm.features.chat.active", "first",
-        "rei.llm.features.chat.endpoints.first.base-url", first,
-        "rei.llm.features.chat.endpoints.first.model", "first-model",
-        "rei.llm.features.chat.endpoints.first.authentication", "none",
-        "rei.llm.features.chat.endpoints.second.base-url", second,
-        "rei.llm.features.chat.endpoints.second.model", "second-model",
-        "rei.llm.features.chat.endpoints.second.authentication", "none")))
-        .bind("rei.llm", LlmProperties.class).get();
+    return new Binder(
+            new MapConfigurationPropertySource(
+                Map.of(
+                    "rei.llm.features.chat.active", "first",
+                    "rei.llm.features.chat.endpoints.first.base-url", first,
+                    "rei.llm.features.chat.endpoints.first.model", "first-model",
+                    "rei.llm.features.chat.endpoints.first.authentication", "none",
+                    "rei.llm.features.chat.endpoints.second.base-url", second,
+                    "rei.llm.features.chat.endpoints.second.model", "second-model",
+                    "rei.llm.features.chat.endpoints.second.authentication", "none")))
+        .bind("rei.llm", LlmProperties.class)
+        .get();
   }
 
   private AgentRunContext owner(String run, AgentRunContext.Mode mode) {
-    return new AgentRunContext(run, "session", root, "project", AgentRunContext.RequestSource.SHELL, mode, false);
+    return new AgentRunContext(
+        run, "session", root, "project", AgentRunContext.RequestSource.SHELL, mode, false);
   }
 }

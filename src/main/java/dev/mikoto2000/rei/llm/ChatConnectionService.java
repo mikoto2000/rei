@@ -4,10 +4,10 @@ import dev.mikoto2000.rei.core.chat.AgentRunContext;
 import dev.mikoto2000.rei.core.service.ModelHolderService;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.model.ChatModel;
-import org.springframework.ai.model.tool.ToolCallingChatOptions;
 import org.springframework.ai.model.openai.autoconfigure.OpenAiChatProperties;
 import org.springframework.ai.model.openai.autoconfigure.OpenAiCommonProperties;
 import org.springframework.ai.model.openai.autoconfigure.OpenAiConnectionDetails;
+import org.springframework.ai.model.tool.ToolCallingChatOptions;
 import org.springframework.beans.factory.ObjectProvider;
 
 /** Host-owned common connection selection, Run snapshots and inference resources. */
@@ -20,33 +20,59 @@ public final class ChatConnectionService implements AutoCloseable {
   private final ChatRunConnections connections;
   private final PinnedChatModels modelCache;
   private final ChatModel routed;
-  private final java.util.concurrent.ConcurrentMap<ClientKey, ChatClient> clients = new java.util.concurrent.ConcurrentHashMap<>();
+  private final java.util.concurrent.ConcurrentMap<ClientKey, ChatClient> clients =
+      new java.util.concurrent.ConcurrentHashMap<>();
+
   private record ClientKey(AgentRunContext.Mode mode, LlmApiType api) {}
 
-  public ChatConnectionService(ChatEndpointCatalog catalog, LlmProperties properties,
-      LlmModelProvider models, ModelHolderService holder,
-      ObjectProvider<OpenAiConnectionDetails> details, ObjectProvider<OpenAiCommonProperties> common,
+  public ChatConnectionService(
+      ChatEndpointCatalog catalog,
+      LlmProperties properties,
+      LlmModelProvider models,
+      ModelHolderService holder,
+      ObjectProvider<OpenAiConnectionDetails> details,
+      ObjectProvider<OpenAiCommonProperties> common,
       ObjectProvider<OpenAiChatProperties> chat,
       ObjectProvider<dev.mikoto2000.rei.llm.capture.CaptureStore> captures) {
     this.catalog = catalog;
     this.models = models;
-    this.legacy = new LegacyChatConnectionSource(models, properties, () -> {
-      var commonProperties = common.getIfAvailable();
-      var chatProperties = chat.getIfAvailable();
-      if (commonProperties == null || chatProperties == null)
-        throw new IllegalStateException("Legacy OpenAI connection settings are unavailable");
-      var connectionDetails = details.getIfAvailable();
-      return connectionDetails == null
-          ? org.springframework.ai.model.openai.autoconfigure.OpenAiAutoConfigurationUtil.resolveCommonProperties(commonProperties, chatProperties)
-          : org.springframework.ai.model.openai.autoconfigure.OpenAiAutoConfigurationUtil.resolveCommonProperties(connectionDetails, commonProperties, chatProperties);
-    }, () -> System.getenv("OPENAI_API_KEY"));
+    this.legacy =
+        new LegacyChatConnectionSource(
+            models,
+            properties,
+            () -> {
+              var commonProperties = common.getIfAvailable();
+              var chatProperties = chat.getIfAvailable();
+              if (commonProperties == null || chatProperties == null)
+                throw new IllegalStateException(
+                    "Legacy OpenAI connection settings are unavailable");
+              var connectionDetails = details.getIfAvailable();
+              return connectionDetails == null
+                  ? org.springframework.ai.model.openai.autoconfigure.OpenAiAutoConfigurationUtil
+                      .resolveCommonProperties(commonProperties, chatProperties)
+                  : org.springframework.ai.model.openai.autoconfigure.OpenAiAutoConfigurationUtil
+                      .resolveCommonProperties(connectionDetails, commonProperties, chatProperties);
+            },
+            () -> System.getenv("OPENAI_API_KEY"));
     var configuredModel = catalog.hasNamedProfiles() ? null : catalog.profiles().getFirst().model();
-    this.factory = RunLlmConnectionFactory.withLegacySettings(catalog, properties,
-        selected -> legacy.resolve(selected == null && (configuredModel == null || configuredModel.isBlank())
-            ? holder.get() : selected), account -> null);
+    this.factory =
+        RunLlmConnectionFactory.withLegacySettings(
+            catalog,
+            properties,
+            selected ->
+                legacy.resolve(
+                    selected == null && (configuredModel == null || configuredModel.isBlank())
+                        ? holder.get()
+                        : selected),
+            account -> null);
     this.connections = new ChatRunConnections(catalog, factory);
-    this.modelCache = new PinnedChatModels(this::credential, factory::verifyBinding,
-        captures.getIfAvailable(), 32, models::decorateRunChatModel);
+    this.modelCache =
+        new PinnedChatModels(
+            this::credential,
+            factory::verifyBinding,
+            captures.getIfAvailable(),
+            32,
+            models::decorateRunChatModel);
     this.routed = new RunLlmConnectionModel(modelCache::model, factory::verifyBinding);
   }
 
@@ -62,23 +88,34 @@ public final class ChatConnectionService implements AutoCloseable {
     var options = RunNativeOptions.options(require(owner));
     var context = new java.util.HashMap<>(options.getToolContext());
     context.put(AgentRunContext.class.getName(), owner);
-    return models.bindRunOptions(options.mutate().toolContext(null).toolContext(context).build(), owner);
+    return models.bindRunOptions(
+        options.mutate().toolContext(null).toolContext(context).build(), owner);
   }
 
   public void restore(AgentRunContext owner, RunLlmConnection saved) {
     connections.restore(owner, saved);
   }
 
-  public void release(AgentRunContext owner) { connections.release(owner); }
-  public void select(String endpoint) { connections.select(endpoint); }
-  public void selectModel(String model) { connections.selectModel(model); }
+  public void release(AgentRunContext owner) {
+    connections.release(owner);
+  }
+
+  public void select(String endpoint) {
+    connections.select(endpoint);
+  }
+
+  public void selectModel(String model) {
+    connections.selectModel(model);
+  }
 
   public ChatModel model() {
     return routed;
   }
 
-  public ChatClient client(LlmChatClientProvider provider, AgentRunContext.Mode mode, RunLlmConnection connection) {
-    return clients.computeIfAbsent(new ClientKey(mode, connection.endpoint().apiType()),
+  public ChatClient client(
+      LlmChatClientProvider provider, AgentRunContext.Mode mode, RunLlmConnection connection) {
+    return clients.computeIfAbsent(
+        new ClientKey(mode, connection.endpoint().apiType()),
         key -> provider.runChatClient(key.mode(), key.api(), routed));
   }
 

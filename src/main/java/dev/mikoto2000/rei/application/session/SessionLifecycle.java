@@ -159,14 +159,30 @@ public final class SessionLifecycle {
       String fingerprint,
       dev.mikoto2000.rei.mcp.McpAdmission mcp,
       Consumer<AgentRunContext> enqueue) {
-    return submit(project, sessionId, message, source, mode, voiceInput, key, fingerprint,
-        mcp, null, enqueue);
+    return submit(
+        project,
+        sessionId,
+        message,
+        source,
+        mode,
+        voiceInput,
+        key,
+        fingerprint,
+        mcp,
+        null,
+        enqueue);
   }
 
   /** Fix run configuration before a fresh admission is published; replays retain their owner. */
   public AgentRunContext submit(
-      ProjectContext project, String sessionId, String message, AgentRunContext.RequestSource source,
-      AgentRunContext.Mode mode, boolean voiceInput, String key, String fingerprint,
+      ProjectContext project,
+      String sessionId,
+      String message,
+      AgentRunContext.RequestSource source,
+      AgentRunContext.Mode mode,
+      boolean voiceInput,
+      String key,
+      String fingerprint,
       dev.mikoto2000.rei.mcp.McpAdmission mcp,
       dev.mikoto2000.rei.core.chat.ChatRunAdmission admission,
       Consumer<AgentRunContext> enqueue) {
@@ -200,40 +216,46 @@ public final class SessionLifecycle {
                       : metadata.responseStyle());
       // 重複受付を保証する要求は、受付記録を永続化できる場合だけ受け付ける。
       boolean[] acquired = {false};
-      Runnable prepare = () -> {
-        if (admission != null) {
-          admission.accept(context, message);
-          acquired[0] = true;
-        }
-      };
+      Runnable prepare =
+          () -> {
+            if (admission != null) {
+              admission.accept(context, message);
+              acquired[0] = true;
+            }
+          };
       try {
-      if (admissions == null) {
-        if (key != null || mcp != null)
-          throw new IllegalStateException("Durable admission is unavailable");
-        prepare.run();
-        repository.accept(metadata, () -> enqueue.accept(context));
-      } else {
-        var receipt = admissions.accept(metadata, context, key, fingerprint, mcp, prepare);
-        // 同じ要求が再送された場合は、受け付け済みの実行を再利用する。
-        if (receipt.replay()) return receipt.context();
-        repository.refreshCompletionSnapshot();
-        try {
-          enqueue.accept(context);
-        } catch (RuntimeException | Error error) {
-          if (mcp != null)
-            admissions.mcpAdmissionFailed(
-                context.runId(),
-                error instanceof RuntimeException runtime ? runtime : new IllegalStateException());
-          // 受付後に実行へ渡せなかった要求を失敗として確定し、会話の利用枠を戻す。
-          admissions.transition(context.runId(), RunStatus.FAILED);
-          admissions.release(context.runId());
-          throw error;
+        if (admissions == null) {
+          if (key != null || mcp != null)
+            throw new IllegalStateException("Durable admission is unavailable");
+          prepare.run();
+          repository.accept(metadata, () -> enqueue.accept(context));
+        } else {
+          var receipt = admissions.accept(metadata, context, key, fingerprint, mcp, prepare);
+          // 同じ要求が再送された場合は、受け付け済みの実行を再利用する。
+          if (receipt.replay()) return receipt.context();
+          repository.refreshCompletionSnapshot();
+          try {
+            enqueue.accept(context);
+          } catch (RuntimeException | Error error) {
+            if (mcp != null)
+              admissions.mcpAdmissionFailed(
+                  context.runId(),
+                  error instanceof RuntimeException runtime
+                      ? runtime
+                      : new IllegalStateException());
+            // 受付後に実行へ渡せなかった要求を失敗として確定し、会話の利用枠を戻す。
+            admissions.transition(context.runId(), RunStatus.FAILED);
+            admissions.release(context.runId());
+            throw error;
+          }
         }
-      }
       } catch (RuntimeException | Error failure) {
         if (acquired[0]) {
-          try { admission.release(context); }
-          catch (RuntimeException | Error cleanup) { failure.addSuppressed(cleanup); }
+          try {
+            admission.release(context);
+          } catch (RuntimeException | Error cleanup) {
+            failure.addSuppressed(cleanup);
+          }
         }
         throw failure;
       }

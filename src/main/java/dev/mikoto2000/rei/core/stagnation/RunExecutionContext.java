@@ -1771,7 +1771,8 @@ public class RunExecutionContext {
   }
 
   /** Persist the current connection and reserved call budget before inference leaves the host. */
-  public synchronized void preserveInferenceProgress(dev.mikoto2000.rei.llm.RunLlmConnection expected) {
+  public synchronized void preserveInferenceProgress(
+      dev.mikoto2000.rei.llm.RunLlmConnection expected) {
     if (!java.util.Objects.equals(acceptedConnection, expected))
       throw new IllegalStateException("Inference connection differs from accepted execution");
     toolResultsCheckpoint.accept(List.of());

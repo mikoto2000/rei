@@ -29,8 +29,11 @@ final class PinnedChatModels implements AutoCloseable {
     this(credential, verify, captures, capacity, Function.identity());
   }
 
-  PinnedChatModels(Function<RunLlmConnection, String> credential, Consumer<RunLlmConnection> verify,
-      dev.mikoto2000.rei.llm.capture.CaptureStore captures, int capacity,
+  PinnedChatModels(
+      Function<RunLlmConnection, String> credential,
+      Consumer<RunLlmConnection> verify,
+      dev.mikoto2000.rei.llm.capture.CaptureStore captures,
+      int capacity,
       Function<ChatModel, ChatModel> decorate) {
     if (capacity < 1) throw new IllegalArgumentException("Model cache capacity must be positive");
     this.credential = java.util.Objects.requireNonNull(credential);
@@ -52,9 +55,13 @@ final class PinnedChatModels implements AutoCloseable {
     var client = client(connection, java.util.List.of());
     try {
       if (connection.endpoint().apiType() == LlmApiType.RESPONSES)
-        return decorate.apply(ResponsesAdapter.createWithClient(connection.endpoint(),
-            (org.springframework.ai.openai.responses.OpenAiResponsesChatOptions) RunNativeOptions.options(connection),
-            client, true));
+        return decorate.apply(
+            ResponsesAdapter.createWithClient(
+                connection.endpoint(),
+                (org.springframework.ai.openai.responses.OpenAiResponsesChatOptions)
+                    RunNativeOptions.options(connection),
+                client,
+                true));
       var model =
           org.springframework.ai.openai.OpenAiChatModel.builder()
               .options(
@@ -63,10 +70,13 @@ final class PinnedChatModels implements AutoCloseable {
               .openAiClient(client)
               .openAiClientAsync(client.async())
               .build();
-      return decorate.apply(captures == null
-          ? model
-          : new CapturingChatModel(
-              model, captures, interceptor -> client(connection, java.util.List.of(interceptor))));
+      return decorate.apply(
+          captures == null
+              ? model
+              : new CapturingChatModel(
+                  model,
+                  captures,
+                  interceptor -> client(connection, java.util.List.of(interceptor))));
     } catch (RuntimeException | Error failed) {
       client.close();
       throw failed;

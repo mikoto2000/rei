@@ -67,7 +67,9 @@ import reactor.core.Disposable;
 @Component
 public class ChatExecutionService implements ChatRunAdmission {
   private dev.mikoto2000.rei.llm.ChatConnectionService chatConnections;
-  private java.util.function.BiFunction<AgentRunContext.Mode, dev.mikoto2000.rei.llm.RunLlmConnection, ChatClient> clientForConnection;
+  private java.util.function.BiFunction<
+          AgentRunContext.Mode, dev.mikoto2000.rei.llm.RunLlmConnection, ChatClient>
+      clientForConnection;
 
   @Autowired(required = false)
   void setChatConnections(dev.mikoto2000.rei.llm.ChatConnectionService connections) {
@@ -86,7 +88,8 @@ public class ChatExecutionService implements ChatRunAdmission {
       throw new IllegalStateException("Saved Run connection records disagree");
     var connection = saved == null ? checkpoint : saved;
     if (connection != null) chatConnections.restore(owner, connection);
-    else if (resumed != null || progress != null
+    else if (resumed != null
+        || progress != null
         || checkpoints != null && checkpoints.hasProgressHistory(owner))
       throw new IllegalStateException("Saved Run connection proof is unavailable; start a new Run");
     else chatConnections.accept(owner);
@@ -98,7 +101,8 @@ public class ChatExecutionService implements ChatRunAdmission {
   }
 
   private boolean structuredCommand(String prompt) {
-    return beginnerReviews != null && dev.mikoto2000.rei.externalagent.BeginnerReviewRequest.accepts(prompt)
+    return beginnerReviews != null
+            && dev.mikoto2000.rei.externalagent.BeginnerReviewRequest.accepts(prompt)
         || doctor != null && dev.mikoto2000.rei.doctor.DoctorRequest.accepts(prompt);
   }
 
@@ -408,7 +412,8 @@ public class ChatExecutionService implements ChatRunAdmission {
             mode == AgentRunContext.Mode.EXCLUSIVE
                 ? chatClientProvider.chatClient(LlmFeature.CHAT)
                 : chatClientProvider.parallelChatClient(mode);
-    this.clientForConnection = (mode, connection) -> chatConnections.client(chatClientProvider, mode, connection);
+    this.clientForConnection =
+        (mode, connection) -> chatConnections.client(chatClientProvider, mode, connection);
     this.readSelectedModel = () -> currentModelHolder.get();
     this.privateSecretaryModel = expected -> modelProvider.privateSecretaryModel(expected);
     this.optionsForModel =
@@ -663,8 +668,10 @@ public class ChatExecutionService implements ChatRunAdmission {
 
     try {
       if (!structuredCommand)
-        execution.setModelOptions(chatConnections == null
-            ? optionsForModel.apply(readSelectedModel.get(), context) : chatConnections.options(context));
+        execution.setModelOptions(
+            chatConnections == null
+                ? optionsForModel.apply(readSelectedModel.get(), context)
+                : chatConnections.options(context));
       if (resumed == null) turns.startOrdered(context, promptText, clock.instant());
       if (checkpoints != null) checkpoints.start(context, promptText);
       execution.capturePlanBaseline();
@@ -1318,8 +1325,10 @@ public class ChatExecutionService implements ChatRunAdmission {
         UserMessage.builder().text(resolvedPrompt.prompt()).media(resolvedPrompt.media()).build();
     execution.preserveUserMessage(originalUser);
     messages.add(originalUser);
-    var client = chatConnections == null ? clientForMode.apply(mode)
-        : clientForConnection.apply(mode, chatConnections.require(execution.runContext()));
+    var client =
+        chatConnections == null
+            ? clientForMode.apply(mode)
+            : clientForConnection.apply(mode, chatConnections.require(execution.runContext()));
     ChatClientRequestSpec requestSpec =
         client
             .prompt(new Prompt(messages, options))

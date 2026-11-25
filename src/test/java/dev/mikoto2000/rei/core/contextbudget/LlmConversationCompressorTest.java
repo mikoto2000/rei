@@ -652,38 +652,60 @@ class LlmConversationCompressorTest {
     assertThat(error.reason().code()).isEqualTo("summary_input_budget");
     assertThat(ContextCompressionException.from(error)).isSameAs(error);
   }
+
   @Test
   void pinnedMainModelDoesNotChangeTheStaticSummaryConnectionModel() {
     var model = mock(ChatModel.class);
-    when(model.stream(any(Prompt.class))).thenAnswer(invocation -> {
-      var sent = (OpenAiChatOptions) ((Prompt) invocation.getArgument(0)).getOptions();
-      assertThat(sent.getModel()).isEqualTo("static-summary-model");
-      assertThat(sent.getToolContext()).doesNotContainKey(
-          dev.mikoto2000.rei.modeloptions.ModelOptions.RUN_CONNECTION_CONTEXT_KEY);
-      return Flux.just(response("summary", "stop"));
-    });
+    when(model.stream(any(Prompt.class)))
+        .thenAnswer(invocation -> {
+          var sent = (OpenAiChatOptions) ((Prompt) invocation.getArgument(0)).getOptions();
+          assertThat(sent.getModel()).isEqualTo("static-summary-model");
+          assertThat(sent.getToolContext())
+              .doesNotContainKey(
+                  dev.mikoto2000.rei.modeloptions.ModelOptions.RUN_CONNECTION_CONTEXT_KEY);
+          return Flux.just(response("summary", "stop"));
+        });
     var models = mock(LlmModelProvider.class);
     when(models.chatModel(LlmFeature.CHAT)).thenReturn(model);
     when(models.requestOptions(eq(LlmFeature.CHAT), any(), eq(false)))
         .thenReturn(OpenAiChatOptions.builder().model("static-summary-model").build());
     ObjectProvider<LlmModelProvider> provider = mock();
     when(provider.getObject()).thenReturn(models);
-    var endpoint = new dev.mikoto2000.rei.llm.ResolvedLlmEndpoint(
-        "selected", 1, dev.mikoto2000.rei.llm.LlmApiType.CHAT_COMPLETIONS,
-        "http://selected.invalid/v1", "chat-endpoint:selected", "selected-main-model",
-        new dev.mikoto2000.rei.llm.LlmCapabilities(
-            dev.mikoto2000.rei.llm.ReasoningReplayMode.NONE, 36, java.util.Set.of()),
-        null, null, java.time.Duration.ofSeconds(30));
-    var pin = new dev.mikoto2000.rei.llm.RunLlmConnection("selected", true,
-        dev.mikoto2000.rei.llm.LlmProvider.OPENAI_COMPATIBLE,
-        dev.mikoto2000.rei.llm.LlmAuthentication.NONE,
-        null, null, endpoint, java.util.Map.of(), java.util.Map.of());
-    var owner = OpenAiChatOptions.builder().model("selected-main-model")
-        .toolContext(java.util.Map.of(
-            dev.mikoto2000.rei.modeloptions.ModelOptions.RUN_CONNECTION_CONTEXT_KEY, pin)).build();
-    assertThat(new LlmConversationCompressor(provider, new ContextCompressionProperties())
-        .summarize("", List.of(), 100, new Prompt("owner", owner))).isEqualTo("summary");
+    var endpoint =
+        new dev.mikoto2000.rei.llm.ResolvedLlmEndpoint(
+            "selected",
+            1,
+            dev.mikoto2000.rei.llm.LlmApiType.CHAT_COMPLETIONS,
+            "http://selected.invalid/v1",
+            "chat-endpoint:selected",
+            "selected-main-model",
+            new dev.mikoto2000.rei.llm.LlmCapabilities(
+                dev.mikoto2000.rei.llm.ReasoningReplayMode.NONE, 36, java.util.Set.of()),
+            null,
+            null,
+            java.time.Duration.ofSeconds(30));
+    var pin =
+        new dev.mikoto2000.rei.llm.RunLlmConnection(
+            "selected",
+            true,
+            dev.mikoto2000.rei.llm.LlmProvider.OPENAI_COMPATIBLE,
+            dev.mikoto2000.rei.llm.LlmAuthentication.NONE,
+            null,
+            null,
+            endpoint,
+            java.util.Map.of(),
+            java.util.Map.of());
+    var owner =
+        OpenAiChatOptions.builder()
+            .model("selected-main-model")
+            .toolContext(
+                java.util.Map.of(
+                    dev.mikoto2000.rei.modeloptions.ModelOptions.RUN_CONNECTION_CONTEXT_KEY, pin))
+            .build();
+    assertThat(
+            new LlmConversationCompressor(provider, new ContextCompressionProperties())
+                .summarize("", List.of(), 100, new Prompt("owner", owner)))
+        .isEqualTo("summary");
     org.mockito.Mockito.verify(models).requestOptions(LlmFeature.CHAT, null, false);
   }
-
 }

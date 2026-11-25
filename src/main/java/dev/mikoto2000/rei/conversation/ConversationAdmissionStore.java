@@ -289,8 +289,12 @@ public final class ConversationAdmissionStore implements AutoCloseable {
 
   /** Prepare a new run after replay validation, before its admission is visible. */
   public Receipt accept(
-      SessionMetadata metadata, AgentRunContext context, String key, String fingerprint,
-      dev.mikoto2000.rei.mcp.McpAdmission mcp, Runnable prepare) {
+      SessionMetadata metadata,
+      AgentRunContext context,
+      String key,
+      String fingerprint,
+      dev.mikoto2000.rei.mcp.McpAdmission mcp,
+      Runnable prepare) {
     String hash = key == null ? null : keyHash(key);
     if (hash != null && (fingerprint == null || !fingerprint.matches("[a-f0-9]{64}")))
       throw new IllegalArgumentException("Invalid request fingerprint");
