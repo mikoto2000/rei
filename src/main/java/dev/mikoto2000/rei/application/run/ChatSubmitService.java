@@ -52,6 +52,12 @@ public final class ChatSubmitService {
     this.dotDelegations = dots;
   }
 
+  private dev.mikoto2000.rei.core.chat.ChatRunAdmission chatRunAdmission;
+
+  @org.springframework.beans.factory.annotation.Autowired(required = false)
+  public void setChatRunAdmission(dev.mikoto2000.rei.core.chat.ChatRunAdmission admission) {
+  }
+
   /** 取得記録一覧。 */
   @FunctionalInterface
   private interface AcceptCapture {
