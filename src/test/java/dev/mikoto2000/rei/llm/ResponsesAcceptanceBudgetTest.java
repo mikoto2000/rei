@@ -70,7 +70,10 @@ class ResponsesAcceptanceBudgetTest {
     assertThatThrownBy(() -> other.reserve(1001, 1)).isInstanceOf(IllegalStateException.class);
     assertThatThrownBy(() -> other.reserve(1, 601)).isInstanceOf(IllegalStateException.class);
     assertThatThrownBy(() -> other.reserve(1000, 601)).isInstanceOf(IllegalStateException.class);
-    assertThatThrownBy(() -> other.reserve(1000, 600)).isInstanceOf(IllegalStateException.class);
+    assertThat(other.reserve(1000, 600).id()).isEqualTo(1);
+    var money = new ResponsesAcceptanceBudget(root.resolve("money.jsonl"), "approved-model",
+        new ResponsesAcceptanceBudget.Limits(3, 1000, 600, Duration.ofHours(3), 27999, 10, 30), clock);
+    assertThatThrownBy(() -> money.reserve(1000, 600)).isInstanceOf(IllegalStateException.class);
   }
 
   @Test
