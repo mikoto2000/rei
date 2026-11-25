@@ -20,6 +20,87 @@ import org.springframework.ai.chat.prompt.Prompt;
 class ContextHistoryAdvisorTest {
   @org.junit.jupiter.params.ParameterizedTest
   @org.junit.jupiter.params.provider.CsvSource({
+    "true,true",
+    "true,false",
+    "false,true",
+    "false,false"
+  })
+  void displayHistoryCanBeSavedForContinuationWithoutStorageMetadata(
+      boolean useLogs, boolean notification) {
+    var metadata =
+        notification
+            ? Map.of("severity", "WARNING", "triggerType", "ENTERTAINMENT_RATIO_HIGH")
+            : Map.of("workContext.directory", "fixture", "workContext.gitCapturedAt", "fixture");
+    var time = java.time.Instant.now().minusSeconds(60);
+    var turns =
+        new ConversationTurnStore((Path) null) {
+          @Override
+          public synchronized java.util.List<Turn> read(String conversation) {
+            return java.util.List.of(
+                new Turn(
+                    "old",
+                    "old request",
+                    Status.COMPLETED,
+                    "old answer",
+                    time,
+                    notification ? "BEHAVIOR_NOTIFICATION" : null,
+                    notification ? "notice" : null,
+                    metadata));
+          }
+        };
+    var logs =
+        new dev.mikoto2000.rei.conversation.ConversationLogStore(
+            dir.resolve("display-logs"),
+            java.time.Clock.systemUTC(),
+            new com.fasterxml.jackson.databind.ObjectMapper()
+                .registerModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule()));
+    if (notification) logs.appendNotification("chat", "notice", "old answer", time, metadata);
+    else logs.append("chat", "assistant", "old answer", metadata);
+    var advisor =
+        new ContextHistoryAdvisor(
+            turns,
+            WindowedConversationMemory.builder().build(),
+            new ConversationSummaryRepository(dir),
+            useLogs ? logs : null);
+    var owner = new AgentRunContext("current", "chat", dir, "project");
+    var request =
+        ChatClientRequest.builder()
+            .prompt(new Prompt(new UserMessage("current request")))
+            .context(
+                Map.of(
+                    org.springframework.ai.chat.client.advisor.api.MemoryAdvisor.CONVERSATION_ID,
+                    "chat",
+                    AgentRunContext.class.getName(),
+                    owner))
+            .build();
+    var history = advisor.before(request, null).prompt().getInstructions();
+    var source = new org.sqlite.SQLiteDataSource();
+    source.setUrl("jdbc:sqlite:" + dir.resolve("display-payloads.db"));
+    var payloads = new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore(source);
+    var scope = dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Scope.forOwner(owner);
+    int index = 0;
+    for (var message : history) {
+      var ref = payloads.saveForContinuation(scope, owner.runId(), "input-" + index++, message);
+      var restored = payloads.load(scope, ref);
+      assertThat(restored.getText()).isEqualTo(message.getText());
+      assertThat(restored.getMetadata()).doesNotContainKeys("source", "sourceId");
+    }
+    var answer =
+        history.stream().filter(m -> m.getText().equals("old answer")).findFirst().orElseThrow();
+    assertThat(answer.getMetadata())
+        .containsKey(ContextHistoryAdvisor.SEQUENCE)
+        .doesNotContainKeys(
+            "severity", "triggerType", "workContext.directory", "workContext.gitCapturedAt");
+    if (notification)
+      assertThat(answer.getMetadata())
+          .containsEntry("source", "BEHAVIOR_NOTIFICATION")
+          .containsEntry("sourceId", "notice");
+    assertThat(turns.read("chat").getFirst().metadata()).isEqualTo(metadata);
+    assertThat(logs.readConversation("chat").getFirst().metadata()).isEqualTo(metadata);
+  }
+
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.CsvSource({
     "COMPLETED,true,ok",
     "COMPLETED,true,checkpointGrant",
     "COMPLETED,false,ok",

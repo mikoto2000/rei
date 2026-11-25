@@ -189,7 +189,9 @@ public class ContextHistoryAdvisor implements BaseChatMemoryAdvisor {
         // One covered entry anchors the existing assembler's summary insertion; it is removed
         // there by the cursor and is never delivered alongside the summary.
         if (sequence > through || !historyAnchor) {
-          var properties = new HashMap<String, Object>(entry.metadata());
+          // Display metadata is not model protocol state. Keep provenance only;
+          // restore() supplies protocol metadata from a validated payload.
+          var properties = new HashMap<String, Object>();
           if (entry.source() != null) properties.put("source", entry.source());
           if (entry.sourceId() != null) properties.put("sourceId", entry.sourceId());
           Message message =
@@ -285,7 +287,7 @@ public class ContextHistoryAdvisor implements BaseChatMemoryAdvisor {
         if ((turn.assistantMessage() != null && !turn.assistantMessage().isBlank())
             || dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.hasHistoryReference(
                 turn.metadata())) {
-          var properties = new HashMap<String, Object>(turn.metadata());
+          var properties = new HashMap<String, Object>();
           if (turn.source() != null) properties.put("source", turn.source());
           if (turn.sourceId() != null) properties.put("sourceId", turn.sourceId());
           messages.add(
