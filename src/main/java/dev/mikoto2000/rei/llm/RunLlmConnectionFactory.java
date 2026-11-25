@@ -5,6 +5,15 @@ import java.util.function.Function;
 /** Resolves immutable settings only; credentials are obtained at the HTTP boundary. */
 final class RunLlmConnectionFactory {
   record LegacySettings(ResolvedLlmEndpoint endpoint, java.util.Map<String, Object> generation) {
+    LegacySettings(ResolvedLlmEndpoint endpoint, java.util.Map<String, Object> generation,
+        LlmAuthentication authentication, java.util.Map<String, String> transport) {
+      this(endpoint, generation);
+    }
+
+    LlmAuthentication authentication() { return LlmAuthentication.LEGACY; }
+
+    java.util.Map<String, String> transport() { return java.util.Map.of(); }
+
     LegacySettings {
       java.util.Objects.requireNonNull(endpoint, "endpoint");
       generation = RunGenerationSettings.copy(generation);
