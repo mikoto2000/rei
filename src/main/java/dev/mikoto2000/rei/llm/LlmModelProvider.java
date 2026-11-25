@@ -172,7 +172,7 @@ public class LlmModelProvider implements dev.mikoto2000.rei.secretary.SecretaryP
             api == LlmApiType.RESPONSES ? server.getSupportedSettings() : java.util.Set.of()),
         maxOutputTokens(server),
         temperature,
-        readTimeout.get());
+        ResponsesProductionProfile.readTimeout(server, readTimeout.get()));
   }
 
   private final Map<String, ModelOutageGuard> outageGuards = new ConcurrentHashMap<>();
@@ -243,6 +243,8 @@ public class LlmModelProvider implements dev.mikoto2000.rei.secretary.SecretaryP
 
   private void requireAvailableProtocol(String feature) {
     var server = resolvedServer(feature);
+    if (ResponsesProductionProfile.declared(server) && server.getApi() != LlmApiType.RESPONSES)
+      throw new IllegalStateException("An accepted Responses profile requires the Responses API");
     if (LlmFeature.VOICE_CORRECTION.equals(feature)
         && (server == null || !server.hasCustomServer())) {
       if (server != null && server.getApi() == LlmApiType.RESPONSES)
@@ -256,6 +258,13 @@ public class LlmModelProvider implements dev.mikoto2000.rei.secretary.SecretaryP
           && !endpoint(server, model(server, null), feature)
               .equals(responsesAcceptanceEndpoints.get(feature)))
         throw new IllegalStateException("Responses acceptance endpoint does not match approval");
+      return;
+    }
+    if (server != null
+        && server.getApi() == LlmApiType.RESPONSES
+        && ResponsesProductionProfile.declared(server)) {
+      ResponsesProductionProfile.requireAccepted(
+          server, endpoint(server, model(server, null), feature), feature);
       return;
     }
     if ((server != null && server.getApi() == LlmApiType.RESPONSES)
@@ -336,7 +345,8 @@ public class LlmModelProvider implements dev.mikoto2000.rei.secretary.SecretaryP
             "Responses requires an explicit endpoint/model without fallback");
       var endpoint = resolvedEndpoint(feature);
       var host = java.net.URI.create(endpoint.baseUrl()).getHost();
-      if (responsesAcceptanceEndpoints == null
+      boolean production = responsesFixtureCustomizers == null;
+      if (!production && responsesAcceptanceEndpoints == null
           && (host == null
               || !(host.endsWith(".invalid")
                   || java.util.Set.of("localhost", "127.0.0.1", "::1", "[::1]").contains(host))))
@@ -350,12 +360,14 @@ public class LlmModelProvider implements dev.mikoto2000.rei.secretary.SecretaryP
       builder.maxRetries(0);
       builder.timeout(endpoint.readTimeout());
       builder.strict(false);
+      if (production) builder.reasoningEffort("low").serviceTier("default");
       var context = new java.util.HashMap<String, Object>();
       context.put(ResolvedLlmEndpoint.CONTEXT_KEY, endpoint);
       if (endpoint.capabilities().maxTools() != null)
         context.put(LlmCapabilities.MAX_TOOLS_CONTEXT_KEY, endpoint.capabilities().maxTools());
       builder.toolContext(context);
-      return ResponsesAdapter.create(endpoint, builder.build(), responsesFixtureCustomizers);
+      return ResponsesAdapter.create(
+          endpoint, builder.build(), production ? java.util.List.of() : responsesFixtureCustomizers);
     }
     if (LlmFeature.VOICE_CORRECTION.equals(feature)) {
       // An explicitly selected correction endpoint must never fall back to a different remote
