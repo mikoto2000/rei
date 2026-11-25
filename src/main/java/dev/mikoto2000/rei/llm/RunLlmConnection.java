@@ -12,7 +12,9 @@ public record RunLlmConnection(
     String accountRegistration,
     ResolvedLlmEndpoint endpoint,
     Map<LlmEndpointCapabilities.Capability, LlmEndpointCapabilities.Support> capabilities,
-    Map<String, Object> generation) {
+    Map<String, Object> generation,
+    @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_EMPTY)
+        Map<String, String> transport) {
   public RunLlmConnection {
     java.util.Objects.requireNonNull(profileId, "profileId");
     java.util.Objects.requireNonNull(provider, "provider");
@@ -20,19 +22,21 @@ public record RunLlmConnection(
     java.util.Objects.requireNonNull(endpoint, "endpoint");
     capabilities = Map.copyOf(capabilities);
     generation = RunGenerationSettings.copy(generation);
+    transport = RunTransportSettings.copy(transport);
   }
 
   public RunLlmConnection(String profileId, boolean named, LlmProvider provider,
       LlmAuthentication authentication, String accountRef, String accountRegistration,
       ResolvedLlmEndpoint endpoint,
       Map<LlmEndpointCapabilities.Capability, LlmEndpointCapabilities.Support> capabilities,
-      Map<String, Object> generation, Map<String, String> transport) {
-    this(profileId, named, provider, authentication, accountRef, accountRegistration, endpoint, capabilities, generation);
+      Map<String, Object> generation) {
+    this(profileId, named, provider, authentication, accountRef, accountRegistration, endpoint, capabilities, generation, Map.of());
   }
 
-  public Map<String, String> transport() { return Map.of(); }
-
-  public java.time.Duration requestTimeout() { return endpoint.readTimeout(); }
+  public java.time.Duration requestTimeout() {
+    var value = transport.get("request_timeout");
+    return value == null ? endpoint.readTimeout() : RunTransportSettings.timeout(value);
+  }
 
   @Override
   public Map<LlmEndpointCapabilities.Capability, LlmEndpointCapabilities.Support> capabilities() {
@@ -76,6 +80,7 @@ public record RunLlmConnection(
     capabilities.forEach((name, support) -> effective.put(name.name(), support.name()));
     values.put("capabilities", effective);
     values.put("generation", generation);
+    values.put("transport", transport);
     try {
       var json = new com.fasterxml.jackson.databind.ObjectMapper()
           .enable(com.fasterxml.jackson.databind.SerializationFeature.ORDER_MAP_ENTRIES_BY_KEYS);
