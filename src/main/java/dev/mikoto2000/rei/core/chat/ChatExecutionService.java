@@ -66,14 +66,41 @@ import reactor.core.Disposable;
 /** 会話の文脈とモデルを使って応答を生成し、実行の完了・失敗・中断を処理する。 */
 @Component
 public class ChatExecutionService implements ChatRunAdmission {
+  private dev.mikoto2000.rei.llm.ChatConnectionService chatConnections;
+  private java.util.function.BiFunction<AgentRunContext.Mode, dev.mikoto2000.rei.llm.RunLlmConnection, ChatClient> clientForConnection;
+
   @Autowired(required = false)
-  void setChatConnections(dev.mikoto2000.rei.llm.ChatConnectionService connections) {}
+  void setChatConnections(dev.mikoto2000.rei.llm.ChatConnectionService connections) {
+    this.chatConnections = connections;
+  }
 
   @Override
-  public void accept(AgentRunContext owner, String prompt) {}
+  public void accept(AgentRunContext owner, String prompt) {
+    if (chatConnections == null || structuredCommand(prompt)) return;
+    var continuations = continuationProvider == null ? null : continuationProvider.getIfAvailable();
+    var resumed = continuations == null ? null : continuations.restore(owner);
+    var progress = checkpoints == null ? null : checkpoints.progress(owner);
+    var saved = resumed == null ? null : resumed.connection();
+    var checkpoint = progress == null ? null : progress.connection();
+    if (saved != null && checkpoint != null && !saved.equals(checkpoint))
+      throw new IllegalStateException("Saved Run connection records disagree");
+    var connection = saved == null ? checkpoint : saved;
+    if (connection != null) chatConnections.restore(owner, connection);
+    else if (resumed != null || progress != null
+        || checkpoints != null && checkpoints.hasProgressHistory(owner))
+      throw new IllegalStateException("Saved Run connection proof is unavailable; start a new Run");
+    else chatConnections.accept(owner);
+  }
 
   @Override
-  public void release(AgentRunContext owner) {}
+  public void release(AgentRunContext owner) {
+    if (chatConnections != null) chatConnections.release(owner);
+  }
+
+  private boolean structuredCommand(String prompt) {
+    return beginnerReviews != null && dev.mikoto2000.rei.externalagent.BeginnerReviewRequest.accepts(prompt)
+        || doctor != null && dev.mikoto2000.rei.doctor.DoctorRequest.accepts(prompt);
+  }
 
   /** 継続入力提供元。 */
   private org.springframework.beans.factory.ObjectProvider<RunContinuation> continuationProvider;
@@ -381,6 +408,7 @@ public class ChatExecutionService implements ChatRunAdmission {
             mode == AgentRunContext.Mode.EXCLUSIVE
                 ? chatClientProvider.chatClient(LlmFeature.CHAT)
                 : chatClientProvider.parallelChatClient(mode);
+    this.clientForConnection = (mode, connection) -> chatConnections.client(chatClientProvider, mode, connection);
     this.readSelectedModel = () -> currentModelHolder.get();
     this.privateSecretaryModel = expected -> modelProvider.privateSecretaryModel(expected);
     this.optionsForModel =
@@ -439,6 +467,7 @@ public class ChatExecutionService implements ChatRunAdmission {
       String promptText,
       UserInterventionQueue interventions,
       OutputLimitRunBudget.LlmCallReservation reservation) {
+    accept(context, promptText);
     if (timing == null) return executeOwned(context, promptText, interventions, reservation);
     return timing.observeRun(
         context, () -> executeOwned(context, promptText, interventions, reservation));
@@ -537,12 +566,16 @@ public class ChatExecutionService implements ChatRunAdmission {
       try {
         result = executeInScope(context, promptText, interventions, reservation, terminalEvents);
       } finally {
-        completeRunResources.accept(context.runId());
-        if (finishRequestCapture != null) finishRequestCapture.accept(context.runId());
-        stopped = runCancellationRequested.test(context.runId());
-        clearCancellation.run();
-        activityTracker.ifPresent(
-            tracker -> tracker.recordAgentCompleted(java.time.Instant.now(clock)));
+        try {
+          completeRunResources.accept(context.runId());
+          if (finishRequestCapture != null) finishRequestCapture.accept(context.runId());
+          stopped = runCancellationRequested.test(context.runId());
+          clearCancellation.run();
+          activityTracker.ifPresent(
+              tracker -> tracker.recordAgentCompleted(java.time.Instant.now(clock)));
+        } finally {
+          release(context);
+        }
       }
       // 終端イベントは実体と後片付けの完了後に一度だけ公開する。
       if (stopped || result.status() == ChatExecutionResult.Status.CANCELLED) {
@@ -630,7 +663,8 @@ public class ChatExecutionService implements ChatRunAdmission {
 
     try {
       if (!structuredCommand)
-        execution.setModelOptions(optionsForModel.apply(readSelectedModel.get(), context));
+        execution.setModelOptions(chatConnections == null
+            ? optionsForModel.apply(readSelectedModel.get(), context) : chatConnections.options(context));
       if (resumed == null) turns.startOrdered(context, promptText, clock.instant());
       if (checkpoints != null) checkpoints.start(context, promptText);
       execution.capturePlanBaseline();
@@ -1284,9 +1318,10 @@ public class ChatExecutionService implements ChatRunAdmission {
         UserMessage.builder().text(resolvedPrompt.prompt()).media(resolvedPrompt.media()).build();
     execution.preserveUserMessage(originalUser);
     messages.add(originalUser);
+    var client = chatConnections == null ? clientForMode.apply(mode)
+        : clientForConnection.apply(mode, chatConnections.require(execution.runContext()));
     ChatClientRequestSpec requestSpec =
-        clientForMode
-            .apply(mode)
+        client
             .prompt(new Prompt(messages, options))
             .advisors(advisor ->
                 advisor
