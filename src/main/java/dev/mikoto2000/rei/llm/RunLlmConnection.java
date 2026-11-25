@@ -36,4 +36,8 @@ public record RunLlmConnection(
   public String toString() {
     return "RunLlmConnection[profileId=" + profileId + "]";
   }
+
+  public String fingerprint() {
+    return "";
+  }
 }
