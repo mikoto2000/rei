@@ -188,6 +188,16 @@ public class LlmModelProvider implements dev.mikoto2000.rei.secretary.SecretaryP
     return provider;
   }
 
+  /** Isolated acceptance composition only; never selected by Spring or external configuration. */
+  static LlmModelProvider forResponsesAcceptance(
+      ChatModel defaults,
+      LlmProperties properties,
+      java.util.List<org.springframework.ai.openai.http.okhttp.OpenAiHttpClientBuilderCustomizer>
+          customizers,
+      Map<String, ResolvedLlmEndpoint> accepted) {
+    return forResponsesFixture(defaults, properties, customizers);
+  }
+
   /** 用途に応じたモデル利用を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public LlmModelProvider(ChatModel defaultChatModel, LlmProperties properties) {
     this(defaultChatModel, properties, null, null);
