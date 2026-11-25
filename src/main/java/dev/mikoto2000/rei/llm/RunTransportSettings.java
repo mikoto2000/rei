@@ -31,6 +31,12 @@ final class RunTransportSettings {
     }
   }
 
+  static Map<String, String> binding(Map<String, String> values) {
+    var binding = new java.util.HashMap<>(values);
+    binding.remove("request_timeout");
+    return Map.copyOf(binding);
+  }
+
   private static IllegalArgumentException invalid() {
     return new IllegalArgumentException("Invalid credential-free Run transport settings");
   }
