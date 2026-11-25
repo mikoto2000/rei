@@ -427,14 +427,23 @@ public class LlmChatClientProvider {
   }
 
   /** Builds a main-chat client whose inference is routed through the accepted Run connection. */
-  public ChatClient runChatClient(dev.mikoto2000.rei.core.chat.AgentRunContext.Mode mode,
-      LlmApiType api, ChatModel model) {
-    ToolCallingChatOptions defaults = switch (api) {
-      // Native constructors substitute an OpenAI model for null. Leave this unresolved until
-      // the caller supplies accepted options; the Run dispatcher rejects unbound requests.
-      case CHAT_COMPLETIONS -> org.springframework.ai.openai.OpenAiChatOptions.builder().model("").maxRetries(0).build();
-      case RESPONSES -> org.springframework.ai.openai.responses.OpenAiResponsesChatOptions.builder().model("").maxRetries(0).build();
-    };
+  public ChatClient runChatClient(
+      dev.mikoto2000.rei.core.chat.AgentRunContext.Mode mode, LlmApiType api, ChatModel model) {
+    ToolCallingChatOptions defaults =
+        switch (api) {
+          // Native constructors substitute an OpenAI model for null. Leave this unresolved until
+          // the caller supplies accepted options; the Run dispatcher rejects unbound requests.
+          case CHAT_COMPLETIONS ->
+              org.springframework.ai.openai.OpenAiChatOptions.builder()
+                  .model("")
+                  .maxRetries(0)
+                  .build();
+          case RESPONSES ->
+              org.springframework.ai.openai.responses.OpenAiResponsesChatOptions.builder()
+                  .model("")
+                  .maxRetries(0)
+                  .build();
+        };
     model = new ProtocolDefaultsChatModel(java.util.Objects.requireNonNull(model), defaults);
     return mode == dev.mikoto2000.rei.core.chat.AgentRunContext.Mode.EXCLUSIVE
         ? createChatClient(LlmFeature.CHAT, model, defaults)
@@ -450,7 +459,8 @@ public class LlmChatClientProvider {
     }
 
     @Override
-    public org.springframework.ai.chat.model.ChatResponse call(org.springframework.ai.chat.prompt.Prompt prompt) {
+    public org.springframework.ai.chat.model.ChatResponse call(
+        org.springframework.ai.chat.prompt.Prompt prompt) {
       return delegate.call(prompt);
     }
 
@@ -462,7 +472,9 @@ public class LlmChatClientProvider {
 
     @Override
     public dev.mikoto2000.rei.timing.TimingExecution timing() {
-      return delegate instanceof dev.mikoto2000.rei.timing.TimingAwareModel timed ? timed.timing() : null;
+      return delegate instanceof dev.mikoto2000.rei.timing.TimingAwareModel timed
+          ? timed.timing()
+          : null;
     }
   }
 
@@ -476,47 +488,50 @@ public class LlmChatClientProvider {
       return chatClient(LlmFeature.CHAT);
     return cache.computeIfAbsent(
         "parallel-" + mode,
-        ignored -> createParallelChatClient(mode, subAgentModel.get(), featureOptions.apply(LlmFeature.CHAT)));
+        ignored ->
+            createParallelChatClient(
+                mode, subAgentModel.get(), featureOptions.apply(LlmFeature.CHAT)));
   }
 
-  private ChatClient createParallelChatClient(dev.mikoto2000.rei.core.chat.AgentRunContext.Mode mode,
-      ChatModel model, ToolCallingChatOptions options) {
-          dev.mikoto2000.rei.core.chat.ToolLoopSupport.requireNoRawTools(options);
-          var callbacks = new ArrayList<org.springframework.ai.tool.ToolCallback>();
-          if (mode == dev.mikoto2000.rei.core.chat.AgentRunContext.Mode.READ_ONLY) {
-            var objects = new ArrayList<Object>();
-            addIfAvailable(objects, tools);
-            addIfAvailable(objects, searchTools);
-            addIfAvailable(objects, webSearchTools);
-            addIfAvailable(objects, urlContentFetchTools);
-            if (rawResultTools != null) objects.add(rawResultTools);
-            if (reviewTools != null) objects.add(reviewTools);
-            if (!objects.isEmpty()) {
-              for (var callback :
-                  dev.mikoto2000.rei.core.contextbudget.DeliveryToolRegistration.provider(
-                          objects.toArray())
-                      .getToolCallbacks()) {
-                if (dev.mikoto2000.rei.core.policy.ToolPermissionPolicy.intrinsicallyReadOnly(
-                    callback.getToolDefinition().name()))
-                  callbacks.add(
-                      new dev.mikoto2000.rei.event.ToolEventCallbackDecorator(
-                          callback, eventFactory, eventPublisher));
-              }
-            }
-          }
-          var builder =
-              ChatClient.builder(
-                      new dev.mikoto2000.rei.core.stagnation.StagnationChatModel(
-                              model, contextAssembler, maxStreamTimeoutRetries)
-                          .withToolDiscovery(toolDiscovery))
-                  .defaultAdvisors(new RunAwareToolCallingAdvisor())
-                  .defaultOptions(
-                      dev.mikoto2000.rei.modeloptions.ModelOptions.withTools(options, callbacks)
-                          .mutate());
-          if (mode == dev.mikoto2000.rei.core.chat.AgentRunContext.Mode.READ_ONLY)
-            builder.defaultSystem(
-                dev.mikoto2000.rei.core.configuration.ToolUsagePolicy.INSTRUCTIONS);
-          return builder.build();
+  private ChatClient createParallelChatClient(
+      dev.mikoto2000.rei.core.chat.AgentRunContext.Mode mode,
+      ChatModel model,
+      ToolCallingChatOptions options) {
+    dev.mikoto2000.rei.core.chat.ToolLoopSupport.requireNoRawTools(options);
+    var callbacks = new ArrayList<org.springframework.ai.tool.ToolCallback>();
+    if (mode == dev.mikoto2000.rei.core.chat.AgentRunContext.Mode.READ_ONLY) {
+      var objects = new ArrayList<Object>();
+      addIfAvailable(objects, tools);
+      addIfAvailable(objects, searchTools);
+      addIfAvailable(objects, webSearchTools);
+      addIfAvailable(objects, urlContentFetchTools);
+      if (rawResultTools != null) objects.add(rawResultTools);
+      if (reviewTools != null) objects.add(reviewTools);
+      if (!objects.isEmpty()) {
+        for (var callback :
+            dev.mikoto2000.rei.core.contextbudget.DeliveryToolRegistration.provider(
+                    objects.toArray())
+                .getToolCallbacks()) {
+          if (dev.mikoto2000.rei.core.policy.ToolPermissionPolicy.intrinsicallyReadOnly(
+              callback.getToolDefinition().name()))
+            callbacks.add(
+                new dev.mikoto2000.rei.event.ToolEventCallbackDecorator(
+                    callback, eventFactory, eventPublisher));
+        }
+      }
+    }
+    var builder =
+        ChatClient.builder(
+                new dev.mikoto2000.rei.core.stagnation.StagnationChatModel(
+                        model, contextAssembler, maxStreamTimeoutRetries)
+                    .withToolDiscovery(toolDiscovery))
+            .defaultAdvisors(new RunAwareToolCallingAdvisor())
+            .defaultOptions(
+                dev.mikoto2000.rei.modeloptions.ModelOptions.withTools(options, callbacks)
+                    .mutate());
+    if (mode == dev.mikoto2000.rei.core.chat.AgentRunContext.Mode.READ_ONLY)
+      builder.defaultSystem(dev.mikoto2000.rei.core.configuration.ToolUsagePolicy.INSTRUCTIONS);
+    return builder.build();
   }
 
   /** 新たな対象を利用できるよう、モデルへ対話を依頼する窓口を作成する。 */
@@ -536,7 +551,8 @@ public class LlmChatClientProvider {
     return createChatClient(feature, featureModel.apply(feature), featureOptions.apply(feature));
   }
 
-  private ChatClient createChatClient(String feature, ChatModel model, ToolCallingChatOptions options) {
+  private ChatClient createChatClient(
+      String feature, ChatModel model, ToolCallingChatOptions options) {
     List<Advisor> advisors = new ArrayList<>();
     if (LlmFeature.CHAT.equals(feature)
         && resumeContext != null

@@ -69,7 +69,7 @@ final class RunNativeOptions {
           OpenAiChatOptions.builder()
               .model(connection.endpoint().model())
               .maxRetries(0)
-          .timeout(connection.requestTimeout())
+              .timeout(connection.requestTimeout())
               .toolContext(context);
       connection
           .generation()

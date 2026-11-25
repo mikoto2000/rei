@@ -1,6 +1,5 @@
 package dev.mikoto2000.rei.llm;
 
-import java.util.Map;
 import java.util.function.Supplier;
 import org.springframework.ai.model.openai.autoconfigure.OpenAiAutoConfigurationUtil.ResolvedConnectionProperties;
 
@@ -11,8 +10,11 @@ final class LegacyChatConnectionSource {
   private final Supplier<ResolvedConnectionProperties> global;
   private final Supplier<String> environmentKey;
 
-  LegacyChatConnectionSource(LlmModelProvider models, LlmProperties properties,
-      Supplier<ResolvedConnectionProperties> global, Supplier<String> environmentKey) {
+  LegacyChatConnectionSource(
+      LlmModelProvider models,
+      LlmProperties properties,
+      Supplier<ResolvedConnectionProperties> global,
+      Supplier<String> environmentKey) {
     this.models = models;
     this.feature = properties.feature(LlmFeature.CHAT);
     this.global = global;
@@ -32,14 +34,15 @@ final class LegacyChatConnectionSource {
         || accepted.endpoint().apiType() != endpoint.apiType()
         || !java.util.Objects.equals(accepted.endpoint().baseUrl(), endpoint.baseUrl())
         || !accepted.endpoint().credentialRef().equals(endpoint.credentialRef())
-        || !RunTransportSettings.binding(accepted.transport()).equals(
-            RunTransportSettings.binding(current.settings().transport()))) throw changed();
+        || !RunTransportSettings.binding(accepted.transport())
+            .equals(RunTransportSettings.binding(current.settings().transport()))) throw changed();
     if (current.settings().authentication() != LlmAuthentication.API_KEY)
       throw new IllegalStateException("Legacy connection has no API-key credentials");
     return current.key().get();
   }
 
   private record Keys(LlmAuthentication authentication, Supplier<String> value) {}
+
   private record Current(RunLlmConnectionFactory.LegacySettings settings, Supplier<String> key) {}
 
   private Current current(String selected) {
@@ -55,13 +58,17 @@ final class LegacyChatConnectionSource {
     if (feature != null && feature.hasCustomServer()) {
       url = OpenAiCompatibleEndpoint.baseUrl(feature.getBaseUrl());
       keys = explicit(feature.getApiKey());
-      if (timeout == null) timeout = org.springframework.ai.openai.AbstractOpenAiOptions.DEFAULT_TIMEOUT;
+      if (timeout == null)
+        timeout = org.springframework.ai.openai.AbstractOpenAiOptions.DEFAULT_TIMEOUT;
     } else {
       var connection = java.util.Objects.requireNonNull(global.get(), "global connection");
-      if (connection.isMicrosoftFoundry() || connection.isGitHubModels()
+      if (connection.isMicrosoftFoundry()
+          || connection.isGitHubModels()
           || connection.getMicrosoftDeploymentName() != null
-          || connection.getMicrosoftFoundryServiceVersion() != null || connection.getProxy() != null)
-        throw new IllegalStateException("Legacy connection requires an explicitly supported transport contract");
+          || connection.getMicrosoftFoundryServiceVersion() != null
+          || connection.getProxy() != null)
+        throw new IllegalStateException(
+            "Legacy connection requires an explicitly supported transport contract");
       url = connection.getBaseUrl();
       if (url == null) url = com.openai.core.ClientOptions.PRODUCTION_URL;
       url = OpenAiCompatibleEndpoint.baseUrl(url);
@@ -70,25 +77,40 @@ final class LegacyChatConnectionSource {
       if (connection.getOrganizationId() != null && !connection.getOrganizationId().isBlank())
         transport.put("organization_id", connection.getOrganizationId());
       var headers = connection.getCustomHeaders();
-      if (headers != null) headers.forEach((name, value) -> {
-        var field = switch (name.toLowerCase(java.util.Locale.ROOT)) {
-          case "openai-organization" -> "organization_id";
-          case "openai-project" -> "project_id";
-          case "openai-beta" -> "api_beta";
-          default -> throw new IllegalStateException("Legacy custom headers require an explicitly supported transport contract");
-        };
-        var prior = transport.putIfAbsent(field, value);
-        if (prior != null && !prior.equals(value))
-          throw new IllegalStateException("Conflicting legacy account connection attributes");
-      });
+      if (headers != null)
+        headers.forEach((name, value) -> {
+          var field =
+              switch (name.toLowerCase(java.util.Locale.ROOT)) {
+                case "openai-organization" -> "organization_id";
+                case "openai-project" -> "project_id";
+                case "openai-beta" -> "api_beta";
+                default ->
+                    throw new IllegalStateException(
+                        "Legacy custom headers require an explicitly supported transport contract");
+              };
+          var prior = transport.putIfAbsent(field, value);
+          if (prior != null && !prior.equals(value))
+            throw new IllegalStateException("Conflicting legacy account connection attributes");
+        });
     }
     ChatEndpointCatalog.validateBaseUrl("legacy chat base-url", url);
     transport.put("request_timeout", timeout.toString());
-    var endpoint = new ResolvedLlmEndpoint(previous.endpointId(), previous.generation(), previous.apiType(),
-        url, previous.credentialRef(), model, previous.capabilities(),
-        dev.mikoto2000.rei.modeloptions.ModelOptions.outputLimit(options), options.getTemperature(), previous.readTimeout());
-    return new Current(new RunLlmConnectionFactory.LegacySettings(endpoint,
-        RunNativeOptions.generation(options), keys.authentication(), transport), keys.value());
+    var endpoint =
+        new ResolvedLlmEndpoint(
+            previous.endpointId(),
+            previous.generation(),
+            previous.apiType(),
+            url,
+            previous.credentialRef(),
+            model,
+            previous.capabilities(),
+            dev.mikoto2000.rei.modeloptions.ModelOptions.outputLimit(options),
+            options.getTemperature(),
+            previous.readTimeout());
+    return new Current(
+        new RunLlmConnectionFactory.LegacySettings(
+            endpoint, RunNativeOptions.generation(options), keys.authentication(), transport),
+        keys.value());
   }
 
   private Keys globalKeys(ResolvedConnectionProperties connection) {
@@ -106,9 +128,13 @@ final class LegacyChatConnectionSource {
         : new Keys(LlmAuthentication.API_KEY, () -> value);
   }
 
-  private static java.time.Duration nativeTimeout(org.springframework.ai.model.tool.ToolCallingChatOptions options) {
-    if (options instanceof org.springframework.ai.openai.OpenAiChatOptions chat) return chat.getTimeout();
-    if (options instanceof org.springframework.ai.openai.responses.OpenAiResponsesChatOptions responses) return responses.getTimeout();
+  private static java.time.Duration nativeTimeout(
+      org.springframework.ai.model.tool.ToolCallingChatOptions options) {
+    if (options instanceof org.springframework.ai.openai.OpenAiChatOptions chat)
+      return chat.getTimeout();
+    if (options
+        instanceof org.springframework.ai.openai.responses.OpenAiResponsesChatOptions responses)
+      return responses.getTimeout();
     throw new IllegalStateException("Legacy chat API is unavailable");
   }
 

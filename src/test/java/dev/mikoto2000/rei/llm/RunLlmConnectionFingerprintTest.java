@@ -21,8 +21,11 @@ class RunLlmConnectionFingerprintTest {
     var reverse = new LinkedHashMap<String, Object>();
     reverse.put("max_tokens", 1024);
     reverse.put("temperature", 0.5);
-    var a = connection(LlmProvider.OPENAI_COMPATIBLE, LlmAuthentication.API_KEY, "registration", first);
-    var b = connection(LlmProvider.OPENAI_COMPATIBLE, LlmAuthentication.API_KEY, "registration", reverse);
+    var a =
+        connection(LlmProvider.OPENAI_COMPATIBLE, LlmAuthentication.API_KEY, "registration", first);
+    var b =
+        connection(
+            LlmProvider.OPENAI_COMPATIBLE, LlmAuthentication.API_KEY, "registration", reverse);
     var json = new ObjectMapper().findAndRegisterModules();
     var restored = json.readValue(json.writeValueAsBytes(a), RunLlmConnection.class);
     assertThat(a.fingerprint()).matches("[a-f0-9]{64}");
@@ -31,44 +34,95 @@ class RunLlmConnectionFingerprintTest {
 
   @Test
   void providerAuthenticationRegistrationAndGenerationArePartOfIdentity() {
-    var baseline = connection(LlmProvider.OPENAI_COMPATIBLE, LlmAuthentication.API_KEY, "registration", Map.of());
-    assertThat(baseline.fingerprint()).isNotEqualTo(connection(
-        LlmProvider.OPENAI_API, LlmAuthentication.API_KEY, "registration", Map.of()).fingerprint());
-    assertThat(baseline.fingerprint()).isNotEqualTo(connection(
-        LlmProvider.OPENAI_COMPATIBLE, LlmAuthentication.NONE, "registration", Map.of()).fingerprint());
-    assertThat(baseline.fingerprint()).isNotEqualTo(connection(
-        LlmProvider.OPENAI_COMPATIBLE, LlmAuthentication.API_KEY, "new-registration", Map.of()).fingerprint());
-    assertThat(baseline.fingerprint()).isNotEqualTo(connection(
-        LlmProvider.OPENAI_COMPATIBLE, LlmAuthentication.API_KEY, "registration", Map.of("seed", 42)).fingerprint());
+    var baseline =
+        connection(
+            LlmProvider.OPENAI_COMPATIBLE, LlmAuthentication.API_KEY, "registration", Map.of());
+    assertThat(baseline.fingerprint())
+        .isNotEqualTo(
+            connection(LlmProvider.OPENAI_API, LlmAuthentication.API_KEY, "registration", Map.of())
+                .fingerprint());
+    assertThat(baseline.fingerprint())
+        .isNotEqualTo(
+            connection(
+                    LlmProvider.OPENAI_COMPATIBLE, LlmAuthentication.NONE, "registration", Map.of())
+                .fingerprint());
+    assertThat(baseline.fingerprint())
+        .isNotEqualTo(
+            connection(
+                    LlmProvider.OPENAI_COMPATIBLE,
+                    LlmAuthentication.API_KEY,
+                    "new-registration",
+                    Map.of())
+                .fingerprint());
+    assertThat(baseline.fingerprint())
+        .isNotEqualTo(
+            connection(
+                    LlmProvider.OPENAI_COMPATIBLE,
+                    LlmAuthentication.API_KEY,
+                    "registration",
+                    Map.of("seed", 42))
+                .fingerprint());
   }
 
   @Test
   void approvalIdentityForAPinnedRunDoesNotDependOnARotatingCredential() {
-    var connection = connection(LlmProvider.OPENAI_COMPATIBLE, LlmAuthentication.API_KEY, "registration", Map.of());
+    var connection =
+        connection(
+            LlmProvider.OPENAI_COMPATIBLE, LlmAuthentication.API_KEY, "registration", Map.of());
     assertThat(ModelOptions.connectionFingerprint(options(connection, "PRIVATE_FIRST")))
         .isEqualTo(ModelOptions.connectionFingerprint(options(connection, "PRIVATE_REFRESHED")));
   }
 
   @Test
   void preparationIdentityIncludesTheAcceptedAccountRegistration() {
-    var first = connection(LlmProvider.OPENAI_COMPATIBLE, LlmAuthentication.API_KEY, "registration", Map.of());
-    var other = connection(LlmProvider.OPENAI_COMPATIBLE, LlmAuthentication.API_KEY, "new-registration", Map.of());
+    var first =
+        connection(
+            LlmProvider.OPENAI_COMPATIBLE, LlmAuthentication.API_KEY, "registration", Map.of());
+    var other =
+        connection(
+            LlmProvider.OPENAI_COMPATIBLE, LlmAuthentication.API_KEY, "new-registration", Map.of());
     assertThat(ModelOptions.preparationFingerprint(new Prompt("request", options(first, null))))
-        .isNotEqualTo(ModelOptions.preparationFingerprint(new Prompt("request", options(other, null))));
+        .isNotEqualTo(
+            ModelOptions.preparationFingerprint(new Prompt("request", options(other, null))));
   }
 
   private OpenAiChatOptions options(RunLlmConnection connection, String key) {
-    return OpenAiChatOptions.builder().model("model").apiKey(key)
-        .toolContext(Map.of(ModelOptions.RUN_CONNECTION_CONTEXT_KEY, connection,
-            ModelOptions.ENDPOINT_CONTEXT_KEY, connection.endpoint())).build();
+    return OpenAiChatOptions.builder()
+        .model("model")
+        .apiKey(key)
+        .toolContext(
+            Map.of(
+                ModelOptions.RUN_CONNECTION_CONTEXT_KEY,
+                connection,
+                ModelOptions.ENDPOINT_CONTEXT_KEY,
+                connection.endpoint()))
+        .build();
   }
 
-  private RunLlmConnection connection(LlmProvider provider, LlmAuthentication authentication,
-      String registration, Map<String, Object> generation) {
-    return new RunLlmConnection("endpoint", true, provider, authentication, "account", registration,
-        new ResolvedLlmEndpoint("endpoint", 1, LlmApiType.CHAT_COMPLETIONS,
-            "http://local.invalid/v1", "endpoint", "model",
-            new LlmCapabilities(ReasoningReplayMode.NONE, 36, Set.of()), 1024, null,
-            Duration.ofSeconds(30)), Map.of(), generation);
+  private RunLlmConnection connection(
+      LlmProvider provider,
+      LlmAuthentication authentication,
+      String registration,
+      Map<String, Object> generation) {
+    return new RunLlmConnection(
+        "endpoint",
+        true,
+        provider,
+        authentication,
+        "account",
+        registration,
+        new ResolvedLlmEndpoint(
+            "endpoint",
+            1,
+            LlmApiType.CHAT_COMPLETIONS,
+            "http://local.invalid/v1",
+            "endpoint",
+            "model",
+            new LlmCapabilities(ReasoningReplayMode.NONE, 36, Set.of()),
+            1024,
+            null,
+            Duration.ofSeconds(30)),
+        Map.of(),
+        generation);
   }
 }

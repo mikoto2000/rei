@@ -13,7 +13,8 @@ public record RunLlmConnection(
     ResolvedLlmEndpoint endpoint,
     Map<LlmEndpointCapabilities.Capability, LlmEndpointCapabilities.Support> capabilities,
     Map<String, Object> generation,
-    @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_EMPTY)
+    @com.fasterxml.jackson.annotation.JsonInclude(
+            com.fasterxml.jackson.annotation.JsonInclude.Include.NON_EMPTY)
         Map<String, String> transport) {
   public RunLlmConnection {
     java.util.Objects.requireNonNull(profileId, "profileId");
@@ -25,12 +26,27 @@ public record RunLlmConnection(
     transport = RunTransportSettings.copy(transport);
   }
 
-  public RunLlmConnection(String profileId, boolean named, LlmProvider provider,
-      LlmAuthentication authentication, String accountRef, String accountRegistration,
+  public RunLlmConnection(
+      String profileId,
+      boolean named,
+      LlmProvider provider,
+      LlmAuthentication authentication,
+      String accountRef,
+      String accountRegistration,
       ResolvedLlmEndpoint endpoint,
       Map<LlmEndpointCapabilities.Capability, LlmEndpointCapabilities.Support> capabilities,
       Map<String, Object> generation) {
-    this(profileId, named, provider, authentication, accountRef, accountRegistration, endpoint, capabilities, generation, Map.of());
+    this(
+        profileId,
+        named,
+        provider,
+        authentication,
+        accountRef,
+        accountRegistration,
+        endpoint,
+        capabilities,
+        generation,
+        Map.of());
   }
 
   public java.time.Duration requestTimeout() {
@@ -70,8 +86,9 @@ public record RunLlmConnection(
     resolved.put("model", endpoint.model());
     resolved.put("replay", endpoint.capabilities().reasoningReplay().name());
     resolved.put("maxTools", endpoint.capabilities().maxTools());
-    resolved.put("supportedSettings", endpoint.capabilities().supportedSettings().stream()
-        .map(Enum::name).sorted().toList());
+    resolved.put(
+        "supportedSettings",
+        endpoint.capabilities().supportedSettings().stream().map(Enum::name).sorted().toList());
     resolved.put("maxOutputTokens", endpoint.maxOutputTokens());
     resolved.put("temperature", endpoint.temperature());
     resolved.put("readTimeout", endpoint.readTimeout().toString());
@@ -82,11 +99,16 @@ public record RunLlmConnection(
     values.put("generation", generation);
     values.put("transport", transport);
     try {
-      var json = new com.fasterxml.jackson.databind.ObjectMapper()
-          .enable(com.fasterxml.jackson.databind.SerializationFeature.ORDER_MAP_ENTRIES_BY_KEYS);
-      return java.util.HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256")
-          .digest(json.writeValueAsBytes(values)));
-    } catch (java.security.NoSuchAlgorithmException | com.fasterxml.jackson.core.JsonProcessingException impossible) {
+      var json =
+          new com.fasterxml.jackson.databind.ObjectMapper()
+              .enable(
+                  com.fasterxml.jackson.databind.SerializationFeature.ORDER_MAP_ENTRIES_BY_KEYS);
+      return java.util.HexFormat.of()
+          .formatHex(
+              java.security.MessageDigest.getInstance("SHA-256")
+                  .digest(json.writeValueAsBytes(values)));
+    } catch (java.security.NoSuchAlgorithmException
+        | com.fasterxml.jackson.core.JsonProcessingException impossible) {
       throw new IllegalStateException("Run connection identity is unavailable");
     }
   }

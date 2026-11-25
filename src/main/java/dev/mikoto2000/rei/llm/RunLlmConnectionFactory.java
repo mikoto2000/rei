@@ -4,8 +4,11 @@ import java.util.function.Function;
 
 /** Resolves immutable settings only; credentials are obtained at the HTTP boundary. */
 final class RunLlmConnectionFactory {
-  record LegacySettings(ResolvedLlmEndpoint endpoint, java.util.Map<String, Object> generation,
-      LlmAuthentication authentication, java.util.Map<String, String> transport) {
+  record LegacySettings(
+      ResolvedLlmEndpoint endpoint,
+      java.util.Map<String, Object> generation,
+      LlmAuthentication authentication,
+      java.util.Map<String, String> transport) {
     LegacySettings(ResolvedLlmEndpoint endpoint, java.util.Map<String, Object> generation) {
       this(endpoint, generation, LlmAuthentication.LEGACY, java.util.Map.of());
     }
@@ -72,11 +75,14 @@ final class RunLlmConnectionFactory {
     if (!catalog.hasNamedProfiles()) {
       var settings = legacy.resolve(modelOverride);
       var resolved = settings.endpoint();
-      var authentication = settings.authentication() == LlmAuthentication.LEGACY
-          ? metadata.authentication() : settings.authentication();
+      var authentication =
+          settings.authentication() == LlmAuthentication.LEGACY
+              ? metadata.authentication()
+              : settings.authentication();
       if (metadata.authentication() != LlmAuthentication.LEGACY
           && metadata.authentication() != authentication)
-        throw new IllegalStateException("Legacy authentication binding does not match its declaration");
+        throw new IllegalStateException(
+            "Legacy authentication binding does not match its declaration");
       return new RunLlmConnection(
           profile,
           false,
@@ -86,7 +92,8 @@ final class RunLlmConnectionFactory {
           null,
           resolved,
           metadata.capabilities().effective(),
-          settings.generation(), settings.transport());
+          settings.generation(),
+          settings.transport());
     }
     var model = modelOverride == null ? metadata.model() : modelOverride;
     if (model == null || model.isBlank() || model.codePoints().anyMatch(Character::isISOControl))
@@ -165,15 +172,19 @@ final class RunLlmConnectionFactory {
     if (saved.endpoint().generation() != metadata.generation())
       throw new IllegalStateException("Run connection generation changed");
     var legacySettings = saved.named() ? null : legacy.resolve(saved.endpoint().model());
-    var authentication = legacySettings == null || legacySettings.authentication() == LlmAuthentication.LEGACY
-        ? metadata.authentication() : legacySettings.authentication();
+    var authentication =
+        legacySettings == null || legacySettings.authentication() == LlmAuthentication.LEGACY
+            ? metadata.authentication()
+            : legacySettings.authentication();
     if (saved.provider() != metadata.provider()
         || saved.authentication() != authentication
         || !java.util.Objects.equals(saved.accountRef(), metadata.accountRef()))
       throw new IllegalStateException("Run connection authentication binding changed");
     var current = legacySettings == null ? null : legacySettings.endpoint();
-    var transport = legacySettings == null ? java.util.Map.<String, String>of() : legacySettings.transport();
-    if (!RunTransportSettings.binding(saved.transport()).equals(RunTransportSettings.binding(transport)))
+    var transport =
+        legacySettings == null ? java.util.Map.<String, String>of() : legacySettings.transport();
+    if (!RunTransportSettings.binding(saved.transport())
+        .equals(RunTransportSettings.binding(transport)))
       throw new IllegalStateException("Run transport account binding changed");
     var baseUrl = saved.named() ? source.getBaseUrl() : current.baseUrl();
     var api = saved.named() ? metadata.api() : current.apiType();

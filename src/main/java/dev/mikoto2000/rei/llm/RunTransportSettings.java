@@ -6,15 +6,17 @@ import java.util.Set;
 
 /** Frozen nonsecret connection attributes; no raw header or credential containers. */
 final class RunTransportSettings {
-  private static final Set<String> FIELDS = Set.of(
-      "request_timeout", "organization_id", "project_id", "api_beta");
+  private static final Set<String> FIELDS =
+      Set.of("request_timeout", "organization_id", "project_id", "api_beta");
 
   private RunTransportSettings() {}
 
   static Map<String, String> copy(Map<String, String> values) {
     if (values == null) return Map.of();
     values.forEach((name, value) -> {
-      if (!FIELDS.contains(name) || value == null || value.isBlank()
+      if (!FIELDS.contains(name)
+          || value == null
+          || value.isBlank()
           || value.codePoints().anyMatch(Character::isISOControl)) throw invalid();
       if (name.equals("request_timeout")) timeout(value);
     });

@@ -25,7 +25,11 @@ class LegacyChatConnectionSourceTest {
     chat.setBaseUrl("http://chat-override.invalid");
     chat.setOrganizationId("org-fixture");
     chat.setTimeout(Duration.ofMinutes(2));
-    var source = source(properties, () -> OpenAiAutoConfigurationUtil.resolveCommonProperties(common, chat), () -> "PRIVATE_ENV");
+    var source =
+        source(
+            properties,
+            () -> OpenAiAutoConfigurationUtil.resolveCommonProperties(common, chat),
+            () -> "PRIVATE_ENV");
     var accepted = factory(properties, source).capture("default", "chosen-model");
     assertThat(accepted.endpoint().baseUrl()).isEqualTo("http://chat-override.invalid/v1");
     assertThat(accepted.endpoint().model()).isEqualTo("chosen-model");
@@ -33,7 +37,8 @@ class LegacyChatConnectionSourceTest {
     assertThat(accepted.transport()).containsEntry("organization_id", "org-fixture");
     assertThat(accepted.requestTimeout()).isEqualTo(Duration.ofMinutes(2));
     assertThat(accepted.generation()).containsEntry("top_p", 0.4);
-    assertThat(new ObjectMapper().findAndRegisterModules().writeValueAsString(accepted)).doesNotContain("PRIVATE_");
+    assertThat(new ObjectMapper().findAndRegisterModules().writeValueAsString(accepted))
+        .doesNotContain("PRIVATE_");
     assertThat(source.credential(accepted)).isEqualTo("PRIVATE_CONNECTION_KEY");
   }
 
@@ -45,10 +50,16 @@ class LegacyChatConnectionSourceTest {
     feature.setModel("feature-model");
     properties.setFeature(LlmFeature.CHAT, feature);
     var reads = new AtomicInteger();
-    var source = source(properties, () -> {
-      reads.incrementAndGet();
-      throw new AssertionError("A feature connection consulted global authentication");
-    }, () -> { throw new AssertionError("A feature connection consulted ambient credentials"); });
+    var source =
+        source(
+            properties,
+            () -> {
+              reads.incrementAndGet();
+              throw new AssertionError("A feature connection consulted global authentication");
+            },
+            () -> {
+              throw new AssertionError("A feature connection consulted ambient credentials");
+            });
     var accepted = factory(properties, source).capture("default", null);
     assertThat(accepted.endpoint().baseUrl()).isEqualTo("http://feature.invalid/v1");
     assertThat(accepted.authentication()).isEqualTo(LlmAuthentication.NONE);
@@ -60,9 +71,15 @@ class LegacyChatConnectionSourceTest {
   void blankGlobalKeyIsExplicitNoAuthAndDoesNotConsultTheEnvironment() {
     var properties = new LlmProperties();
     var common = common("http://global.invalid", "");
-    var source = source(properties,
-        () -> OpenAiAutoConfigurationUtil.resolveCommonProperties(common, new OpenAiChatProperties()),
-        () -> { throw new AssertionError("Explicit no-auth consulted ambient credentials"); });
+    var source =
+        source(
+            properties,
+            () ->
+                OpenAiAutoConfigurationUtil.resolveCommonProperties(
+                    common, new OpenAiChatProperties()),
+            () -> {
+              throw new AssertionError("Explicit no-auth consulted ambient credentials");
+            });
     assertThat(factory(properties, source).capture("default", null).authentication())
         .isEqualTo(LlmAuthentication.NONE);
   }
@@ -71,30 +88,46 @@ class LegacyChatConnectionSourceTest {
   void refreshedKeyIsReadOnlyAfterVerifyingTheSamePinnedAudience() {
     var properties = new LlmProperties();
     var common = common("http://global.invalid", "PRIVATE_FIRST");
-    var current = new AtomicReference<>(OpenAiAutoConfigurationUtil.resolveCommonProperties(common, new OpenAiChatProperties()));
+    var current =
+        new AtomicReference<>(
+            OpenAiAutoConfigurationUtil.resolveCommonProperties(
+                common, new OpenAiChatProperties()));
     var source = source(properties, current::get, () -> null);
     var accepted = factory(properties, source).capture("default", null);
     common.setApiKey("PRIVATE_REFRESHED");
-    current.set(OpenAiAutoConfigurationUtil.resolveCommonProperties(common, new OpenAiChatProperties()));
+    current.set(
+        OpenAiAutoConfigurationUtil.resolveCommonProperties(common, new OpenAiChatProperties()));
     assertThat(source.credential(accepted)).isEqualTo("PRIVATE_REFRESHED");
     common.setBaseUrl("http://other.invalid");
-    current.set(OpenAiAutoConfigurationUtil.resolveCommonProperties(common, new OpenAiChatProperties()));
+    current.set(
+        OpenAiAutoConfigurationUtil.resolveCommonProperties(common, new OpenAiChatProperties()));
     assertThatThrownBy(() -> source.credential(accepted))
-        .isInstanceOf(IllegalStateException.class).hasMessageContaining("binding");
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("binding");
   }
 
-  private LegacyChatConnectionSource source(LlmProperties properties,
+  private LegacyChatConnectionSource source(
+      LlmProperties properties,
       java.util.function.Supplier<OpenAiAutoConfigurationUtil.ResolvedConnectionProperties> global,
       java.util.function.Supplier<String> environmentKey) {
     var model = mock(ChatModel.class);
-    when(model.getOptions()).thenReturn(OpenAiChatOptions.builder().model("root-model")
-        .baseUrl("http://unrelated-native-default.invalid/v1").apiKey("PRIVATE_NATIVE_OPTIONS")
-        .topP(0.4).maxRetries(0).build());
-    return new LegacyChatConnectionSource(new LlmModelProvider(model, properties), properties, global, environmentKey);
+    when(model.getOptions())
+        .thenReturn(
+            OpenAiChatOptions.builder()
+                .model("root-model")
+                .baseUrl("http://unrelated-native-default.invalid/v1")
+                .apiKey("PRIVATE_NATIVE_OPTIONS")
+                .topP(0.4)
+                .maxRetries(0)
+                .build());
+    return new LegacyChatConnectionSource(
+        new LlmModelProvider(model, properties), properties, global, environmentKey);
   }
 
-  private RunLlmConnectionFactory factory(LlmProperties properties, LegacyChatConnectionSource source) {
-    return RunLlmConnectionFactory.withLegacySettings(new ChatEndpointCatalog(properties), properties, source::resolve, ignored -> null);
+  private RunLlmConnectionFactory factory(
+      LlmProperties properties, LegacyChatConnectionSource source) {
+    return RunLlmConnectionFactory.withLegacySettings(
+        new ChatEndpointCatalog(properties), properties, source::resolve, ignored -> null);
   }
 
   private OpenAiCommonProperties common(String url, String key) {
