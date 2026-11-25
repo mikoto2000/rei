@@ -112,8 +112,8 @@ class RunLlmConnectionModelTest {
 
   private ToolCallingChatOptions options(LlmApiType api) {
     return api == LlmApiType.CHAT_COMPLETIONS
-        ? OpenAiChatOptions.builder().model("model").build()
-        : OpenAiResponsesChatOptions.builder().model("model").build();
+        ? OpenAiChatOptions.builder().model("model").maxRetries(0).build()
+        : OpenAiResponsesChatOptions.builder().model("model").maxRetries(0).build();
   }
 
   private RunLlmConnection connection(LlmApiType api) {
