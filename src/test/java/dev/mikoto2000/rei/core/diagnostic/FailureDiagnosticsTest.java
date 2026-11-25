@@ -11,6 +11,19 @@ import org.junit.jupiter.params.provider.CsvSource;
 /** 失敗情報診断情報の結果と状態の契約を検証するテスト。 */
 class FailureDiagnosticsTest {
   @Test
+  void responsesConfigurationFailureSurvivesWrappingWithoutExposingConfigurationValues() {
+    var failure =
+        FailureDiagnostics.classify(
+            new IllegalStateException(
+                "PRIVATE key=url",
+                new dev.mikoto2000.rei.modeloptions.ResponsesConfigurationException()));
+    assertEquals("responses_configuration_unsupported", failure.code());
+    assertTrue(failure.message().contains("rei.llm.features"));
+    assertTrue(failure.message().contains("max-tools（36）"));
+    assertFalse(failure.message().contains("PRIVATE"));
+  }
+
+  @Test
   void contextBudgetRejectionHasDedicatedDiagnosticWithoutLeakingDetails() {
     var failure =
         new IllegalStateException(

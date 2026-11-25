@@ -69,6 +69,9 @@ public final class FailureDiagnostics {
           || reactor.core.Exceptions.isCancel(cause))
         return diagnostic("cancelled", "処理が中断されました。保存済みの状態を確認してください。");
     for (var cause : causes) {
+      if (cause
+          instanceof dev.mikoto2000.rei.modeloptions.ResponsesConfigurationException configuration)
+        return diagnostic("responses_configuration_unsupported", configuration.getMessage());
       if (cause instanceof dev.mikoto2000.rei.toolcontract.ToolReadRejectedException read
           && "CONTEXT_BUDGET_INSUFFICIENT".equals(read.code()))
         return diagnostic(

@@ -69,7 +69,6 @@ class ResponsesProductionGateTest {
         "base",
         "model",
         "generation",
-        "output",
         "tools",
         "replay",
         "settings",
@@ -86,7 +85,6 @@ class ResponsesProductionGateTest {
           case "base" -> Map.of("base-url", "http://gx10-707e.local:8888");
           case "model" -> Map.of("model", "");
           case "generation" -> Map.of("endpoint-generation", "2");
-          case "output" -> Map.of("max-output-tokens", "1024");
           case "tools" -> Map.of("max-tools", "35");
           case "replay" -> Map.of("reasoning-replay", "NONE");
           case "settings" -> Map.of("supported-settings", "REASONING_EFFORT,IMAGE_INPUT");
@@ -102,6 +100,22 @@ class ResponsesProductionGateTest {
     assertThatThrownBy(() -> provider.resolvedEndpoint(feature))
         .isInstanceOf(IllegalStateException.class);
     assertThatThrownBy(() -> provider.chatModel(feature)).isInstanceOf(IllegalStateException.class);
+  }
+
+  @ParameterizedTest
+  @ValueSource(ints = {1024, 2048, 8192, 16384})
+  void configuredOutputBudgetDoesNotPreventTheRunFromStarting(int tokens) {
+    var provider =
+        new LlmModelProvider(
+            null,
+            properties(
+                LlmFeature.CHAT,
+                Map.of("model", "gpt-6.2-sol", "max-output-tokens", Integer.toString(tokens))));
+    assertThat(provider.resolvedEndpoint(LlmFeature.CHAT).maxOutputTokens()).isEqualTo(tokens);
+    assertThat(
+            ((OpenAiResponsesChatOptions) provider.requestOptions(LlmFeature.CHAT, null, true))
+                .getMaxOutputTokens())
+        .isEqualTo(tokens);
   }
 
   @Test
