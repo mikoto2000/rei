@@ -174,16 +174,18 @@ public final class ResponsesCoreLiveAcceptance {
               if (!name.equals(specialist))
                 throw new dev.mikoto2000.rei.core.policy.ToolPermissionException(
                     name, dev.mikoto2000.rei.core.policy.PermissionDecision.DENY);
-            long started = System.nanoTime();
-            guard.validateArguments(name, input, owner);
+              long started = System.nanoTime();
+              guard.validateArguments(name, input, owner);
               guard.check(name, input, owner);
               if (executions.incrementAndGet() != 1)
                 throw new IllegalStateException("Synthetic specialist repeated");
-            try {
-              runtime.report("TOOL_DURATION", Map.of("tool", name, "duration_ms", (System.nanoTime() - started) / 1000000.0));
-            } catch (java.io.IOException failure) {
-              throw new IllegalStateException("Owned tool timing evidence failed");
-            }
+              try {
+                runtime.report(
+                    "TOOL_DURATION",
+                    Map.of("tool", name, "duration_ms", (System.nanoTime() - started) / 1000000.0));
+              } catch (java.io.IOException failure) {
+                throw new IllegalStateException("Owned tool timing evidence failed");
+              }
               return "{\"accepted-value\":\"" + nonce + "\"}";
             }
           });
