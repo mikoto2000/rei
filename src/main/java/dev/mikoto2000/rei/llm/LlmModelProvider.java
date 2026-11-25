@@ -443,12 +443,6 @@ public class LlmModelProvider implements dev.mikoto2000.rei.secretary.SecretaryP
     return model(resolvedServer(feature), defaultModel);
   }
 
-  /** シェルに表示する通常チャットのモデル名も、送信時と同じ設定から解決する。 */
-  @org.springframework.context.annotation.Bean
-  public java.util.function.UnaryOperator<String> chatModelResolver() {
-    return selected -> model(LlmFeature.CHAT, selected);
-  }
-
   private String model(LlmProperties.Server server, String defaultModel) {
     if (server == null || server.getModel() == null || server.getModel().isBlank()) {
       return defaultModel != null && !defaultModel.isBlank()

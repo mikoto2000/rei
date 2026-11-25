@@ -7,6 +7,7 @@ import dev.mikoto2000.rei.core.service.CommandCancellationService;
 import dev.mikoto2000.rei.core.service.CommandCompletionNotificationPolicy;
 import dev.mikoto2000.rei.core.service.CommandUserInputDisplayPolicy;
 import dev.mikoto2000.rei.core.service.ModelHolderService;
+import dev.mikoto2000.rei.llm.ChatModelResolver;
 import dev.mikoto2000.rei.llm.LlmApiType;
 import dev.mikoto2000.rei.llm.LlmFeature;
 import dev.mikoto2000.rei.llm.LlmModelProvider;
@@ -57,7 +58,7 @@ class ReiApplicationInputRenderingTest {
     org.springframework.test.util.ReflectionTestUtils.invokeMethod(
         selected,
         "setChatModelResolver",
-        new LlmModelProvider(null, properties).chatModelResolver());
+        new ChatModelResolver(new LlmModelProvider(null, properties)));
 
     assertEquals("09:42 gpt-6.2-sol> ", app.buildPrompt());
   }
@@ -69,7 +70,7 @@ class ReiApplicationInputRenderingTest {
     org.springframework.test.util.ReflectionTestUtils.invokeMethod(
         selected,
         "setChatModelResolver",
-        new LlmModelProvider(null, new LlmProperties()).chatModelResolver());
+        new ChatModelResolver(new LlmModelProvider(null, new LlmProperties())));
 
     assertEquals("09:42 default-model> ", app.buildPrompt());
     selected.set("another-model");
