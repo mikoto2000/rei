@@ -18,7 +18,7 @@ class ChatEndpointCapabilitiesTest {
     assertThat(view.at("/usagePath").asText()).isEqualTo("unknown");
     assertThat(view.at("/capabilities/effective/VISION").asText()).isEqualTo("UNKNOWN");
     assertThat(view.at("/capabilities/effective/FUNCTION_CALLING").asText()).isEqualTo("UNKNOWN");
-    assertThat(view.at("/capabilities/effective/CHAT_COMPLETIONS").asText()).isEqualTo("SUPPORTED");
+    assertThat(view.at("/capabilities/effective/CHAT_COMPLETIONS").asText()).isEqualTo("UNKNOWN");
     assertThat(view.at("/capabilities/effective/RESPONSES").asText()).isEqualTo("UNSUPPORTED");
   }
 
@@ -26,6 +26,7 @@ class ChatEndpointCapabilitiesTest {
   void anExplicitModelDeclarationCannotOverrideTransportRestrictions() {
     var settings = local();
     settings.put("rei.llm.features.chat.endpoints.local.model-capabilities.vision", "supported");
+    settings.put("rei.llm.features.chat.endpoints.local.server-capabilities.vision", "supported");
     settings.put(
         "rei.llm.features.chat.endpoints.local.model-capabilities.tool-namespace", "supported");
     settings.put(
@@ -122,6 +123,7 @@ class ChatEndpointCapabilitiesTest {
   void flatResponsesNamespacesAndUnimplementedInputsAreNotAdvertisedAsAvailable() {
     var settings = local();
     settings.put("rei.llm.features.chat.endpoints.local.api", "responses");
+    settings.put("rei.llm.features.chat.endpoints.local.server-capabilities.responses", "supported");
     var view = view(settings);
     assertThat(view.at("/capabilities/effective/RESPONSES").asText()).isEqualTo("SUPPORTED");
     assertThat(view.at("/capabilities/effective/TOOL_NAMESPACE").asText()).isEqualTo("UNSUPPORTED");
