@@ -117,10 +117,16 @@ CC会話・CC/native未完了Checkpoint・native payload hash/parts・期限切�
 破損backupと新データのある復元先は拒否する。既存の移行障害注入・旧CC schema・protocol transfer拒否を補完証拠とする。
 本番DBのコピー・バックアップ・migrationは未実施。合成fixtureの成功を実データ移行完了と呼ばない。
 
+稼働中の旧JAR（SHA-256 `438736d1ff006691824ffb049fc06a0fe4c4dbbf9f7b312ecd941e7a2df9986e`）の実クラス/依存で、
+新JARが作った所有合成DBを別JVMから読んだ。CC Checkpointは読めたがnative Checkpointは`CORRUPT_CHECKPOINT`で拒否された。
+新JAR（`1c9886f9e99605a6407bd6b7d1bd3afbabd404def0b79c5b15610e14f326f483`）の対照では両方を読み、native historyを保持した。
+これは実バイナリcomponentの互換試験で、旧アプリ全体の起動を検証した意味ではない。
+少なくともこの旧JARへ、新しいnative未完了記録があるDBをそのまま渡す切戻しは禁止する。
+
 切戻しは次の3つを分ける。
 
 1. **API形式**: 新しいJAR/DBを維持し、今後のRunをCCへ戻す。chat/plannerのprofileを除去し、API/接続先/圧縮設定を保存した旧設定へ戻す。native未完了Runは変換せず保持し、元のnative構成を復元できる時に照合して再開する。
-2. **アプリ版**: 旧JARと新DBの任意組合せはUNVERIFIED。設定だけで安全と仮定しない。既知互換版か、対応する停止時backupを別の空領域へ復元する計画をレビューする。
+2. **アプリ版**: 観測した旧JARは新native Checkpointと非互換。その他の旧JAR/新DBの任意組合せもUNVERIFIED。新JARを保つAPI切戻しを優先し、版を戻す場合は対応する停止時backupを別の空領域へ復元する計画をレビューする。
 3. **DB**: 全writer停止後の検証済み一式を復元する。SQLite本体だけをWAL/関連ファイルから切り離してコピーしない。新規データのある領域へ上書きしない。後続の外部副作用はDBを戻しても取り消せないため台帳を照合する。
 
 ## 段階的導入と停止条件
