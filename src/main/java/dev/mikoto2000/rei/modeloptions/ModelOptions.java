@@ -149,12 +149,16 @@ public final class ModelOptions {
 
   public static ToolCallingChatOptions singleRequest(
       ToolCallingChatOptions options, java.util.Map<String, Object> callerContext) {
+    if (options.getToolContext() != null
+        && options.getToolContext().containsKey(RUN_CONNECTION_CONTEXT_KEY))
+      throw new IllegalArgumentException("Run connection cannot become a feature request");
     var clean = withoutTools(options);
     var context = new java.util.HashMap<String, Object>(callerContext);
     for (String key :
         List.of(
             "rei.llm.replay-owner",
             ENDPOINT_CONTEXT_KEY,
+            RUN_CONNECTION_CONTEXT_KEY,
             MAX_TOOLS_CONTEXT_KEY,
             PREPARATION_CONTEXT_KEY,
             SINGLE_REQUEST_CONTEXT_KEY,
