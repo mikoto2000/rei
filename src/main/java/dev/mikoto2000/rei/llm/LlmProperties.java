@@ -170,6 +170,7 @@ public class LlmProperties {
     public void setAcceptedResponsesProfile(String value) {
       acceptedResponsesProfile = value;
     }
+
     private ReasoningReplayMode reasoningReplay;
     private java.util.Set<LlmCapabilities.Setting> supportedSettings = java.util.Set.of();
 
