@@ -29,21 +29,31 @@ class RunLlmConnectionFactoryTest {
     assertThat(snapshot.endpoint().model()).isEqualTo("fixture-model");
     assertThat(snapshot.endpoint().baseUrl()).isEqualTo("http://localhost:8000/v1");
     assertThat(snapshot.endpoint().readTimeout()).isEqualTo(Duration.ofSeconds(42));
-    assertThat(snapshot.generation()).containsEntry("max_tokens", 2048).containsEntry("temperature", 0.5);
+    assertThat(snapshot.generation())
+        .containsEntry("max_tokens", 2048)
+        .containsEntry("temperature", 0.5);
     properties.setReadTimeout(Duration.ofSeconds(9));
     properties.setFeature("chat", new LlmProperties.Server());
     assertThat(snapshot.endpoint().readTimeout()).isEqualTo(Duration.ofSeconds(42));
     var json = new ObjectMapper().findAndRegisterModules().writeValueAsString(snapshot);
-    assertThat(json).doesNotContain("PRIVATE_GLOBAL_CANARY", "PRIVATE_LOCAL_CANARY", "apiKey", "accessToken", "refreshToken");
+    assertThat(json)
+        .doesNotContain(
+            "PRIVATE_GLOBAL_CANARY",
+            "PRIVATE_LOCAL_CANARY",
+            "apiKey",
+            "accessToken",
+            "refreshToken");
     assertThat(snapshot.toString()).doesNotContain("localhost", "fixture-model", "PRIVATE");
-    assertThatThrownBy(() -> snapshot.generation().put("temperature", 1.0)).isInstanceOf(UnsupportedOperationException.class);
-    assertThatThrownBy(() -> snapshot.capabilities().clear()).isInstanceOf(UnsupportedOperationException.class);
+    assertThatThrownBy(() -> snapshot.generation().put("temperature", 1.0))
+        .isInstanceOf(UnsupportedOperationException.class);
+    assertThatThrownBy(() -> snapshot.capabilities().clear())
+        .isInstanceOf(UnsupportedOperationException.class);
   }
 
   @Test
   void aNamedProfileCalledDefaultDoesNotBecomeTheLegacyConnection() {
     var settings = new HashMap<String, String>();
-    local().forEach((key,value) -> settings.put(key.replace(".local.", ".default."), value));
+    local().forEach((key, value) -> settings.put(key.replace(".local.", ".default."), value));
     settings.put("rei.llm.features.chat.active", "default");
     var snapshot = factory(properties(settings)).capture("default", null);
     assertThat(snapshot).isNotNull();
@@ -62,32 +72,46 @@ class RunLlmConnectionFactoryTest {
 
   @Test
   void planSnapshotPinsRegistrationAndReplayWithoutInheritingGenericGenerationDefaults() {
-    var props = properties(Map.of(
-        "rei.llm.features.chat.active", "subscription",
-        "rei.llm.features.chat.endpoints.subscription.provider", "chatgpt-plan",
-        "rei.llm.features.chat.endpoints.subscription.api", "responses",
-        "rei.llm.features.chat.endpoints.subscription.account-ref", "personal",
-        "rei.llm.features.chat.endpoints.subscription.model", "fixture-plan"));
+    var props =
+        properties(
+            Map.of(
+                "rei.llm.features.chat.active", "subscription",
+                "rei.llm.features.chat.endpoints.subscription.provider", "chatgpt-plan",
+                "rei.llm.features.chat.endpoints.subscription.api", "responses",
+                "rei.llm.features.chat.endpoints.subscription.account-ref", "personal",
+                "rei.llm.features.chat.endpoints.subscription.model", "fixture-plan"));
     var snapshot = factory(props).capture("subscription", null);
     assertThat(snapshot).isNotNull();
     assertThat(snapshot.accountRegistration()).isEqualTo("registration-1");
-    assertThat(snapshot.endpoint().capabilities().reasoningReplay()).isEqualTo(ReasoningReplayMode.ENCRYPTED);
+    assertThat(snapshot.endpoint().capabilities().reasoningReplay())
+        .isEqualTo(ReasoningReplayMode.ENCRYPTED);
     assertThat(snapshot.endpoint().maxOutputTokens()).isNull();
     assertThat(snapshot.generation()).isEmpty();
   }
 
   private RunLlmConnectionFactory factory(LlmProperties props) {
-    return new RunLlmConnectionFactory(new ChatEndpointCatalog(props), props, ignored -> legacy(), ignored -> "registration-1");
+    return new RunLlmConnectionFactory(
+        new ChatEndpointCatalog(props), props, ignored -> legacy(), ignored -> "registration-1");
   }
 
   private static ResolvedLlmEndpoint legacy() {
-    return new ResolvedLlmEndpoint("default", 1, LlmApiType.CHAT_COMPLETIONS,
-        "http://legacy.invalid/v1", "default", "legacy-model",
-        new LlmCapabilities(ReasoningReplayMode.NONE, 36, Set.of()), 8192, 0.3, Duration.ofSeconds(120));
+    return new ResolvedLlmEndpoint(
+        "default",
+        1,
+        LlmApiType.CHAT_COMPLETIONS,
+        "http://legacy.invalid/v1",
+        "default",
+        "legacy-model",
+        new LlmCapabilities(ReasoningReplayMode.NONE, 36, Set.of()),
+        8192,
+        0.3,
+        Duration.ofSeconds(120));
   }
 
   private LlmProperties properties(Map<String, String> values) {
-    return new Binder(new MapConfigurationPropertySource(values)).bind("rei.llm", LlmProperties.class).get();
+    return new Binder(new MapConfigurationPropertySource(values))
+        .bind("rei.llm", LlmProperties.class)
+        .get();
   }
 
   private HashMap<String, String> local() {
