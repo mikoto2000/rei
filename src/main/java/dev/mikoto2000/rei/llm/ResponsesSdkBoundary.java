@@ -84,6 +84,7 @@ final class ResponsesSdkBoundary {
       if (output != null)
         for (var item : output) {
           item.validate();
+          requireFlatToolCall(item);
           if (plaintext) validatePlaintextItem(item);
         }
       var nativeUsage = ResponsesTransportException.known(response._usage());
@@ -102,6 +103,13 @@ final class ResponsesSdkBoundary {
     } catch (RuntimeException invalid) {
       throw ResponsesTransportException.normalize(invalid);
     }
+  }
+
+  /** This adapter only advertises flat tools. Never let Spring discard a foreign namespace. */
+  private static void requireFlatToolCall(com.openai.models.responses.ResponseOutputItem output) {
+    if (output.functionCall().filter(call -> call.namespace().isPresent()).isPresent())
+      throw new ResponsesTransportException(
+          ResponsesTransportException.Category.INVALID_RESPONSE);
   }
 
   /** Unknown plaintext fields cannot be dropped before the canonical ReasoningPart is stored. */
@@ -174,11 +182,13 @@ final class ResponsesSdkBoundary {
         .ifPresent(done -> {
           validateDelta("", done.outputIndex());
           done.item().validate();
+          requireFlatToolCall(done.item());
         });
     event
         .outputItemAdded()
         .ifPresent(added -> {
           validateDelta("", added.outputIndex());
+          requireFlatToolCall(added.item());
           if (added.item().isFunctionCall()) {
             var call = added.item().asFunctionCall();
             validateDelta(call.callId(), 0);
