@@ -2,7 +2,7 @@
 # This launcher is opt-in and never reads application.yaml or inherits general environment variables.
 param(
  [Parameter(Mandatory=$true)][ValidateSet('openai','local-deepseek')][string]$Target,
- [Parameter(Mandatory=$true)][ValidateSet('core','discovery-verified','discovery-metrics','checkpoint-write','checkpoint-read','approval-write','approval-read','approval-deny-write','approval-deny','features','output-limit','continuity','storage-metrics','local-common','local-structured','local-image','local-summary','local-continuity','local-output-limit','operational-preflight','operational-smoke','operational-short','operational-medium','operational-long','operational-goal','operational-research','operational-planning','operational-subagent','operational-cancel')][string]$Action,
+ [Parameter(Mandatory=$true)][ValidateSet('core','discovery-verified','discovery-metrics','checkpoint-write','checkpoint-read','checkpoint-operational-write','checkpoint-operational-read','approval-write','approval-read','approval-deny-write','approval-deny','features','output-limit','continuity','storage-metrics','local-common','local-structured','local-image','local-summary','local-continuity','local-output-limit','operational-preflight','operational-smoke','operational-short','operational-medium','operational-medium-retest','operational-long','operational-goal','operational-research','operational-research-retest','operational-planning','operational-planning-retest','operational-subagent','operational-subagent-retest','operational-cancel')][string]$Action,
  [Parameter(Mandatory=$true)][string]$EvidenceRoot,
  [Parameter(Mandatory=$true)][switch]$ApprovedExtendedBudget,
  [switch]$ApprovedTimeExtension,
@@ -70,6 +70,20 @@ if (Test-Path -LiteralPath $taskJournal) {
  if ($taskRemaining -le 0) { throw 'Existing approved time window expired; no child started' }
  $taskWaitMs=[int][Math]::Min(1800000,[Math]::Floor($taskRemaining))
 }
+$taskInvocation=[Guid]::NewGuid().ToString('N')
+$taskClassHashes=[ordered]@{}
+foreach ($taskClass in @('ResponsesCoreLiveAcceptance','ResponsesOperationalLiveAcceptance','ResponsesOperationalRounds','ResponsesOperationalScenarios','ResponsesAcceptanceRuntime','ResponsesAcceptanceMeter','ResponsesAcceptanceBudget')) {
+ $taskClassPath=Join-Path $taskWorktree ('target/test-classes/dev/mikoto2000/rei/llm/' + $taskClass + '.class')
+ if (Test-Path -LiteralPath $taskClassPath) { $taskClassHashes[$taskClass]=(Get-FileHash -LiteralPath $taskClassPath -Algorithm SHA256).Hash.ToLowerInvariant() }
+}
+$taskSummaryClass=Join-Path $taskWorktree 'target/classes/dev/mikoto2000/rei/core/contextbudget/LlmConversationCompressor.class'
+$taskClassHashes['LlmConversationCompressor']=(Get-FileHash -LiteralPath $taskSummaryClass -Algorithm SHA256).Hash.ToLowerInvariant()
+$taskLaunch=[ordered]@{target=$Target;action=$Action;invocation=$taskInvocation;created_utc=[DateTimeOffset]::UtcNow.ToString('o');git_head=(git -C $taskWorktree rev-parse HEAD);git_dirty=@(git -C $taskWorktree status --porcelain);class_sha256=$taskClassHashes;process_deadline_ms=$taskWaitMs;explicit_time_extension=[bool]$ApprovedTimeExtension}
+$taskLaunch | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath ($taskRoot + '/' + $Action + '.' + $taskInvocation + '.launch.json') -Encoding utf8
+foreach ($taskSuffix in @('stdout.log','stderr.log')) {
+ $taskPrevious=Join-Path $taskRoot ($Action + '.' + $taskSuffix)
+ if (Test-Path -LiteralPath $taskPrevious) { Copy-Item -LiteralPath $taskPrevious -Destination (Join-Path $taskRoot ($Action + '.previous.' + $taskInvocation + '.' + $taskSuffix)) }
+}
 try {
  $taskStartedAt=[DateTimeOffset]::UtcNow
  [void]$taskProcess.Start()
@@ -85,7 +99,7 @@ try {
  $taskExit=$taskProcess.ExitCode
  if ($taskExit -eq 0 -and $Action.StartsWith('operational-')) {
   $taskResults=Join-Path $taskRoot 'results.jsonl'
-  $taskReceipts=if (Test-Path -LiteralPath $taskResults) { @(Get-Content -LiteralPath $taskResults | ForEach-Object { $_ | ConvertFrom-Json } | Where-Object { $_.case -eq 'OPERATIONAL_ACTION' -and $_.action -eq $Action -and $_.success -and [DateTimeOffset]::Parse($_.timestamp) -ge $taskStartedAt }) } else { @() }
+  $taskReceipts=if (Test-Path -LiteralPath $taskResults) { @(Get-Content -LiteralPath $taskResults | ForEach-Object { $_ | ConvertFrom-Json } | Where-Object { $_.case -eq 'OPERATIONAL_ACTION' -and $_.action -eq $Action -and $_.success -and $(if ($_.timestamp -is [datetime]) { [DateTimeOffset]::new($_.timestamp) } else { [DateTimeOffset]::Parse($_.timestamp) }) -ge $taskStartedAt }) } else { @() }
   if ($taskReceipts.Count -ne 1) { throw 'Operational exit code lacks the new owned terminal receipt' }
  }
  [pscustomobject]@{Target=$Target; Action=$Action; ExitCode=$taskExit}

@@ -12,7 +12,8 @@
 | 5 | MERGED | codex/responses-api-phase-5-deepseek / 削除済み | [#633](https://github.com/mikoto2000/rei/pull/633) | f9fd5a5ebbd4fff2fe65781373d9af4f31027276 | PR・マージ後CI8,215件、成功8,203、期待skip12、failure/error0。全品質ゲート成功 |
 | 6 | MERGED | codex/responses-api-phase-6-operational-validation / 削除済み | [#634](https://github.com/mikoto2000/rei/pull/634) | 38a13f1d38f0759049290e37df40cdd078a58e54 | exact SHAのJava/品質/Client CI成功。全回帰8,273件、成功8,261・期待skip12・failure/error0 |
 | 7 | MERGED | codex/responses-api-phase-7-openai-validation / 削除済み | [#635](https://github.com/mikoto2000/rei/pull/635) | 6e104b3d434d22873c8f45083d78063c07d0edb2 | PR/merge全CI成功。Backend8,301・成功8,289・期待skip12・failure/error0、品質0/0、全Client成功。実OpenAI初期7＋追加65要求 |
-| 8 | IN_PROGRESS | codex/responses-api-phase-8-deepseek-validation / .worktrees/responses-api-phase-8 | 作成中 | 未マージ | 指定ローカルの独立能力・3試行を実施。新規32要求、JSON系400を区別。fixture25件成功。全CI待ち |
+| 8 | MERGED | codex/responses-api-phase-8-deepseek-validation / 削除済み | [#636](https://github.com/mikoto2000/rei/pull/636) | 64e2d4095154ac5a4f4b43fa3ff578e69573dfe1 | PR/merge全CI成功。Backend8,304・成功8,292・期待skip12・failure/error0。品質0/0、全Client成功。最初のmerge-B timeoutは同一SHA再試行成功、証拠保持 |
+| 9 | IN_PROGRESS | codex/responses-api-phase-9-long-acceptance / .worktrees/responses-api-phase-9 | 作成中 | 未マージ | 実Spring/Coreで両Short/修正後Medium成功、OpenAI Long50操作・実圧縮7回成功。最初のMedium失敗と2要約修正を記録。残ケース/全CI未完了 |
 
 ## Phase 7〜10 開始時の状態確認（2026-11-25）
 
@@ -30,7 +31,7 @@ Phase 6 の完了を上表の古い IN_PROGRESS 表示だけで判定しない�
 
 Phase 7 専用 worktree を最新 origin/main から作成し、隔離Core・耐久予算・受入試験台帳を実装した。
 詳細は [実接続受入試験](responses-api-live-validation.md)。追加枠は各200要求・3時間、OpenAI USD20を承認済み。
-ローカルの先行試験は公式DeepSeek APIの受入とは区別する。本番 gate は閉じたまま。Phase 8〜10 は未完了であり、
+ローカルの先行試験は公式DeepSeek APIの受入とは区別する。本番 gate は閉じたまま。Phase 9〜10 は未完了であり、
 準備コードや PR の状態を実受入・長時間 Run・本番導入の成功に読み替えない。
 
 ## Phase 0: 接続先管理・API抽象化

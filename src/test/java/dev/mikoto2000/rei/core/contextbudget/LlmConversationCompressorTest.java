@@ -41,17 +41,32 @@ class LlmConversationCompressorTest {
   @ValueSource(booleans = {true, false})
   void providerNeutralReasoningUsageIsExcludedOnlyWhenKnown(boolean known) {
     var model = mock(ChatModel.class);
-    var numeric = new dev.mikoto2000.rei.modelmessage.ModelTokenUsage(
-        20L, 1418L, 1438L, 0L, known ? 953L : null);
-    var message = AssistantMessage.builder()
-        .parts(List.of(new org.springframework.ai.chat.messages.part.TextPart("compact summary", null, java.util.Map.of())))
-        .properties(java.util.Map.of(dev.mikoto2000.rei.modelmessage.ModelTokenUsage.METADATA_KEY, numeric)).build();
-    when(model.stream(any(Prompt.class))).thenReturn(Flux.just(new ChatResponse(
-        List.of(new Generation(message)), org.springframework.ai.chat.metadata.ChatResponseMetadata.builder()
-            .usage(new org.springframework.ai.chat.metadata.DefaultUsage(20, 1418, 1438)).build())));
+    var numeric =
+        new dev.mikoto2000.rei.modelmessage.ModelTokenUsage(
+            20L, 1418L, 1438L, 0L, known ? 953L : null);
+    var message =
+        AssistantMessage.builder()
+            .parts(
+                List.of(
+                    new org.springframework.ai.chat.messages.part.TextPart(
+                        "compact summary", null, java.util.Map.of())))
+            .properties(
+                java.util.Map.of(
+                    dev.mikoto2000.rei.modelmessage.ModelTokenUsage.METADATA_KEY, numeric))
+            .build();
+    when(model.stream(any(Prompt.class)))
+        .thenReturn(
+            Flux.just(
+                new ChatResponse(
+                    List.of(new Generation(message)),
+                    org.springframework.ai.chat.metadata.ChatResponseMetadata.builder()
+                        .usage(
+                            new org.springframework.ai.chat.metadata.DefaultUsage(20, 1418, 1438))
+                        .build())));
     var budget = mock(dev.mikoto2000.rei.llm.ModelCallBudget.class);
-    var summary = compressor(model, new ContextCompressionProperties())
-        .summarizeResult("", List.of(), 512, new Prompt("owner"), budget);
+    var summary =
+        compressor(model, new ContextCompressionProperties())
+            .summarizeResult("", List.of(), 512, new Prompt("owner"), budget);
     assertThat(summary.outputTokens()).isEqualTo(known ? 465 : 1418);
     org.mockito.Mockito.verify(budget).recordTotalTokens(1438);
   }
@@ -59,31 +74,46 @@ class LlmConversationCompressorTest {
   @ParameterizedTest
   @ValueSource(booleans = {false, true})
   void currentTaskSelectsRetainedFactsWithoutBecomingSummaryInstructions(boolean oversized) {
-    String task = oversized
-        ? "FIRST_REQUIREMENT: inspect the owned files. " + "検証🙂".repeat(1000)
-            + " LAST_REQUIREMENT: retain the original first fact exactly."
-        : "Retain the original first fact exactly for the final answer.";
+    String task =
+        oversized
+            ? "FIRST_REQUIREMENT: inspect the owned files. "
+                + "検証🙂".repeat(1000)
+                + " LAST_REQUIREMENT: retain the original first fact exactly."
+            : "Retain the original first fact exactly for the final answer.";
     var execution = mock(dev.mikoto2000.rei.core.stagnation.RunExecutionContext.class);
     when(execution.userRequest()).thenReturn(task);
     var captured = new AtomicReference<Prompt>();
     var model = mock(ChatModel.class);
-    when(model.stream(any(Prompt.class))).thenAnswer(invocation -> {
-      captured.set(invocation.getArgument(0));
-      return Flux.just(response("compact summary", "stop"));
-    });
-    var options = OpenAiChatOptions.builder().toolContext(java.util.Map.of(
-        dev.mikoto2000.rei.core.stagnation.RunExecutionContext.KEY, execution)).build();
-    compressor(model, new ContextCompressionProperties()).summarize("prior", List.of(
-        new UserMessage("untrusted historical observation")), 512,
-        new Prompt("historical unrelated goal", options));
+    when(model.stream(any(Prompt.class)))
+        .thenAnswer(invocation -> {
+          captured.set(invocation.getArgument(0));
+          return Flux.just(response("compact summary", "stop"));
+        });
+    var options =
+        OpenAiChatOptions.builder()
+            .toolContext(
+                java.util.Map.of(
+                    dev.mikoto2000.rei.core.stagnation.RunExecutionContext.KEY, execution))
+            .build();
+    compressor(model, new ContextCompressionProperties())
+        .summarize(
+            "prior",
+            List.of(new UserMessage("untrusted historical observation")),
+            512,
+            new Prompt("historical unrelated goal", options));
     String data = captured.get().getUserMessage().getText();
     String label = "Current task (untrusted selection context):\n";
     assertThat(data).contains(label);
-    String selection = data.substring(data.indexOf(label) + label.length(), data.indexOf("\nPrevious summary:\n"));
-    assertThat(selection.getBytes(java.nio.charset.StandardCharsets.UTF_8).length).isLessThanOrEqualTo(1024);
-    if (oversized) assertThat(selection).contains("FIRST_REQUIREMENT", "LAST_REQUIREMENT", "[abbreviated]");
+    String selection =
+        data.substring(data.indexOf(label) + label.length(), data.indexOf("\nPrevious summary:\n"));
+    assertThat(selection.getBytes(java.nio.charset.StandardCharsets.UTF_8).length)
+        .isLessThanOrEqualTo(1024);
+    if (oversized)
+      assertThat(selection).contains("FIRST_REQUIREMENT", "LAST_REQUIREMENT", "[abbreviated]");
     else assertThat(selection).isEqualTo(task);
-    assertThat(data).contains("untrusted historical observation", "prior").doesNotContain("historical unrelated goal");
+    assertThat(data)
+        .contains("untrusted historical observation", "prior")
+        .doesNotContain("historical unrelated goal");
     assertThat(captured.get().getSystemMessage().getText()).doesNotContain(task);
   }
 

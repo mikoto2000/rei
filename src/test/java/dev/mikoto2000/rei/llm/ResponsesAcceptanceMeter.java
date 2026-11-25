@@ -22,8 +22,11 @@ final class ResponsesAcceptanceMeter implements ChatModel {
     this(delegate, budget, defaultTierOnly, false);
   }
 
-  ResponsesAcceptanceMeter(ChatModel delegate, ResponsesAcceptanceBudget budget,
-      boolean defaultTierOnly, boolean lowEffortOnly) {
+  ResponsesAcceptanceMeter(
+      ChatModel delegate,
+      ResponsesAcceptanceBudget budget,
+      boolean defaultTierOnly,
+      boolean lowEffortOnly) {
     this.delegate = delegate;
     this.budget = budget;
     this.defaultTierOnly = defaultTierOnly;
@@ -35,9 +38,13 @@ final class ResponsesAcceptanceMeter implements ChatModel {
     if (!(prompt.getOptions()
         instanceof org.springframework.ai.openai.responses.OpenAiResponsesChatOptions options))
       throw new IllegalArgumentException("Explicit native acceptance options required");
-    if (defaultTierOnly && options.getServiceTier() != null && !options.getServiceTier().equals("default"))
+    if (defaultTierOnly
+        && options.getServiceTier() != null
+        && !options.getServiceTier().equals("default"))
       throw new IllegalArgumentException("Acceptance requires the approved default service tier");
-    if (lowEffortOnly && options.getReasoningEffort() != null && !options.getReasoningEffort().equals("low"))
+    if (lowEffortOnly
+        && options.getReasoningEffort() != null
+        && !options.getReasoningEffort().equals("low"))
       throw new IllegalArgumentException("Operational acceptance requires low reasoning effort");
     var accepted = options.mutate();
     if (defaultTierOnly) accepted.serviceTier("default");

@@ -52,6 +52,56 @@ class ResponsesAcceptanceServiceTierTest {
   }
 
   @Test
+  void operationalLowEffortPreservesContextForSyncAndStreamWithoutAddingALocalTier() {
+    var options =
+        OpenAiResponsesChatOptions.builder()
+            .model("fixture")
+            .maxOutputTokens(2048)
+            .toolContext(Map.of("owned-context", "retained"))
+            .build();
+    java.util.function.Consumer<Prompt> check =
+        prompt -> {
+          var actual = (OpenAiResponsesChatOptions) prompt.getOptions();
+          assertThat(actual.getReasoningEffort()).isEqualTo("low");
+          assertThat(actual.getServiceTier()).isNull();
+          assertThat(actual.getToolContext()).containsEntry("owned-context", "retained");
+        };
+    when(delegate.call(any(Prompt.class)))
+        .thenAnswer(invocation -> {
+          check.accept(invocation.getArgument(0));
+          return response();
+        });
+    when(delegate.stream(any(Prompt.class)))
+        .thenAnswer(invocation -> {
+          check.accept(invocation.getArgument(0));
+          return reactor.core.publisher.Flux.just(response());
+        });
+    var budget = budget();
+    var model = new ResponsesAcceptanceMeter(delegate, budget, false, true);
+    model.call(new Prompt("synthetic", options));
+    model.stream(new Prompt("synthetic", options)).collectList().block();
+    assertThat(options.getReasoningEffort()).isNull();
+    assertThat(budget.snapshot().completed()).isEqualTo(2);
+  }
+
+  @Test
+  void operationalEffortOverrideIsRejectedBeforeQuotaAndTransport() {
+    var budget = budget();
+    var options =
+        OpenAiResponsesChatOptions.builder()
+            .model("fixture")
+            .maxOutputTokens(2048)
+            .reasoningEffort("medium")
+            .build();
+    assertThatThrownBy(() ->
+            new ResponsesAcceptanceMeter(delegate, budget, true, true)
+                .call(new Prompt("synthetic", options)))
+        .isInstanceOf(IllegalArgumentException.class);
+    assertThat(budget.snapshot().calls()).isZero();
+    org.mockito.Mockito.verifyNoInteractions(delegate);
+  }
+
+  @Test
   void pinsDefaultTierWithoutMutatingTheAcceptedPromptOrItsContext() {
     var options =
         OpenAiResponsesChatOptions.builder()

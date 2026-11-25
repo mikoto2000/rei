@@ -23,8 +23,10 @@ class ResponsesAcceptanceTimeExtensionTest {
 
   private ResponsesAcceptanceBudget budget() {
     return new ResponsesAcceptanceBudget(
-        root.resolve("budget.jsonl"), "owned-test",
-        new ResponsesAcceptanceBudget.Limits(3, 1000, 600, Duration.ofHours(3), 0, 0, 0), clock);
+        root.resolve("budget.jsonl"),
+        "owned-test",
+        new ResponsesAcceptanceBudget.Limits(3, 1000, 600, Duration.ofHours(3), 0, 0, 0),
+        clock);
   }
 
   @Test
@@ -70,7 +72,8 @@ class ResponsesAcceptanceTimeExtensionTest {
     clock = Clock.offset(clock, Duration.ofHours(5));
     assertThatThrownBy(() -> budget().authorizeTimeExtension(APPROVAL))
         .isInstanceOf(IllegalStateException.class);
-    Files.writeString(root.resolve("budget.jsonl"),
+    Files.writeString(
+        root.resolve("budget.jsonl"),
         "{\"type\":\"E\",\"extension_ms\":14400000,\"approval\":\"" + APPROVAL + "\"}\n",
         java.nio.file.StandardOpenOption.APPEND);
     assertThatThrownBy(() -> budget().snapshot()).isInstanceOf(IllegalStateException.class);

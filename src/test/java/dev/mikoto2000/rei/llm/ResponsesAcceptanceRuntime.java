@@ -30,6 +30,7 @@ final class ResponsesAcceptanceRuntime {
   final String model;
   final String base;
   final boolean operational;
+  volatile Runnable streamHeaders = () -> {};
   final LlmProperties properties;
   final LlmModelProvider models;
   final ModelMessagePayloadStore payloads;
@@ -52,9 +53,12 @@ final class ResponsesAcceptanceRuntime {
     this("fixture", root, fixtureTransport, Candidate.BASE);
   }
 
-  ResponsesAcceptanceRuntime(Path root,
-      List<org.springframework.ai.openai.http.okhttp.OpenAiHttpClientBuilderCustomizer> fixtureTransport,
-      Candidate candidate) throws Exception {
+  ResponsesAcceptanceRuntime(
+      Path root,
+      List<org.springframework.ai.openai.http.okhttp.OpenAiHttpClientBuilderCustomizer>
+          fixtureTransport,
+      Candidate candidate)
+      throws Exception {
     this("fixture", root, fixtureTransport, candidate);
   }
 
@@ -67,8 +71,10 @@ final class ResponsesAcceptanceRuntime {
       throws Exception {
     boolean fixture =
         fixtureTransport != null && !fixtureTransport.isEmpty() && target.equals("fixture");
-    if (candidate == null || candidate != Candidate.BASE && candidate != Candidate.OPERATIONAL
-        && !target.equals("local-deepseek"))
+    if (candidate == null
+        || candidate != Candidate.BASE
+            && candidate != Candidate.OPERATIONAL
+            && !target.equals("local-deepseek"))
       throw new IllegalArgumentException(
           "Candidate capability probes require the approved local target");
     if (!fixture
@@ -223,6 +229,10 @@ final class ResponsesAcceptanceRuntime {
                 audit.put("error_flags", flags);
               }
               report("WIRE", audit);
+              if (response.isSuccessful()
+                  && body.path("stream").asBoolean(false)
+                  && response.header("Content-Type", "").startsWith("text/event-stream"))
+                streamHeaders.run();
               return response;
             }));
     if (fixture) {
@@ -232,11 +242,11 @@ final class ResponsesAcceptanceRuntime {
     var descriptors = new java.util.HashMap<String, ResolvedLlmEndpoint>();
     var snapshot = LlmModelProvider.forResponsesFixture(defaults, properties, policies);
     descriptors.put(LlmFeature.CHAT, snapshot.resolvedEndpoint(LlmFeature.CHAT));
-    if (operational) descriptors.put(LlmFeature.OUTPUT_LIMIT_PLANNER,
-        snapshot.resolvedEndpoint(LlmFeature.OUTPUT_LIMIT_PLANNER));
-    models =
-        LlmModelProvider.forResponsesAcceptance(
-            defaults, properties, policies, descriptors);
+    if (operational)
+      descriptors.put(
+          LlmFeature.OUTPUT_LIMIT_PLANNER,
+          snapshot.resolvedEndpoint(LlmFeature.OUTPUT_LIMIT_PLANNER));
+    models = LlmModelProvider.forResponsesAcceptance(defaults, properties, policies, descriptors);
     payloads = new ModelMessagePayloadStore(source("payload.db"));
     beans = new org.springframework.beans.factory.support.StaticListableBeanFactory();
     beans.addBean("payloads", payloads);
