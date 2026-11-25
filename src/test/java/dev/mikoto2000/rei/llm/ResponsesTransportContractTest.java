@@ -16,22 +16,14 @@ import org.springframework.ai.openai.responses.OpenAiResponsesChatOptions;
 class ResponsesTransportContractTest {
   @org.junit.jupiter.params.ParameterizedTest
   @org.junit.jupiter.params.provider.ValueSource(booleans = {false, true})
-  void flatToolRequestsRejectNamespacedCallsBeforeSpringCanDiscardTheNamespace(boolean streaming) {
-    reply =
-        completed()
-            .replace(
-                "\"output\":[{\"type\":\"message\"",
-                "\"output\":[{\"type\":\"message\"");
+  void flatToolRequestsRejectNamespacedCallsBeforeSpringCanDiscardTheNamespace(boolean streaming)
+      throws Exception {
     var output =
         "{\"type\":\"function_call\",\"id\":\"fc_fixture\",\"call_id\":\"call_fixture\","
             + "\"name\":\"fixture\",\"namespace\":\"unregistered\",\"arguments\":\"{}\",\"status\":\"completed\"}";
-    try {
-      var response = (com.fasterxml.jackson.databind.node.ObjectNode) new ObjectMapper().readTree(completed());
-      response.set("output", new ObjectMapper().readTree("[" + output + "]"));
-      reply = response.toString();
-    } catch (com.fasterxml.jackson.core.JsonProcessingException invalidFixture) {
-      throw new AssertionError(invalidFixture);
-    }
+    var response = (com.fasterxml.jackson.databind.node.ObjectNode) new ObjectMapper().readTree(completed());
+    response.set("output", new ObjectMapper().readTree("[" + output + "]"));
+    reply = response.toString();
     if (streaming) {
       contentType = "text/event-stream";
       reply = event("response.output_item.done", "\"output_index\":0,\"item\":" + output)
