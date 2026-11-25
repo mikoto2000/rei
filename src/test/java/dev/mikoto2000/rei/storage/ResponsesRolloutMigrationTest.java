@@ -39,7 +39,8 @@ class ResponsesRolloutMigrationTest {
       AnnotationConfigApplicationContext context,
       ModelMessagePayloadStore payloads,
       PersistentCheckpointRepository checkpoints,
-      JdbcConversationMemoryStore memory) implements AutoCloseable {
+      JdbcConversationMemoryStore memory)
+      implements AutoCloseable {
     @Override
     public void close() {
       context.close();
@@ -47,8 +48,11 @@ class ResponsesRolloutMigrationTest {
   }
 
   private record Fixture(
-      Path data, ModelMessagePayloadStore.Scope scope, ModelMessagePayloadStore.Ref ref,
-      ModelMessagePayloadStore.History history, List<org.springframework.ai.chat.messages.part.MessagePart> parts,
+      Path data,
+      ModelMessagePayloadStore.Scope scope,
+      ModelMessagePayloadStore.Ref ref,
+      ModelMessagePayloadStore.History history,
+      List<org.springframework.ai.chat.messages.part.MessagePart> parts,
       PersistentCheckpoint legacy) {}
 
   private SQLiteDataSource source(Path file) {
@@ -60,11 +64,15 @@ class ResponsesRolloutMigrationTest {
   private Stores stores(Path data) {
     var source = source(ReiPaths.memoryConsolidationDbPath(data));
     var context = new AnnotationConfigApplicationContext();
-    context.registerBean(ModelMessagePayloadStore.class, () -> new ModelMessagePayloadStore(source));
-    context.registerBean(PersistentCheckpointRepository.class,
+    context.registerBean(
+        ModelMessagePayloadStore.class, () -> new ModelMessagePayloadStore(source));
+    context.registerBean(
+        PersistentCheckpointRepository.class,
         () -> new PersistentCheckpointRepository(source, new CheckpointProperties()));
     context.refresh();
-    return new Stores(context, context.getBean(ModelMessagePayloadStore.class),
+    return new Stores(
+        context,
+        context.getBean(ModelMessagePayloadStore.class),
         context.getBean(PersistentCheckpointRepository.class),
         new JdbcConversationMemoryStore(source(ReiPaths.memoryDbPath(data))));
   }
@@ -80,35 +88,83 @@ class ResponsesRolloutMigrationTest {
       StorageSchemaFixture.removeDurableSchema(sql);
       sql.execute("DELETE FROM storage_migrations WHERE version>=20");
       sql.execute("PRAGMA user_version=19");
-      sql.execute("INSERT INTO review_jobs VALUES('owned-legacy','project','legacy-session','2026-11-25','owned preserved review')");
+      sql.execute(
+          "INSERT INTO review_jobs VALUES('owned-legacy','project','legacy-session','2026-11-25','owned preserved review')");
     }
-    new ResourceDatabasePopulator(new ClassPathResource("dev/mikoto2000/rei/conversation/schema-sqlite.sql"))
+    new ResourceDatabasePopulator(
+            new ClassPathResource("dev/mikoto2000/rei/conversation/schema-sqlite.sql"))
         .execute(source(ReiPaths.memoryDbPath(data)));
     try (var stores = stores(data)) {
-      stores.memory().saveAll("legacy-session", List.of(
-          new UserMessage("owned existing CC question"), new AssistantMessage("owned existing CC answer")));
-      var legacy = PersistentCheckpoint.initial(
-          "legacy-pending", "project", "legacy-session", "legacy-run", work, "owned unfinished CC task");
+      stores
+          .memory()
+          .saveAll(
+              "legacy-session",
+              List.of(
+                  new UserMessage("owned existing CC question"),
+                  new AssistantMessage("owned existing CC answer")));
+      var legacy =
+          PersistentCheckpoint.initial(
+              "legacy-pending",
+              "project",
+              "legacy-session",
+              "legacy-run",
+              work,
+              "owned unfinished CC task");
       stores.checkpoints().save(legacy, 0, "before-native-opt-in");
       var owner = new AgentRunContext("native-run", "native-session", work, "project");
       var exchange = stores.payloads().newExchange(owner);
-      var origin = new ModelMessagePayloadStore.Origin(exchange.ownerKey(), "owned-native-endpoint");
-      var assistant = AssistantMessage.builder().parts(List.of(
-          new ReasoningPart(null, null, new OpaquePayload("openai", "reasoning", "owned synthetic ciphertext"),
-              Map.of("id", "rs_owned", "status", "completed")),
-          new TextPart("owned native pending result", null, Map.of())))
-          .properties(Map.of("rei.llm.replay-origin-owner", origin.owner(),
-              "rei.llm.replay-origin-endpoint", origin.endpoint())).build();
-      var ref = stores.payloads().save(exchange.scope(), owner.runId(), "assistant/ASSISTANT", assistant);
-      stores.payloads().publish(exchange.scope(), ref, ModelMessagePayloadStore.ReferenceKind.RUN, owner.runId());
-      var history = new ModelMessagePayloadStore.History(1, owner.runId(), origin,
-          List.of(new ModelMessagePayloadStore.History.Entry("assistant/ASSISTANT", ref)));
-      var fields = stores.checkpoints().fields(PersistentCheckpoint.initial(
-          "native-pending", "project", "native-session", owner.runId(), work, "owned unfinished native task"));
-      fields.put("progress", new RunExecutionContext.ProgressState(null, null, 0, 0, 0, null, history));
+      var origin =
+          new ModelMessagePayloadStore.Origin(exchange.ownerKey(), "owned-native-endpoint");
+      var assistant =
+          AssistantMessage.builder()
+              .parts(
+                  List.of(
+                      new ReasoningPart(
+                          null,
+                          null,
+                          new OpaquePayload("openai", "reasoning", "owned synthetic ciphertext"),
+                          Map.of("id", "rs_owned", "status", "completed")),
+                      new TextPart("owned native pending result", null, Map.of())))
+              .properties(
+                  Map.of(
+                      "rei.llm.replay-origin-owner",
+                      origin.owner(),
+                      "rei.llm.replay-origin-endpoint",
+                      origin.endpoint()))
+              .build();
+      var ref =
+          stores.payloads().save(exchange.scope(), owner.runId(), "assistant/ASSISTANT", assistant);
+      stores
+          .payloads()
+          .publish(
+              exchange.scope(), ref, ModelMessagePayloadStore.ReferenceKind.RUN, owner.runId());
+      var history =
+          new ModelMessagePayloadStore.History(
+              1,
+              owner.runId(),
+              origin,
+              List.of(new ModelMessagePayloadStore.History.Entry("assistant/ASSISTANT", ref)));
+      var fields =
+          stores
+              .checkpoints()
+              .fields(
+                  PersistentCheckpoint.initial(
+                      "native-pending",
+                      "project",
+                      "native-session",
+                      owner.runId(),
+                      work,
+                      "owned unfinished native task"));
+      fields.put(
+          "progress", new RunExecutionContext.ProgressState(null, null, 0, 0, 0, null, history));
       stores.checkpoints().save(stores.checkpoints().fields(fields), 0, "before-upgrade");
-      stores.payloads().release(exchange.scope(), ref, ModelMessagePayloadStore.ReferenceKind.RUN, owner.runId());
-      try (var db = DriverManager.getConnection(source(ReiPaths.memoryConsolidationDbPath(data)).getUrl());
+      stores
+          .payloads()
+          .release(
+              exchange.scope(), ref, ModelMessagePayloadStore.ReferenceKind.RUN, owner.runId());
+      try (var db =
+              DriverManager.getConnection(
+                  source(ReiPaths.memoryConsolidationDbPath(data)).getUrl());
           var sql = db.createStatement()) {
         sql.execute("UPDATE model_message_payloads SET staged_until=0");
       }
@@ -162,7 +218,8 @@ class ResponsesRolloutMigrationTest {
     StorageBackup.restoreToEmptyDirectory(backup, restored);
     verifyPreserved(restored, fixture);
     try (var migration = new StorageMigrationCoordinator(restored)) {
-      assertThat(migration.prepare().schemaVersion()).isEqualTo(StorageMigrationCoordinator.SCHEMA_VERSION);
+      assertThat(migration.prepare().schemaVersion())
+          .isEqualTo(StorageMigrationCoordinator.SCHEMA_VERSION);
     }
     verifyPreserved(restored, fixture);
   }
@@ -179,9 +236,13 @@ class ResponsesRolloutMigrationTest {
     var sentinel = occupied.resolve("retain.txt");
     Files.writeString(sentinel, "owned later data");
     assertThatThrownBy(() -> StorageBackup.restoreToEmptyDirectory(backup, occupied))
-        .isInstanceOf(java.io.IOException.class).hasMessageContaining("empty");
+        .isInstanceOf(java.io.IOException.class)
+        .hasMessageContaining("empty");
     assertThat(Files.readString(sentinel)).isEqualTo("owned later data");
-    Files.writeString(backup.resolve("files/storage.db"), "owned corruption", java.nio.file.StandardOpenOption.APPEND);
+    Files.writeString(
+        backup.resolve("files/storage.db"),
+        "owned corruption",
+        java.nio.file.StandardOpenOption.APPEND);
     Path rejected = root.resolve("rejected-restore");
     assertThatThrownBy(() -> StorageBackup.restoreToEmptyDirectory(backup, rejected))
         .isInstanceOf(java.io.IOException.class);

@@ -1,5 +1,9 @@
 # Responses API 実接続受入試験
 
+最新の集約判定は [本番利用準備](responses-api-production-readiness.md)。Phase7〜9の工程は完了し、
+固定profileによるOpenAIの段階的利用を準備する。指定ローカルの結合調査FAILEDと公式DeepSeek UNVERIFIEDは維持する。
+本番環境は未変更。以下の開始時情報と各試行の履歴を、現在の一律未検証と読み替えない。
+
 更新日: 2026-11-25（Asia/Tokyo）。基準: `38a13f1d38f0759049290e37df40cdd078a58e54`。
 Spring AI 2.1.0 / OpenAI Java SDK 4.101.0。依存更新、本番設定・DB・プロセスの変更は行わない。
 

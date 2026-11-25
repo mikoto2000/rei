@@ -231,7 +231,8 @@ final class ResponsesAdapter implements LlmProtocolAdapter, ChatModel {
   ResponsesAdapter forModel(String model) {
     if (model == null || model.equals(endpoint.model())) return this;
     if (acceptedProfile)
-      throw new IllegalArgumentException("Responses child model has not passed operational acceptance");
+      throw new IllegalArgumentException(
+          "Responses child model has not passed operational acceptance");
     if (model.isBlank()) throw new IllegalArgumentException("Responses model is required");
     var resolved =
         new ResolvedLlmEndpoint(

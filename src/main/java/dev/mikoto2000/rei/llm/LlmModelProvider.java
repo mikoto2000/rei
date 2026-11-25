@@ -214,10 +214,14 @@ public class LlmModelProvider implements dev.mikoto2000.rei.secretary.SecretaryP
     return provider;
   }
 
-  /** Owned transport fixture retaining the normal production profile gate; no configuration path. */
+  /**
+   * Owned transport fixture retaining the normal production profile gate; no configuration path.
+   */
   static LlmModelProvider forResponsesProductionTransport(
-      ChatModel defaults, LlmProperties properties,
-      java.util.List<org.springframework.ai.openai.http.okhttp.OpenAiHttpClientBuilderCustomizer> customizers) {
+      ChatModel defaults,
+      LlmProperties properties,
+      java.util.List<org.springframework.ai.openai.http.okhttp.OpenAiHttpClientBuilderCustomizer>
+          customizers) {
     if (customizers == null || customizers.isEmpty())
       throw new IllegalArgumentException("Owned production transport fixture required");
     var provider = new LlmModelProvider(defaults, properties);
@@ -360,7 +364,8 @@ public class LlmModelProvider implements dev.mikoto2000.rei.secretary.SecretaryP
       var endpoint = resolvedEndpoint(feature);
       var host = java.net.URI.create(endpoint.baseUrl()).getHost();
       boolean production = responsesFixtureCustomizers == null;
-      if (!production && responsesAcceptanceEndpoints == null
+      if (!production
+          && responsesAcceptanceEndpoints == null
           && (host == null
               || !(host.endsWith(".invalid")
                   || java.util.Set.of("localhost", "127.0.0.1", "::1", "[::1]").contains(host))))
@@ -381,7 +386,9 @@ public class LlmModelProvider implements dev.mikoto2000.rei.secretary.SecretaryP
         context.put(LlmCapabilities.MAX_TOOLS_CONTEXT_KEY, endpoint.capabilities().maxTools());
       builder.toolContext(context);
       return ResponsesAdapter.create(
-          endpoint, builder.build(), production ? responsesProductionTransport : responsesFixtureCustomizers,
+          endpoint,
+          builder.build(),
+          production ? responsesProductionTransport : responsesFixtureCustomizers,
           production);
     }
     if (LlmFeature.VOICE_CORRECTION.equals(feature)) {

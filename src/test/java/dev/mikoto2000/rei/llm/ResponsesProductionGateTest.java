@@ -64,33 +64,50 @@ class ResponsesProductionGateTest {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = {"absent-profile", "profile", "base", "model", "generation", "output",
-      "tools", "replay", "settings", "temperature", "timeout", "fallback", "key", "feature", "api"})
+  @ValueSource(
+      strings = {
+        "absent-profile",
+        "profile",
+        "base",
+        "model",
+        "generation",
+        "output",
+        "tools",
+        "replay",
+        "settings",
+        "temperature",
+        "timeout",
+        "fallback",
+        "key",
+        "feature",
+        "api"
+      })
   void unverifiedEffectiveSettingsAndFailedLocalAcceptanceRemainClosed(String change) {
     String feature = change.equals("feature") ? LlmFeature.MEMORY : LlmFeature.CHAT;
-    Map<String, String> changes = switch (change) {
-      case "absent-profile" -> Map.of("accepted-responses-profile", "");
-      case "profile" -> Map.of("accepted-responses-profile", "local-deepseek-unverified");
-      case "base" -> Map.of("base-url", "http://gx10-707e.local:8888");
-      case "model" -> Map.of("model", "deepseek-v4.1-flash-1017");
-      case "generation" -> Map.of("endpoint-generation", "2");
-      case "output" -> Map.of("max-output-tokens", "1024");
-      case "tools" -> Map.of("max-tools", "35");
-      case "replay" -> Map.of("reasoning-replay", "NONE");
-      case "settings" -> Map.of("supported-settings", "REASONING_EFFORT,IMAGE_INPUT");
-      case "temperature" -> Map.of("temperature", "0.0");
-      case "timeout" -> Map.of("timeout", "30s");
-      case "fallback" -> Map.of("fallback-to-default", "true");
-      case "key" -> Map.of("api-key", "dummy-key");
-      case "api" -> Map.of("api", "CHAT_COMPLETIONS");
-      default -> Map.of();
-    };
-    var provider = new LlmModelProvider(
-        org.mockito.Mockito.mock(ChatModel.class), properties(feature, changes));
+    Map<String, String> changes =
+        switch (change) {
+          case "absent-profile" -> Map.of("accepted-responses-profile", "");
+          case "profile" -> Map.of("accepted-responses-profile", "local-deepseek-unverified");
+          case "base" -> Map.of("base-url", "http://gx10-707e.local:8888");
+          case "model" -> Map.of("model", "deepseek-v4.1-flash-1017");
+          case "generation" -> Map.of("endpoint-generation", "2");
+          case "output" -> Map.of("max-output-tokens", "1024");
+          case "tools" -> Map.of("max-tools", "35");
+          case "replay" -> Map.of("reasoning-replay", "NONE");
+          case "settings" -> Map.of("supported-settings", "REASONING_EFFORT,IMAGE_INPUT");
+          case "temperature" -> Map.of("temperature", "0.0");
+          case "timeout" -> Map.of("timeout", "30s");
+          case "fallback" -> Map.of("fallback-to-default", "true");
+          case "key" -> Map.of("api-key", "dummy-key");
+          case "api" -> Map.of("api", "CHAT_COMPLETIONS");
+          default -> Map.of();
+        };
+    var provider =
+        new LlmModelProvider(
+            org.mockito.Mockito.mock(ChatModel.class), properties(feature, changes));
     assertThatThrownBy(() -> provider.resolvedEndpoint(feature))
         .isInstanceOf(IllegalStateException.class);
-    assertThatThrownBy(() -> provider.chatModel(feature))
-        .isInstanceOf(IllegalStateException.class);
+    assertThatThrownBy(() -> provider.chatModel(feature)).isInstanceOf(IllegalStateException.class);
   }
 
   @Test

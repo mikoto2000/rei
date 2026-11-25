@@ -1,6 +1,9 @@
 # Phase 9: 隔離した実アプリケーションの受入記録
 
-更新日: 2026-11-25。**進行中**。実試験、fixture、未実施を区別する。
+更新日: 2026-11-25。**Phase9工程完了**。実試験、fixture、FAILED/未検証を区別する。
+PR [#637](https://github.com/mikoto2000/rei/pull/637)、通常merge `18fb7d27ef0c98f337ad3be9647ddb0dd364ba2c`。
+PR/マージ後exact SHAのJava・静的解析・Client CIは全成功、8316件/成功8304/期待skip12/failure・error0。
+専用worktreeとlocal/remote branchは削除済み。ローカル結合調査2試行のFAILED判定は維持する。
 本番プロセス・JAR・外部設定・DB は変更しておらず、本番 Responses 生成 gate は閉じたまま。
 
 ## 対象・承認・判定基準
@@ -99,7 +102,7 @@ raw reasoningは所有SQLiteだけに保持し、報告は長さ/hash/件数/固
 
 Phase7の実承認/拒否・別JVM CheckpointとPhase6の異常終了/GC/120round/外国owner等のfixtureは補完証拠であり、
 今回の新しい候補profileで全ケースを再実施したことにはしない。
-残りの実試験、全品質、最新head全回帰、セルフレビュー、通常PR merge、exact merge-SHA CI、証拠保存とcleanupは未完了。
+以下にPR準備時からの追記を残す。最終の全品質・全回帰・通常merge・exact SHA CI・証拠保存・cleanupは完了している。
 
 ## 最終実試験の追記
 

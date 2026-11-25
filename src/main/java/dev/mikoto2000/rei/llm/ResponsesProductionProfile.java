@@ -33,8 +33,7 @@ final class ResponsesProductionProfile {
         || server.isFallbackToDefault()
         || server.getApiKey() == null
         || server.getApiKey().isBlank()
-        || "dummy-key".equals(server.getApiKey()))
-      throw unavailable();
+        || "dummy-key".equals(server.getApiKey())) throw unavailable();
     if (!feature.equals(endpoint.endpointId())) throw unavailable();
     requireEndpoint(endpoint);
   }
@@ -43,18 +42,21 @@ final class ResponsesProductionProfile {
     String feature = endpoint.endpointId();
     if (!Set.of(LlmFeature.CHAT, LlmFeature.OUTPUT_LIMIT_PLANNER).contains(feature))
       throw unavailable();
-    var accepted = new ResolvedLlmEndpoint(
-        feature,
-        1,
-        LlmApiType.RESPONSES,
-        "https://api.openai.com/v1",
-        "feature:" + feature,
-        "gpt-5.6-sol",
-        new LlmCapabilities(
-            ReasoningReplayMode.ENCRYPTED, 36, Set.of(LlmCapabilities.Setting.REASONING_EFFORT)),
-        2048,
-        null,
-        TIMEOUT);
+    var accepted =
+        new ResolvedLlmEndpoint(
+            feature,
+            1,
+            LlmApiType.RESPONSES,
+            "https://api.openai.com/v1",
+            "feature:" + feature,
+            "gpt-5.6-sol",
+            new LlmCapabilities(
+                ReasoningReplayMode.ENCRYPTED,
+                36,
+                Set.of(LlmCapabilities.Setting.REASONING_EFFORT)),
+            2048,
+            null,
+            TIMEOUT);
     if (!accepted.equals(endpoint)) throw unavailable();
   }
 
@@ -67,13 +69,16 @@ final class ResponsesProductionProfile {
         || options.getMetadata() != null && !options.getMetadata().isEmpty()
         || options.getPromptCacheKey() != null
         || options.getSafetyIdentifier() != null
-        || include != null && !include.isEmpty()
+        || include != null
+            && !include.isEmpty()
             && !include.equals(java.util.List.of("reasoning.encrypted_content")))
-      throw new IllegalArgumentException("Responses request differs from the accepted operational profile");
+      throw new IllegalArgumentException(
+          "Responses request differs from the accepted operational profile");
     return options.mutate().reasoningEffort("low").serviceTier("default").build();
   }
 
   private static IllegalStateException unavailable() {
-    return new IllegalStateException("Responses requires an accepted operational profile and exact effective settings");
+    return new IllegalStateException(
+        "Responses requires an accepted operational profile and exact effective settings");
   }
 }
