@@ -14,6 +14,7 @@ public final class ChatEndpointCatalog {
   private final Map<String, LlmProperties.Server> connections;
   private final Map<String, LlmProperties.Server> featureSettings;
   private final List<String> diagnostics;
+  private final boolean namedProfiles;
 
   public ChatEndpointCatalog(LlmProperties properties) {
     var features = properties.getFeatures();
@@ -47,6 +48,7 @@ public final class ChatEndpointCatalog {
     });
     var chat = features.get(LlmFeature.CHAT);
     var endpoints = chat == null ? null : chat.getEndpoints();
+    namedProfiles = endpoints != null;
     if (endpoints == null) {
       if (chat != null && chat.getActive() != null)
         throw invalid(CHAT + ".endpoints", "must define the named profiles selected by active");
@@ -244,6 +246,10 @@ public final class ChatEndpointCatalog {
 
   public String initialEndpoint() {
     return initial;
+  }
+
+  boolean hasNamedProfiles() {
+    return namedProfiles;
   }
 
   public List<Profile> profiles() {

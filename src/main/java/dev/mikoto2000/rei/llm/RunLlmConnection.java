@@ -13,6 +13,25 @@ public record RunLlmConnection(
     ResolvedLlmEndpoint endpoint,
     Map<LlmEndpointCapabilities.Capability, LlmEndpointCapabilities.Support> capabilities,
     Map<String, Object> generation) {
+  public RunLlmConnection {
+    java.util.Objects.requireNonNull(profileId, "profileId");
+    java.util.Objects.requireNonNull(provider, "provider");
+    java.util.Objects.requireNonNull(authentication, "authentication");
+    java.util.Objects.requireNonNull(endpoint, "endpoint");
+    capabilities = Map.copyOf(capabilities);
+    generation = Map.copyOf(generation);
+  }
+
+  @Override
+  public Map<LlmEndpointCapabilities.Capability, LlmEndpointCapabilities.Support> capabilities() {
+    return Map.copyOf(capabilities);
+  }
+
+  @Override
+  public Map<String, Object> generation() {
+    return Map.copyOf(generation);
+  }
+
   @Override
   public String toString() {
     return "RunLlmConnection[profileId=" + profileId + "]";
