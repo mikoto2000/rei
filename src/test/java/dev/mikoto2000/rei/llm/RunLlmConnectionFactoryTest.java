@@ -14,6 +14,55 @@ import org.springframework.boot.context.properties.source.MapConfigurationProper
 
 class RunLlmConnectionFactoryTest {
   @Test
+  void modelOverrideDoesNotBorrowCapabilitiesFromTheConfiguredModel() {
+    var settings = local();
+    var prefix = "rei.llm.features.chat.endpoints.local.";
+    settings.remove(prefix + "temperature");
+    settings.remove(prefix + "max-output-tokens");
+    settings.put(prefix + "model-capabilities.vision", "supported");
+    settings.put(prefix + "server-capabilities.vision", "supported");
+    var factory = factory(properties(settings));
+    assertThat(factory.capture("local", null).capabilities().get(LlmEndpointCapabilities.Capability.VISION))
+        .isEqualTo(LlmEndpointCapabilities.Support.SUPPORTED);
+    var other = factory.capture("local", "other-model");
+    assertThat(other.endpoint().model()).isEqualTo("other-model");
+    assertThat(other.capabilities().get(LlmEndpointCapabilities.Capability.VISION))
+        .isEqualTo(LlmEndpointCapabilities.Support.UNKNOWN);
+    assertThat(other.endpoint().capabilities().supportedSettings()).doesNotContain(LlmCapabilities.Setting.IMAGE_INPUT);
+  }
+
+  @Test
+  void explicitUnsupportedTemperatureIsRejectedBeforeAnyClientCanBeConstructed() {
+    var settings = local();
+    settings.put("rei.llm.features.chat.endpoints.local.model-capabilities.temperature", "unsupported");
+    assertThatThrownBy(() -> factory(properties(settings)).capture("local", null))
+        .isInstanceOf(IllegalStateException.class).hasMessageContaining("temperature");
+  }
+
+  @Test
+  void catalogGenerationAlsoFreezesInheritedDefaultsBeforeRunCapture() {
+    var settings = local();
+    settings.remove("rei.llm.features.chat.endpoints.local.max-output-tokens");
+    var properties = properties(settings);
+    properties.setReadTimeout(Duration.ofSeconds(42));
+    var factory = factory(properties);
+    properties.setMaxOutputTokens(1000);
+    properties.setReadTimeout(Duration.ofSeconds(9));
+    var snapshot = factory.capture("local", null);
+    assertThat(snapshot.endpoint().readTimeout()).isEqualTo(Duration.ofSeconds(42));
+    assertThat(snapshot.endpoint().maxOutputTokens()).isEqualTo(8192);
+  }
+
+  @Test
+  void durableSnapshotRoundTripsWithoutBecomingMutable() throws Exception {
+    var snapshot = factory(properties(local())).capture("local", null);
+    var json = new ObjectMapper().findAndRegisterModules();
+    var restored = json.readValue(json.writeValueAsBytes(snapshot), RunLlmConnection.class);
+    assertThat(restored).isEqualTo(snapshot);
+    assertThatThrownBy(() -> restored.generation().clear()).isInstanceOf(UnsupportedOperationException.class);
+  }
+
+  @Test
   void namedSnapshotFreezesSettingsAndNeverIncludesLocalOrGlobalCredentials() throws Exception {
     var settings = local();
     settings.put("rei.llm.features.chat.api-key", "PRIVATE_GLOBAL_CANARY");
