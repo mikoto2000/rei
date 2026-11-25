@@ -434,8 +434,8 @@ public final class ConversationInputRouter {
   /** 実行順序を管理するため、会話入力入力の振り分けを実行待ちに登録する。 */
   private Disposition enqueue(Slot slot, Consumer<Runnable> lifecycle) {
     var context = slot.context();
-    try {
     if (admissions != null) admissions.reserveKnownSession(context);
+    try {
     if (chatRunAdmission != null) chatRunAdmission.accept(context, slot.prompt());
     var admitted = beforeExecution.getOrDefault(context.runId(), () -> {});
     agentSlots.put(context.runId(), slot);
