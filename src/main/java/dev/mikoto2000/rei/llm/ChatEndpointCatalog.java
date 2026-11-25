@@ -27,8 +27,12 @@ public final class ChatEndpointCatalog {
     if (endpoints == null) {
       if (chat != null && chat.getActive() != null)
         throw invalid(CHAT + ".endpoints", "must define the named profiles selected by active");
+      if (chat != null && provider(chat, CHAT) == LlmProvider.CHATGPT_PLAN)
+        throw invalid(CHAT + ".provider", "chatgpt-plan requires a named endpoint");
+      if (chat != null && chat.getAccountRef() != null)
+        throw invalid(CHAT + ".account-ref", "is only supported for chatgpt-plan named endpoints");
       initial = "default";
-      profiles = List.of(new Profile("default", chat == null ? null : chat.getModel()));
+      profiles = List.of(profile("default", chat, CHAT));
     } else {
       if (endpoints.isEmpty()) throw invalid(CHAT + ".endpoints", "must not be empty");
       for (var name : endpoints.keySet())
@@ -39,7 +43,7 @@ public final class ChatEndpointCatalog {
       endpoints.forEach((name, server) -> validate(CHAT + ".endpoints." + name, server));
       initial = chat.getActive();
       profiles = endpoints.entrySet().stream().sorted(Map.Entry.comparingByKey())
-          .map(entry -> new Profile(entry.getKey(), entry.getValue().getModel())).toList();
+          .map(entry -> profile(entry.getKey(), entry.getValue(), CHAT + ".endpoints." + entry.getKey())).toList();
     }
   }
 
@@ -53,7 +57,30 @@ public final class ChatEndpointCatalog {
       throw invalid(field + ".model", "must not be blank for a named profile");
     if (server.isFallbackToDefault())
       throw invalid(field + ".fallback-to-default", "must be false; named profiles cannot fall back");
-    validateBaseUrl(field + ".base-url", server.getBaseUrl());
+    if (provider(server, field) == LlmProvider.CHATGPT_PLAN) {
+      if (server.getBaseUrl() != null)
+        throw invalid(field + ".base-url", "is not allowed for chatgpt-plan");
+      if (server.getApiKey() != null)
+        throw invalid(field + ".api-key", "is not allowed for chatgpt-plan");
+      if (server.getApi() != LlmApiType.RESPONSES)
+        throw invalid(field + ".api", "must be responses for chatgpt-plan");
+      if (server.getAccountRef() == null || !server.getAccountRef().matches("[a-zA-Z0-9_-]{1,64}"))
+        throw invalid(field + ".account-ref", "must name a valid ChatGPT account label");
+    } else {
+      if (server.getAccountRef() != null)
+        throw invalid(field + ".account-ref", "is only supported for chatgpt-plan");
+      validateBaseUrl(field + ".base-url", server.getBaseUrl());
+    }
+  }
+
+  private static LlmProvider provider(LlmProperties.Server server, String field) {
+    return LlmProvider.configured(server == null ? null : server.getProvider(), field + ".provider");
+  }
+
+  private static Profile profile(String name, LlmProperties.Server server, String field) {
+    return new Profile(name, server == null ? null : server.getModel(), provider(server, field),
+        server == null || server.getApi() == null ? LlmApiType.CHAT_COMPLETIONS : server.getApi(),
+        server == null ? null : server.getAccountRef(), server == null ? 1 : server.getEndpointGeneration());
   }
 
   private static void validateBaseUrl(String field, String value) {
@@ -86,5 +113,6 @@ public final class ChatEndpointCatalog {
     return profiles;
   }
 
-  public record Profile(String id, String model) {}
+  public record Profile(String id, String model, LlmProvider provider, LlmApiType api,
+      String accountRef, long generation) {}
 }

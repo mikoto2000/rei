@@ -154,11 +154,31 @@ public class LlmProperties {
       copy.supportedSettings = supportedSettings;
       copy.active = active;
       copy.endpoints = endpoints == null ? null : copyFeatures(endpoints);
+      copy.provider = provider;
+      copy.accountRef = accountRef;
       return copy;
     }
 
     private String active;
     private Map<String, Server> endpoints;
+    private String provider;
+    private String accountRef;
+
+    public String getProvider() {
+      return provider;
+    }
+
+    public void setProvider(String provider) {
+      this.provider = provider;
+    }
+
+    public String getAccountRef() {
+      return accountRef;
+    }
+
+    public void setAccountRef(String accountRef) {
+      this.accountRef = accountRef;
+    }
 
     public String getActive() {
       return active;

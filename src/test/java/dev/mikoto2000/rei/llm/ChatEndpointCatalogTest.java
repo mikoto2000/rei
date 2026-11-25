@@ -196,7 +196,7 @@ class ChatEndpointCatalogTest {
         .run(context -> assertThat(context).hasFailed());
   }
 
-  @org.springframework.context.annotation.Configuration(proxyBeanMethods = false)
+  @org.springframework.boot.test.context.TestConfiguration(proxyBeanMethods = false)
   @org.springframework.boot.context.properties.EnableConfigurationProperties(LlmProperties.class)
   @org.springframework.context.annotation.Import(ChatEndpointCatalog.class)
   static class CatalogConfiguration {}
