@@ -6,14 +6,14 @@ import org.springframework.stereotype.Component;
 /** Resolves the chat model for display using the same settings as request routing. */
 @Component
 public final class ChatModelResolver implements UnaryOperator<String> {
-  private final LlmModelProvider models;
+  private final UnaryOperator<String> resolveModel;
 
   public ChatModelResolver(LlmModelProvider models) {
-    this.models = models;
+    this.resolveModel = selected -> models.model(LlmFeature.CHAT, selected);
   }
 
   @Override
   public String apply(String selectedModel) {
-    return models.model(LlmFeature.CHAT, selectedModel);
+    return resolveModel.apply(selectedModel);
   }
 }
