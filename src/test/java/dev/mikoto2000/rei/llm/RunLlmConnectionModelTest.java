@@ -101,7 +101,8 @@ class RunLlmConnectionModelTest {
         "request",
         options(api)
             .mutate()
-            .toolContext(Map.of(ModelOptions.RUN_CONNECTION_CONTEXT_KEY, connection))
+                .toolContext(Map.of(ModelOptions.RUN_CONNECTION_CONTEXT_KEY, connection,
+                    ModelOptions.ENDPOINT_CONTEXT_KEY, connection.endpoint()))
             .build());
   }
 

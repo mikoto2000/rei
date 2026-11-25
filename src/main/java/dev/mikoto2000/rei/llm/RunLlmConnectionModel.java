@@ -48,7 +48,27 @@ final class RunLlmConnectionModel implements ChatModel {
           case RESPONSES -> options instanceof OpenAiResponsesChatOptions;
         };
     if (!matchingApi) throw new IllegalStateException("Request API differs from accepted Run API");
+    if (!connection.endpoint().equals(options.getToolContext().get(
+        dev.mikoto2000.rei.modeloptions.ModelOptions.ENDPOINT_CONTEXT_KEY)))
+      throw new IllegalStateException("Run request endpoint context differs from accepted connection");
+    boolean override;
+    if (options instanceof OpenAiChatOptions chat) {
+      override = overrides(connection, chat.getBaseUrl(), chat.getApiKey(), chat.getCredential(),
+          chat.getCustomHeaders(), chat.getOrganizationId());
+    } else {
+      var responses = (OpenAiResponsesChatOptions) options;
+      override = overrides(connection, responses.getBaseUrl(), responses.getApiKey(), responses.getCredential(),
+          responses.getCustomHeaders(), responses.getOrganizationId());
+    }
+    if (override) throw new IllegalStateException("Run request cannot override accepted connection");
     verify.accept(connection);
     return Objects.requireNonNull(models.apply(connection), "Run transport is unavailable");
+  }
+
+  private static boolean overrides(RunLlmConnection connection, String baseUrl, String apiKey,
+      Object credential, java.util.Map<String, String> headers, String organization) {
+    return baseUrl != null && !baseUrl.equals(connection.endpoint().baseUrl())
+        || apiKey != null || credential != null || headers != null && !headers.isEmpty()
+        || organization != null;
   }
 }
