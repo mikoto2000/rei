@@ -36,6 +36,13 @@ public final class ModelOptions {
     java.util.function.Consumer<Object> add =
         value -> values.add(value == null ? null : value.toString());
     add.accept(options.getClass().getName());
+    var acceptedContext = options.getToolContext();
+    if (acceptedContext != null && acceptedContext.containsKey(RUN_CONNECTION_CONTEXT_KEY)) {
+      if (!(acceptedContext.get(RUN_CONNECTION_CONTEXT_KEY)
+          instanceof dev.mikoto2000.rei.llm.RunLlmConnection connection))
+        throw new IllegalArgumentException("Invalid accepted Run connection");
+      add.accept(connection.fingerprint());
+    }
     add.accept(options.getModel());
     add.accept(options.getTemperature());
     add.accept(options.getTopP());
@@ -111,6 +118,13 @@ public final class ModelOptions {
    * Opaque digest for approval invalidation; connection credentials must never leave this method.
    */
   public static String connectionFingerprint(ToolCallingChatOptions options) {
+    var acceptedContext = options.getToolContext();
+    if (acceptedContext != null && acceptedContext.containsKey(RUN_CONNECTION_CONTEXT_KEY)) {
+      if (!(acceptedContext.get(RUN_CONNECTION_CONTEXT_KEY)
+          instanceof dev.mikoto2000.rei.llm.RunLlmConnection connection))
+        throw new IllegalArgumentException("Invalid accepted Run connection");
+      return connection.fingerprint();
+    }
     String baseUrl, apiKey;
     if (options instanceof OpenAiResponsesChatOptions responses) {
       baseUrl = responses.getBaseUrl();
