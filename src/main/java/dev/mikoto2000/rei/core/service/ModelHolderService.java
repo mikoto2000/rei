@@ -15,7 +15,7 @@ public class ModelHolderService {
 
   private UnaryOperator<String> chatModelResolver = UnaryOperator.identity();
 
-  @Autowired
+  @Autowired(required = false)
   void setChatModelResolver(@Qualifier("chatModelResolver") UnaryOperator<String> resolver) {
     chatModelResolver = resolver;
   }
