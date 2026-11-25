@@ -94,6 +94,41 @@ class PinnedChatModelsTest {
     }
   }
 
+  @Test
+  void legacyResponsesUseTheSameCacheWithoutReadingCredentialsAtConstruction() {
+    try (var models = new PinnedChatModels(pin -> { throw new AssertionError("Early credential read"); },
+        pin -> {}, null, 2)) {
+      var pin = legacyResponses(false);
+      var model = models.model(pin);
+      assertThat(models.model(pin)).isSameAs(model);
+      assertThat(model).isInstanceOf(ResponsesAdapter.class);
+      var options = (org.springframework.ai.openai.responses.OpenAiResponsesChatOptions) model.getOptions();
+      assertThat(options.getModel()).isEqualTo("fixture-model");
+      assertThat(options.getBaseUrl()).isNull();
+      assertThat(options.getApiKey()).isNull();
+      assertThat(options.getMaxRetries()).isZero();
+    }
+  }
+
+  @Test
+  void aNamedProfileCannotBorrowTheLegacyResponsesProductionAcceptance() {
+    try (var models = new PinnedChatModels(pin -> { throw new AssertionError("Early credential read"); },
+        pin -> {}, null, 2)) {
+      assertThatThrownBy(() -> models.model(legacyResponses(true)))
+          .isInstanceOf(IllegalStateException.class);
+    }
+  }
+
+  private RunLlmConnection legacyResponses(boolean named) {
+    return new RunLlmConnection("default", named, LlmProvider.OPENAI_COMPATIBLE,
+        LlmAuthentication.API_KEY, null, null,
+        new ResolvedLlmEndpoint(LlmFeature.CHAT, 1, LlmApiType.RESPONSES,
+            "https://api.openai.com/v1", "feature:" + LlmFeature.CHAT, "fixture-model",
+            new LlmCapabilities(ReasoningReplayMode.ENCRYPTED, 36,
+                Set.of(LlmCapabilities.Setting.REASONING_EFFORT)), 2048, null, Duration.ofSeconds(120)),
+        Map.of(), Map.of("max_output_tokens", 2048, "reasoning_effort", "low", "service_tier", "default"));
+  }
+
   private void infer(ChatModel model, RunLlmConnection pin) {
     assertThat(
             model
