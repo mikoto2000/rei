@@ -9,6 +9,8 @@ import dev.mikoto2000.rei.core.service.CommandCompletionNotificationPolicy;
 import dev.mikoto2000.rei.core.service.CommandUserInputDisplayPolicy;
 import dev.mikoto2000.rei.core.service.ModelHolderService;
 import dev.mikoto2000.rei.event.AgentEventBus;
+import dev.mikoto2000.rei.llm.LlmFeature;
+import dev.mikoto2000.rei.llm.LlmModelProvider;
 import dev.mikoto2000.rei.storage.StorageInUseException;
 import dev.mikoto2000.rei.topic.AgentActivityTracker;
 import dev.mikoto2000.rei.ui.shell.JLineShellEventOutput;
@@ -87,8 +89,13 @@ public class ReiApplication {
   /** 生成元。 */
   private final CommandLine.IFactory factory;
 
-  /** 現在モデル保持先。 */
-  private final Supplier<String> readSelectedModel;
+  /** 通常チャットで使うモデル名の表示。 */
+  private Supplier<String> readChatModel;
+
+  @Autowired
+  void configurePromptModel(LlmModelProvider models, ModelHolderService selectedModel) {
+    readChatModel = () -> models.model(LlmFeature.CHAT, selectedModel.get());
+  }
 
   /** escキャンセル排他制御。 */
   private final EscCancellationMonitor escCancellationMonitor;
@@ -175,7 +182,7 @@ public class ReiApplication {
       Environment environment) {
     this.rootCommand = rootCommand;
     this.factory = factory;
-    this.readSelectedModel = () -> currentModelHolder.get();
+    this.readChatModel = currentModelHolder::get;
     this.escCancellationMonitor = escCancellationMonitor;
     this.cancelCommand = () -> commandCancellationService.cancel();
     this.commandCompletionNotificationPolicy = commandCompletionNotificationPolicy;
@@ -816,7 +823,7 @@ public class ReiApplication {
         + (activeRunDisplay == null ? "" : activeRunDisplay.promptStatus() + "\n")
         + now().format(PROMPT_TIME_FORMATTER)
         + " "
-        + readSelectedModel.get()
+        + readChatModel.get()
         + "> ";
   }
 

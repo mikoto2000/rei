@@ -7,6 +7,10 @@ import dev.mikoto2000.rei.core.service.CommandCancellationService;
 import dev.mikoto2000.rei.core.service.CommandCompletionNotificationPolicy;
 import dev.mikoto2000.rei.core.service.CommandUserInputDisplayPolicy;
 import dev.mikoto2000.rei.core.service.ModelHolderService;
+import dev.mikoto2000.rei.llm.LlmApiType;
+import dev.mikoto2000.rei.llm.LlmFeature;
+import dev.mikoto2000.rei.llm.LlmModelProvider;
+import dev.mikoto2000.rei.llm.LlmProperties;
 import dev.mikoto2000.rei.ui.shell.RootCommand;
 import dev.mikoto2000.rei.ui.shell.sound.ChatResponseNarrator;
 import dev.mikoto2000.rei.ui.shell.sound.SoundNotificationService;
@@ -39,6 +43,31 @@ class ReiApplicationInputRenderingTest {
     ReiApplication app = newAppWithFixedTime("gpt-5.4", LocalTime.of(9, 42));
 
     assertEquals("09:42 gpt-5.4> ", app.buildPrompt());
+  }
+
+  @Test
+  void promptShowsTheConfiguredResponsesChatModel() {
+    ReiApplication app = newAppWithFixedTime("deepseek-v4.1-flash-1017", LocalTime.of(9, 42));
+    var selected = new ModelHolderService("deepseek-v4.1-flash-1017");
+    var properties = new LlmProperties();
+    var chat = new LlmProperties.Server();
+    chat.setApi(LlmApiType.RESPONSES);
+    chat.setModel("gpt-6.2-sol");
+    properties.setFeatures(java.util.Map.of(LlmFeature.CHAT, chat));
+    app.configurePromptModel(new LlmModelProvider(null, properties), selected);
+
+    assertEquals("09:42 gpt-6.2-sol> ", app.buildPrompt());
+  }
+
+  @Test
+  void promptFollowsTheSelectedModelWhenChatHasNoDedicatedModel() {
+    ReiApplication app = newAppWithFixedTime("default-model", LocalTime.of(9, 42));
+    var selected = new ModelHolderService("default-model");
+    app.configurePromptModel(new LlmModelProvider(null, new LlmProperties()), selected);
+
+    assertEquals("09:42 default-model> ", app.buildPrompt());
+    selected.set("another-model");
+    assertEquals("09:42 another-model> ", app.buildPrompt());
   }
 
   /** れいの起動で、入力や保存形式を契約に従って解釈し、情報を受け渡すことを確認する。 */
