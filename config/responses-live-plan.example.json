@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "provider": "openai",
+  "base_url": "https://api.openai.com/v1",
+  "model": "",
+  "reasoning_effort": "",
+  "reasoning_replay": "encrypted",
+  "credential_env": "REI_LIVE_OPENAI_API_KEY",
+  "authorization_reference": "",
+  "data_scope": "synthetic-only",
+  "max_api_calls": null,
+  "max_input_tokens": null,
+  "max_output_tokens": null,
+  "max_seconds": null,
+  "currency": "USD",
+  "cost_limit": null,
+  "input_rate_ceiling_per_million": null,
+  "output_rate_ceiling_per_million": null,
+  "trials": [
+    {
+      "id": "OA-01",
+      "repetitions": 1,
+      "max_calls": 1,
+      "input_tokens_per_call": null,
+      "output_tokens_per_call": null
+    }
+  ]
+}
