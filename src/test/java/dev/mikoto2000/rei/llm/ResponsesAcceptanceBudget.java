@@ -28,6 +28,8 @@ final class ResponsesAcceptanceBudget {
   record Snapshot(int calls, int completed, int unknown, long input, long output, long microUsd) {}
 
   private static final ObjectMapper JSON = new ObjectMapper();
+  private static final String TIME_APPROVAL = "user-20261125-phase9-time-2h";
+  private static final long TIME_EXTENSION_MILLIS = Duration.ofHours(2).toMillis();
   private final Path journal;
   private final String binding;
   private final Limits limits;
@@ -52,6 +54,7 @@ final class ResponsesAcceptanceBudget {
 
   private static final class State {
     long started;
+    long extensionMillis;
     int calls;
     boolean violated;
     final Map<Integer, Slot> slots = new HashMap<>();
@@ -72,7 +75,7 @@ final class ResponsesAcceptanceBudget {
       var snapshot = snapshot(state);
       if (state.violated
           || elapsed < 0
-          || elapsed >= limits.time().toMillis()
+          || elapsed >= durationMillis(state)
           || state.calls >= limits.calls()
           || snapshot.input() > limits.input() - input
           || snapshot.output() > limits.output() - output
@@ -114,15 +117,31 @@ final class ResponsesAcceptanceBudget {
   }
 
   synchronized void authorizeTimeExtension(String approval) {
-    throw rejected();
+    if (!TIME_APPROVAL.equals(approval) || !limits.time().equals(Duration.ofHours(3)))
+      throw rejected();
+    transaction((channel, state) -> {
+      long now = clock.millis();
+      long elapsed = now - state.started;
+      if (state.started == 0 || state.violated || elapsed < 0
+          || elapsed >= Math.addExact(limits.time().toMillis(), TIME_EXTENSION_MILLIS))
+        throw rejected();
+      if (state.extensionMillis == 0)
+        append(channel, Map.of("type", "E", "extension_ms", TIME_EXTENSION_MILLIS,
+            "approval", approval, "authorized_at", now));
+      return null;
+    });
+  }
+
+  private long durationMillis(State state) {
+    return Math.addExact(limits.time().toMillis(), state.extensionMillis);
   }
 
   synchronized long remainingMillis() {
     return transaction((channel, state) -> {
       if (state.started == 0) return limits.time().toMillis();
       long elapsed = clock.millis() - state.started;
-      if (elapsed < 0 || elapsed >= limits.time().toMillis() || state.violated) throw rejected();
-      return limits.time().toMillis() - elapsed;
+      if (elapsed < 0 || elapsed >= durationMillis(state) || state.violated) throw rejected();
+      return durationMillis(state) - elapsed;
     });
   }
 
@@ -177,6 +196,16 @@ final class ResponsesAcceptanceBudget {
           if (state.started != 0 || !binding.equals(row.path("binding").asText())) throw rejected();
           state.started = row.path("started").asLong();
           if (state.started <= 0) throw rejected();
+        } else if (type.equals("E")) {
+          long authorized = row.path("authorized_at").asLong();
+          if (state.started == 0 || state.extensionMillis != 0 || row.size() != 4
+              || row.path("extension_ms").asLong() != TIME_EXTENSION_MILLIS
+              || !TIME_APPROVAL.equals(row.path("approval").asText())
+              || !limits.time().equals(Duration.ofHours(3))
+              || authorized < state.started || authorized > clock.millis()
+              || authorized - state.started >= Math.addExact(limits.time().toMillis(), TIME_EXTENSION_MILLIS))
+            throw rejected();
+          state.extensionMillis = TIME_EXTENSION_MILLIS;
         } else if (type.equals("R")) {
           int id = row.path("id").asInt();
           long input = row.path("input").asLong();
