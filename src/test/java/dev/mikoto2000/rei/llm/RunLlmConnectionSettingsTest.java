@@ -34,7 +34,16 @@ class RunLlmConnectionSettingsTest {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = {"apiKey", "accessToken", "credential", "toolContext", "customHeaders", "headers", "base_url"})
+  @ValueSource(
+      strings = {
+        "apiKey",
+        "accessToken",
+        "credential",
+        "toolContext",
+        "customHeaders",
+        "headers",
+        "base_url"
+      })
   void generationCannotBecomeAnAlternativeCredentialOrConnectionContainer(String field) {
     assertThatThrownBy(() -> connection(Map.of(field, "PRIVATE_CANARY")))
         .isInstanceOf(IllegalArgumentException.class)
@@ -48,11 +57,27 @@ class RunLlmConnectionSettingsTest {
   }
 
   private RunLlmConnection connection(Map<String, Object> settings) {
-    var endpoint = new ResolvedLlmEndpoint("local", 1, LlmApiType.CHAT_COMPLETIONS,
-        "http://local.invalid/v1", "local", "model",
-        new LlmCapabilities(ReasoningReplayMode.NONE, 36, Set.of()), 512, null,
-        Duration.ofSeconds(30));
-    return new RunLlmConnection("local", true, LlmProvider.OPENAI_COMPATIBLE,
-        LlmAuthentication.NONE, null, null, endpoint, Map.of(), settings);
+    var endpoint =
+        new ResolvedLlmEndpoint(
+            "local",
+            1,
+            LlmApiType.CHAT_COMPLETIONS,
+            "http://local.invalid/v1",
+            "local",
+            "model",
+            new LlmCapabilities(ReasoningReplayMode.NONE, 36, Set.of()),
+            512,
+            null,
+            Duration.ofSeconds(30));
+    return new RunLlmConnection(
+        "local",
+        true,
+        LlmProvider.OPENAI_COMPATIBLE,
+        LlmAuthentication.NONE,
+        null,
+        null,
+        endpoint,
+        Map.of(),
+        settings);
   }
 }

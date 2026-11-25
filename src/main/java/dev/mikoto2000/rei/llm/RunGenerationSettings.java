@@ -8,12 +8,37 @@ import java.util.Set;
 
 /** Immutable JSON generation values; transport credentials and runtime authority are excluded. */
 final class RunGenerationSettings {
-  private static final Set<String> FIELDS = Set.of(
-      "max_tokens", "max_completion_tokens", "max_output_tokens", "temperature", "top_p", "top_k",
-      "frequency_penalty", "presence_penalty", "stop", "seed", "n", "response_format",
-      "logit_bias", "logprobs", "top_logprobs", "reasoning_effort", "reasoning_summary",
-      "verbosity", "service_tier", "parallel_tool_calls", "max_tool_calls", "tool_choice",
-      "strict", "store", "truncation", "include", "modalities", "audio", "replay_reasoning_content");
+  private static final Set<String> FIELDS =
+      Set.of(
+          "max_tokens",
+          "max_completion_tokens",
+          "max_output_tokens",
+          "temperature",
+          "top_p",
+          "top_k",
+          "frequency_penalty",
+          "presence_penalty",
+          "stop",
+          "seed",
+          "n",
+          "response_format",
+          "logit_bias",
+          "logprobs",
+          "top_logprobs",
+          "reasoning_effort",
+          "reasoning_summary",
+          "verbosity",
+          "service_tier",
+          "parallel_tool_calls",
+          "max_tool_calls",
+          "tool_choice",
+          "strict",
+          "store",
+          "truncation",
+          "include",
+          "modalities",
+          "audio",
+          "replay_reasoning_content");
 
   private RunGenerationSettings() {}
 
@@ -28,7 +53,9 @@ final class RunGenerationSettings {
 
   private static Object freeze(Object value, int depth) {
     if (depth > 64) throw invalid();
-    if (value == null || value instanceof String || value instanceof Boolean
+    if (value == null
+        || value instanceof String
+        || value instanceof Boolean
         || value instanceof Integer) return value;
     if (value instanceof Byte || value instanceof Short) return ((Number) value).intValue();
     if (value instanceof Long number) {
