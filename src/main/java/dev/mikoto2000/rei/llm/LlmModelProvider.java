@@ -96,6 +96,7 @@ public class LlmModelProvider implements dev.mikoto2000.rei.secretary.SecretaryP
   private java.util.List<
           org.springframework.ai.openai.http.okhttp.OpenAiHttpClientBuilderCustomizer>
       responsesFixtureCustomizers;
+  private Map<String, ResolvedLlmEndpoint> responsesAcceptanceEndpoints;
 
   /** 実行状況の通知を生成する窓口。 */
   private final AgentEventFactory eventFactory;
@@ -195,7 +196,13 @@ public class LlmModelProvider implements dev.mikoto2000.rei.secretary.SecretaryP
       java.util.List<org.springframework.ai.openai.http.okhttp.OpenAiHttpClientBuilderCustomizer>
           customizers,
       Map<String, ResolvedLlmEndpoint> accepted) {
-    return forResponsesFixture(defaults, properties, customizers);
+    if (accepted == null || accepted.isEmpty() || customizers == null || customizers.isEmpty()
+        || accepted.values().stream().anyMatch(endpoint -> endpoint == null
+            || endpoint.apiType() != LlmApiType.RESPONSES))
+      throw new IllegalArgumentException("Explicit acceptance endpoints and transport policy required");
+    var provider = forResponsesFixture(defaults, properties, customizers);
+    provider.responsesAcceptanceEndpoints = Map.copyOf(accepted);
+    return provider;
   }
 
   /** 用途に応じたモデル利用を利用するため、指定を補って共通の初期化へ引き渡す。 */
@@ -238,7 +245,13 @@ public class LlmModelProvider implements dev.mikoto2000.rei.secretary.SecretaryP
     }
     if (server != null
         && server.getApi() == LlmApiType.RESPONSES
-        && responsesFixtureCustomizers != null) return;
+        && responsesFixtureCustomizers != null) {
+      if (responsesAcceptanceEndpoints != null
+          && !endpoint(server, model(server, null), feature)
+              .equals(responsesAcceptanceEndpoints.get(feature)))
+        throw new IllegalStateException("Responses acceptance endpoint does not match approval");
+      return;
+    }
     if ((server != null && server.getApi() == LlmApiType.RESPONSES)
         || ((server == null || !server.hasCustomServer() || server.isFallbackToDefault())
             && defaultChatModel != null
@@ -317,9 +330,10 @@ public class LlmModelProvider implements dev.mikoto2000.rei.secretary.SecretaryP
             "Responses requires an explicit endpoint/model without fallback");
       var endpoint = resolvedEndpoint(feature);
       var host = java.net.URI.create(endpoint.baseUrl()).getHost();
-      if (host == null
-          || !(host.endsWith(".invalid")
-              || java.util.Set.of("localhost", "127.0.0.1", "::1", "[::1]").contains(host)))
+      if (responsesAcceptanceEndpoints == null
+          && (host == null
+              || !(host.endsWith(".invalid")
+                  || java.util.Set.of("localhost", "127.0.0.1", "::1", "[::1]").contains(host))))
         throw new IllegalStateException("Responses fixture endpoint must be owned locally");
       var builder =
           org.springframework.ai.openai.responses.OpenAiResponsesChatOptions.builder()
