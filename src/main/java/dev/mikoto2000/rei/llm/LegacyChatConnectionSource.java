@@ -9,6 +9,7 @@ final class LegacyChatConnectionSource {
   private final LlmProperties.Server feature;
   private final Supplier<ResolvedConnectionProperties> global;
   private final Supplier<String> environmentKey;
+  private final Supplier<String> environmentBaseUrl;
 
   LegacyChatConnectionSource(
       LlmModelProvider models,
@@ -25,6 +26,7 @@ final class LegacyChatConnectionSource {
     this.feature = properties.feature(LlmFeature.CHAT);
     this.global = global;
     this.environmentKey = environmentKey;
+    this.environmentBaseUrl = environmentBaseUrl;
   }
 
   RunLlmConnectionFactory.LegacySettings resolve(String model) {
@@ -76,6 +78,7 @@ final class LegacyChatConnectionSource {
         throw new IllegalStateException(
             "Legacy connection requires an explicitly supported transport contract");
       url = connection.getBaseUrl();
+      if (url == null) url = environmentBaseUrl.get();
       if (url == null) url = com.openai.core.ClientOptions.PRODUCTION_URL;
       url = OpenAiCompatibleEndpoint.baseUrl(url);
       keys = globalKeys(connection);
