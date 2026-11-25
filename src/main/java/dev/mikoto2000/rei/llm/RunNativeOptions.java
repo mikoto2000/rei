@@ -3,6 +3,7 @@ package dev.mikoto2000.rei.llm;
 import java.util.Map;
 import org.springframework.ai.model.tool.ToolCallingChatOptions;
 import org.springframework.ai.openai.OpenAiChatOptions;
+import org.springframework.ai.openai.OpenAiChatModel;
 import org.springframework.ai.openai.responses.OpenAiResponsesChatOptions;
 
 /** Native request generation rebuilt from a credential-free accepted snapshot. */
@@ -14,6 +15,8 @@ final class RunNativeOptions {
     put(values, "temperature", options.getTemperature());
     put(values, "top_p", options.getTopP());
     if (options instanceof OpenAiChatOptions chat) {
+      if (chat.getExtraBody() != null && !chat.getExtraBody().isEmpty()) throw unsupported("extra_body");
+      put(values, "response_format", formatSettings(chat.getResponseFormat()));
       put(values, "max_tokens", chat.getMaxTokens());
       put(values, "max_completion_tokens", chat.getMaxCompletionTokens());
       put(values, "reasoning_effort", chat.getReasoningEffort());
@@ -31,6 +34,8 @@ final class RunNativeOptions {
       put(values, "parallel_tool_calls", chat.getParallelToolCalls());
       put(values, "store", chat.getStore());
     } else if (options instanceof OpenAiResponsesChatOptions responses) {
+      if (responses.getExtraBody() != null && !responses.getExtraBody().isEmpty()) throw unsupported("extra_body");
+      put(values, "response_format", formatSettings(responses.getResponseFormat()));
       put(values, "max_output_tokens", responses.getMaxOutputTokens());
       put(values, "reasoning_effort", responses.getReasoningEffort());
       put(values, "service_tier", responses.getServiceTier());
@@ -78,6 +83,7 @@ final class RunNativeOptions {
           case "strict" -> builder.strict(bool(name, value));
           case "parallel_tool_calls" -> builder.parallelToolCalls(bool(name, value));
           case "store" -> builder.store(bool(name, value));
+          case "response_format" -> builder.responseFormat(format(value));
           default -> throw unsupported(name);
         }
       });
@@ -99,6 +105,7 @@ final class RunNativeOptions {
         case "max_tool_calls" -> builder.maxToolCalls(integer(name, value));
         case "include" -> builder.include(strings(name, value));
         case "truncation" -> builder.truncation(string(name, value));
+        case "response_format" -> builder.responseFormat(format(value));
         default -> throw unsupported(name);
       }
     });
@@ -144,6 +151,42 @@ final class RunNativeOptions {
     var copy = new java.util.LinkedHashMap<String, Integer>();
     map.forEach((key, item) -> copy.put(string(name, key), signedInteger(name, item)));
     return Map.copyOf(copy);
+  }
+
+  private static Map<String, Object> formatSettings(OpenAiChatModel.ResponseFormat format) {
+    if (format == null) return null;
+    if (format.getType() == null) throw unsupported("response_format");
+    var values = new java.util.LinkedHashMap<String, Object>();
+    values.put("type", format.getType().name().toLowerCase(java.util.Locale.ROOT));
+    put(values, "json_schema", format.getJsonSchema());
+    put(values, "strict", format.getStrict());
+    return RunGenerationSettings.copy(Map.of("response_format", values))
+        .get("response_format") instanceof Map<?, ?> copied ? stringMap(copied) : null;
+  }
+
+  private static Map<String, Object> stringMap(Map<?, ?> source) {
+    var values = new java.util.LinkedHashMap<String, Object>();
+    source.forEach((key, value) -> values.put(string("response_format", key), value));
+    return java.util.Collections.unmodifiableMap(values);
+  }
+
+  private static OpenAiChatModel.ResponseFormat format(Object value) {
+    if (!(value instanceof Map<?, ?> values)) throw unsupported("response_format");
+    if (!java.util.Set.of("type", "json_schema", "strict").containsAll(values.keySet()))
+      throw unsupported("response_format");
+    var type = switch (string("response_format", values.get("type"))) {
+      case "text" -> OpenAiChatModel.ResponseFormat.Type.TEXT;
+      case "json_object" -> OpenAiChatModel.ResponseFormat.Type.JSON_OBJECT;
+      case "json_schema" -> OpenAiChatModel.ResponseFormat.Type.JSON_SCHEMA;
+      default -> throw unsupported("response_format");
+    };
+    var builder = OpenAiChatModel.ResponseFormat.builder().type(type);
+    if (values.containsKey("json_schema")) {
+      if (type != OpenAiChatModel.ResponseFormat.Type.JSON_SCHEMA) throw unsupported("response_format");
+      builder.jsonSchema(string("response_format", values.get("json_schema")));
+    } else if (type == OpenAiChatModel.ResponseFormat.Type.JSON_SCHEMA) throw unsupported("response_format");
+    if (values.containsKey("strict")) builder.strict(bool("response_format", values.get("strict")));
+    return builder.build();
   }
 
   private static IllegalArgumentException unsupported(String name) {
