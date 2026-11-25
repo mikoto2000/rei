@@ -122,12 +122,23 @@ final class ResponsesAcceptanceBudget {
     transaction((channel, state) -> {
       long now = clock.millis();
       long elapsed = now - state.started;
-      if (state.started == 0 || state.violated || elapsed < 0
+      if (state.started == 0
+          || state.violated
+          || elapsed < 0
           || elapsed >= Math.addExact(limits.time().toMillis(), TIME_EXTENSION_MILLIS))
         throw rejected();
       if (state.extensionMillis == 0)
-        append(channel, Map.of("type", "E", "extension_ms", TIME_EXTENSION_MILLIS,
-            "approval", approval, "authorized_at", now));
+        append(
+            channel,
+            Map.of(
+                "type",
+                "E",
+                "extension_ms",
+                TIME_EXTENSION_MILLIS,
+                "approval",
+                approval,
+                "authorized_at",
+                now));
       return null;
     });
   }
@@ -161,7 +172,12 @@ final class ResponsesAcceptanceBudget {
       output = Math.addExact(output, usage == null ? slot.output() : usage.output());
     }
     return new Snapshot(
-        state.calls, state.known.size(), state.unknown.size(), input, output, cost(input, output));
+        state.calls,
+        state.known.size(),
+        state.calls - state.known.size(),
+        input,
+        output,
+        cost(input, output));
   }
 
   private long cost(long input, long output) {
@@ -198,12 +214,16 @@ final class ResponsesAcceptanceBudget {
           if (state.started <= 0) throw rejected();
         } else if (type.equals("E")) {
           long authorized = row.path("authorized_at").asLong();
-          if (state.started == 0 || state.extensionMillis != 0 || row.size() != 4
+          if (state.started == 0
+              || state.extensionMillis != 0
+              || row.size() != 4
               || row.path("extension_ms").asLong() != TIME_EXTENSION_MILLIS
               || !TIME_APPROVAL.equals(row.path("approval").asText())
               || !limits.time().equals(Duration.ofHours(3))
-              || authorized < state.started || authorized > clock.millis()
-              || authorized - state.started >= Math.addExact(limits.time().toMillis(), TIME_EXTENSION_MILLIS))
+              || authorized < state.started
+              || authorized > clock.millis()
+              || authorized - state.started
+                  >= Math.addExact(limits.time().toMillis(), TIME_EXTENSION_MILLIS))
             throw rejected();
           state.extensionMillis = TIME_EXTENSION_MILLIS;
         } else if (type.equals("R")) {
