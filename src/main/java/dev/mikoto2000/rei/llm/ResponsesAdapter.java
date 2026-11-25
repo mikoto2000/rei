@@ -74,6 +74,11 @@ final class ResponsesAdapter implements LlmProtocolAdapter, ChatModel {
                   .build())
           .enable(DeserializationFeature.FAIL_ON_TRAILING_TOKENS);
 
+  static ResponsesAdapter createWithClient(ResolvedLlmEndpoint endpoint,
+      OpenAiResponsesChatOptions options, com.openai.client.OpenAIClient client, boolean production) {
+    throw new IllegalStateException("Pinned Responses client bridge is unavailable");
+  }
+
   static ResponsesAdapter create(
       ResolvedLlmEndpoint endpoint,
       OpenAiResponsesChatOptions options,
