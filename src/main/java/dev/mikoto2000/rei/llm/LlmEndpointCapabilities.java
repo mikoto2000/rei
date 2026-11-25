@@ -7,8 +7,10 @@ import java.util.Map;
 
 /** Independent server/model declarations intersected with Rei's adapter constraints. */
 public record LlmEndpointCapabilities(
-    Map<Capability, Support> route, Map<Capability, Support> server,
-    Map<Capability, Support> model, Integer maxTools) {
+    Map<Capability, Support> route,
+    Map<Capability, Support> server,
+    Map<Capability, Support> model,
+    Integer maxTools) {
   public enum Support {
     SUPPORTED,
     UNSUPPORTED,
@@ -83,11 +85,13 @@ public record LlmEndpointCapabilities(
       var declared = model.get(capability);
       result.put(
           capability,
-          transport == Support.UNSUPPORTED || implementation == Support.UNSUPPORTED
-              || declared == Support.UNSUPPORTED
+          transport == Support.UNSUPPORTED
+                  || implementation == Support.UNSUPPORTED
+                  || declared == Support.UNSUPPORTED
               ? Support.UNSUPPORTED
-              : transport == Support.UNKNOWN || implementation == Support.UNKNOWN
-                  || declared == Support.UNKNOWN
+              : transport == Support.UNKNOWN
+                      || implementation == Support.UNKNOWN
+                      || declared == Support.UNKNOWN
                   ? Support.UNKNOWN
                   : Support.SUPPORTED);
     }
@@ -99,7 +103,8 @@ public record LlmEndpointCapabilities(
       LlmProvider provider,
       LlmApiType api,
       Integer defaultMaxTools,
-      String field, boolean named) {
+      String field,
+      boolean named) {
     var transport = filled(Support.UNKNOWN);
     if (provider != LlmProvider.CHATGPT_PLAN) {
       transport = filled(Support.SUPPORTED);
@@ -173,7 +178,8 @@ public record LlmEndpointCapabilities(
     }
     var implementation = filled(named ? Support.UNKNOWN : Support.SUPPORTED);
     if (server != null)
-      applyDeclarations(server.getServerCapabilities(), implementation, field + ".server-capabilities");
+      applyDeclarations(
+          server.getServerCapabilities(), implementation, field + ".server-capabilities");
     return new LlmEndpointCapabilities(
         transport,
         implementation,
@@ -182,31 +188,29 @@ public record LlmEndpointCapabilities(
             server, provider == LlmProvider.CHATGPT_PLAN ? null : defaultMaxTools));
   }
 
-  private static void applyDeclarations(Map<String, String> source,
-      Map<Capability, Support> declared, String field) {
-      var seen = EnumSet.noneOf(Capability.class);
-      for (var entry : source.entrySet()) {
-        Capability capability;
-        try {
-          capability =
-              Capability.valueOf(
-                  entry.getKey().strip().toUpperCase(java.util.Locale.ROOT).replace('-', '_'));
-        } catch (IllegalArgumentException invalid) {
-          throw new IllegalArgumentException(field + ": unknown capability");
-        }
-        if (!seen.add(capability))
-          throw new IllegalArgumentException(field + ": duplicate capability");
-        String path =
-            field
-                + "."
-                + capability.name().toLowerCase(java.util.Locale.ROOT).replace('_', '-');
-        try {
-          declared.put(
-              capability,
-              Support.valueOf(entry.getValue().strip().toUpperCase(java.util.Locale.ROOT)));
-        } catch (IllegalArgumentException invalid) {
-          throw new IllegalArgumentException(path + ": must be supported, unsupported, or unknown");
-        }
+  private static void applyDeclarations(
+      Map<String, String> source, Map<Capability, Support> declared, String field) {
+    var seen = EnumSet.noneOf(Capability.class);
+    for (var entry : source.entrySet()) {
+      Capability capability;
+      try {
+        capability =
+            Capability.valueOf(
+                entry.getKey().strip().toUpperCase(java.util.Locale.ROOT).replace('-', '_'));
+      } catch (IllegalArgumentException invalid) {
+        throw new IllegalArgumentException(field + ": unknown capability");
       }
+      if (!seen.add(capability))
+        throw new IllegalArgumentException(field + ": duplicate capability");
+      String path =
+          field + "." + capability.name().toLowerCase(java.util.Locale.ROOT).replace('_', '-');
+      try {
+        declared.put(
+            capability,
+            Support.valueOf(entry.getValue().strip().toUpperCase(java.util.Locale.ROOT)));
+      } catch (IllegalArgumentException invalid) {
+        throw new IllegalArgumentException(path + ": must be supported, unsupported, or unknown");
+      }
+    }
   }
 }

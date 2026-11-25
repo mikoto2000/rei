@@ -18,6 +18,16 @@ public final class ChatEndpointCatalog {
   public ChatEndpointCatalog(LlmProperties properties) {
     var features = properties.getFeatures();
     features.forEach((feature, server) -> {
+      if (server != null) {
+        var field = PREFIX + feature;
+        if (server.getAuthentication() != null)
+          throw invalid(field + ".authentication", "is only supported for named chat profiles");
+        if (provider(server, field) == LlmProvider.OPENAI_API) {
+          validateBaseUrl(field + ".base-url", server.getBaseUrl());
+          validateOpenAiUrl(field + ".base-url", server.getBaseUrl());
+          LlmAuthentication.resolve(server, LlmProvider.OPENAI_API, false, field);
+        }
+      }
       if (!LlmFeature.CHAT.equals(feature) && server != null) {
         if (server.getActive() != null)
           throw invalid(

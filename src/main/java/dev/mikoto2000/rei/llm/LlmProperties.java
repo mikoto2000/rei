@@ -177,7 +177,8 @@ public class LlmProperties {
     }
 
     public void setServerCapabilities(Map<String, String> serverCapabilities) {
-      this.serverCapabilities = serverCapabilities == null ? Map.of() : Map.copyOf(serverCapabilities);
+      this.serverCapabilities =
+          serverCapabilities == null ? Map.of() : Map.copyOf(serverCapabilities);
     }
 
     public String getUsagePath() {

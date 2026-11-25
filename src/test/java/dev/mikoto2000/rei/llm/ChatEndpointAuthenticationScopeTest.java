@@ -16,22 +16,36 @@ class ChatEndpointAuthenticationScopeTest {
   void authenticationModeCannotBeSilentlyIgnoredByLegacyStaticRouting(String feature, String mode) {
     var field = "rei.llm.features." + feature + ".authentication";
     var settings = new HashMap<>(Map.of(field, mode));
-    assertThatThrownBy(() -> catalog(settings)).isInstanceOf(IllegalArgumentException.class)
-        .hasMessageContaining(field).hasMessageContaining("named chat");
+    assertThatThrownBy(() -> catalog(settings))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining(field)
+        .hasMessageContaining("named chat");
   }
 
   @ParameterizedTest
   @ValueSource(strings = {"chat", "voice-correction", "summary"})
   void explicitOpenAiContractIsAlsoValidatedForStaticFeatureConfigurations(String feature) {
     var prefix = "rei.llm.features." + feature + ".";
-    var settings = Map.of(prefix + "provider", "openai-api", prefix + "api-key", "PRIVATE_CANARY",
-        prefix + "base-url", "http://localhost:8000", prefix + "model", "fixture-model");
-    assertThatThrownBy(() -> catalog(settings)).isInstanceOf(IllegalArgumentException.class)
-        .hasMessageContaining(prefix + "base-url").hasMessageNotContaining("PRIVATE_CANARY");
+    var settings =
+        Map.of(
+            prefix + "provider",
+            "openai-api",
+            prefix + "api-key",
+            "PRIVATE_CANARY",
+            prefix + "base-url",
+            "http://localhost:8000",
+            prefix + "model",
+            "fixture-model");
+    assertThatThrownBy(() -> catalog(settings))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining(prefix + "base-url")
+        .hasMessageNotContaining("PRIVATE_CANARY");
   }
 
   private ChatEndpointCatalog catalog(Map<String, String> settings) {
-    return new ChatEndpointCatalog(new Binder(new MapConfigurationPropertySource(settings))
-        .bind("rei.llm", LlmProperties.class).get());
+    return new ChatEndpointCatalog(
+        new Binder(new MapConfigurationPropertySource(settings))
+            .bind("rei.llm", LlmProperties.class)
+            .get());
   }
 }

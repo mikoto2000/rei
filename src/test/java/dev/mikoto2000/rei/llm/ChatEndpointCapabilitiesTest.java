@@ -123,7 +123,8 @@ class ChatEndpointCapabilitiesTest {
   void flatResponsesNamespacesAndUnimplementedInputsAreNotAdvertisedAsAvailable() {
     var settings = local();
     settings.put("rei.llm.features.chat.endpoints.local.api", "responses");
-    settings.put("rei.llm.features.chat.endpoints.local.server-capabilities.responses", "supported");
+    settings.put(
+        "rei.llm.features.chat.endpoints.local.server-capabilities.responses", "supported");
     var view = view(settings);
     assertThat(view.at("/capabilities/effective/RESPONSES").asText()).isEqualTo("SUPPORTED");
     assertThat(view.at("/capabilities/effective/TOOL_NAMESPACE").asText()).isEqualTo("UNSUPPORTED");
