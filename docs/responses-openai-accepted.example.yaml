@@ -50,6 +50,8 @@ rei:
     recent-tokens: 1500
     summary-tokens: 512
     summary-generation-reserve: 1024
+    # Clear an inherited CC-only chat_template_kwargs override; profile reasoning stays low.
+    summary-enable-thinking: null
     summary-input-tokens: 12000
     summary-model-feature: chat
     standalone-summary-max-llm-calls: 10
