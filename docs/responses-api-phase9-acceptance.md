@@ -162,3 +162,14 @@ store全体249,133 bytes / 227件 / refs28,871には過去Run保持も含む。
 初回の既読再要求と合わせて、圧縮・動的公開・調査の結合で安定した受入条件を満たしていない。
 したがって指定ローカルの本番gate解禁は不可と判定する。Phase10で未検証/不合格のまま保護し、OpenAIの判定と独立に扱う。
 実試験全体の完了（全項目合格）とは表現せず、失敗・fixture補完・未検証の範囲を引き継ぐ。
+
+### 最終ローカル品質
+
+最終ソースの再コンパイル（main1768 / test1410）と対象75テストは全成功、失敗・エラー・skip0。
+最終Checkstyle0 / SpotBugs0 / analysis error0 / missing classes0 / Spotless成功。
+18個の所有試験DB（各接続先9個）はすべてPRAGMA quick_check成功。DB/hash/WALサイズと数値台帳は外部`phase9-final-live-summary.json`に保存した。
+ローカル全回帰とPR/merge CIの最終件数は後続記録で確定する。
+
+最初のローカル全回帰は、一時領域をGit worktreeの`target`内に置いたため、非Gitディレクトリを前提とする検索系fixtureが親`.git`を検出し、8 failure/1 errorとなった。
+所有Mavenだけを停止してログを保存し、コード・期待値を変えずGit外の専用一時領域で該当41件を再実行した。失敗・エラー0、既存skip2。
+その配置で全回帰を新規XML領域へ再実行する。試験計画Python10件も成功した（最初のsandbox一時領域PermissionDeniedは所有領域への変更で解消）。
