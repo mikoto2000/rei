@@ -1,6 +1,7 @@
 # Responses API: 本番利用準備と段階的導入
 
-更新: 2026-11-25。Phase10はソース・設定例・移行試験を整備中。PR/全CI/マージ後確認は未完了。
+更新: 2026-11-25。Phase10のソース・設定例・移行試験・ローカル全検証は完了。
+この文書はソースcommit時点の記録。最新PR head/マージ後exact SHAのCI・merge commit・cleanupは当該PRとworktree外の最終報告で照合する。
 **本番プロセス・JAR・クライアント・外部設定・本番DBは未変更。本番適用は未承認。**
 
 ## 接続先ごとの判定
@@ -146,17 +147,34 @@ CC会話・CC/native未完了Checkpoint・native payload hash/parts・期限切�
 互換性/owner不一致、必要payload欠損、未承認効果・成功prefix再実行、usage欠損の予約解放、保存/GCエラー、予算超過を1件でも検出したら拡大を止める。
 認証・非対応設定・繰返すtimeout/出力枯渇/不要ツール再実行も停止・調査対象。API形式の新規Run切戻しを優先し、未完了nativeをCCとして再開しない。
 
-## 証拠と残作業
+## TDDとローカル品質
+
+| 境界 | Red | Green |
+| --- | --- | --- |
+| 構成の明示profile・完全snapshot | `ac3a78980`、18件中3 assertion failure、error0 | `0508c7a4a`、関連31件成功 |
+| 要求Options/子モデルの未検証変更 | `13539875d`、16件中15 assertion failure、error0 | `32790468b`、関連179件成功 |
+| 既存CC thinking設定の継承 | `539420d22`、2件中1 assertion failure、error0 | `a7c766443`、null解除後2件成功 |
+| nullable metadataの再取得 | SpotBugs1件、解析error0 | `148f03cc1`、単一snapshotに修正、抑制なしで0件 |
+
+新規38件・Architecture7件の最終対象45件、既存native169+実アプリfixture1件、移行関連51件、Python10件が成功。
+これらは重複を含む関連確認であり、件数を足して全回帰にしない。
+最終全回帰は**8354件 / 成功8342 / 失敗0 / error0 / 期待skip12 / 新規skip0**。
+Checkstyle0 / SpotBugs0 / analysis error0 / missing classes0 / Spotless成功。通常CIで実API/鍵を要求しない。
+最初の移行fixtureの型合わせ・手動class path配線のコンパイル不備は、製品不具合のRedに数えない。
+品質指摘の修正前に始めたfullは所有Mavenだけを停止して部分ログを保持し、上記は修正後の完了実行である。
+
+## 証拠と本番適用待ち
 
 | Phase | PR / merge | 全回帰 | exact merge CI / cleanup |
 | --- | --- | --- | --- |
 | 7 | [#635](https://github.com/mikoto2000/rei/pull/635) / `6e104b3d434d22873c8f45083d78063c07d0edb2` | 8301 / 成功8289 / skip12 / failure・error0 | 全成功 / 完了 |
 | 8 | [#636](https://github.com/mikoto2000/rei/pull/636) / `64e2d4095154ac5a4f4b43fa3ff578e69573dfe1` | 8304 / 成功8292 / skip12 / failure・error0 | 全成功 / 完了。最初のBのCI制限時間超過は同一SHAの再試行成功として記録 |
 | 9 | [#637](https://github.com/mikoto2000/rei/pull/637) / `18fb7d27ef0c98f337ad3be9647ddb0dd364ba2c` | 8316 / 成功8304 / skip12 / failure・error0 | 全成功 / 完了。ローカル実調査FAILEDは維持 |
-| 10 | 作成前 / 未マージ | 最終集計前 | 未完了 |
+| 10 | 当該PRと外部最終報告を参照 | 8354 / 成功8342 / skip12 / failure・error0（ローカル） | Git/CIの確定値は当該PRに記録。本番適用は未承認 |
 
 所有記録: `F:/project/rei/target/responses-api-workflows/phase7-10-20261125/`。
 Phase7 PR635、Phase8 PR636、Phase9 PR637は通常merge/exact SHA全CI/専用worktree・branch削除まで完了。
 Phase9の基準は8316件/成功8304/期待skip12/failure0/error0、品質0/0、全Client成功。
-Phase10の最終品質・PR・merge SHA・artifact SHA・後片付け・本番適用承認は確定後に追記する。
+Phase10のPR・merge SHA・exact CI・後片付けは当該PRと外部最終報告へ記録し、配布JARのsource/artifact SHAは同梱manifestへ固定する。
+JARは鍵なし・所有home/tmp/dataで`--help`成功、検証ハーネスclassを含まないこととSDK版を照合した。本番JARへの配置ではない。
 raw reasoningは所有SQLiteに限定し、ACLと2026-12-09までの手動保持方針を維持する。自動削除や常駐監視は設定していない。
