@@ -1,0 +1,157 @@
+package dev.mikoto2000.rei.llm;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
+import com.openai.client.OpenAIClient;
+import com.openai.models.responses.EasyInputMessage;
+import com.openai.models.responses.ResponseCreateParams;
+import com.openai.models.responses.ResponseInputItem;
+import java.net.InetSocketAddress;
+import java.nio.charset.StandardCharsets;
+import java.time.Duration;
+import java.util.List;
+import java.util.Set;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
+import org.junit.jupiter.api.Test;
+
+class PinnedOpenAiClientsTest {
+  private record Owned(OpenAIClient client) implements AutoCloseable {
+    public void close() { if (client != null) client.close(); }
+  }
+
+  @Test
+  void unauthenticatedProfileNeverUsesAnotherProfilesCredentialOrHeader() throws Exception {
+    try (var fixture = new Fixture()) {
+      try (var keyed = new Owned(PinnedOpenAiClients.open(fixture.endpoint(), LlmAuthentication.API_KEY,
+          () -> "PRIVATE_OTHER_PROFILE", fixture.transport, List.of()))) {
+        assertThat(keyed.client()).isNotNull();
+        request(keyed.client());
+      }
+      var lookups = new AtomicInteger();
+      try (var none = new Owned(PinnedOpenAiClients.open(fixture.endpoint(), LlmAuthentication.NONE,
+          () -> { lookups.incrementAndGet(); return "PRIVATE_OTHER_PROFILE"; }, fixture.transport, List.of()))) {
+        assertThat(none.client()).isNotNull();
+        assertThat(request(none.client())).isEqualTo("resp_fixture");
+      }
+      assertThat(lookups).hasValue(0);
+      assertThat(fixture.authorizations).containsExactly("Bearer PRIVATE_OTHER_PROFILE", "<none>");
+      assertThat(fixture.alternativeKeys).containsOnly("<none>");
+    }
+  }
+
+  @Test
+  void oneCachedClientReadsTheCurrentCredentialForEachRequest() throws Exception {
+    try (var fixture = new Fixture()) {
+      var current = new AtomicReference<>("PRIVATE_FIRST");
+      try (var client = new Owned(PinnedOpenAiClients.open(fixture.endpoint(), LlmAuthentication.API_KEY,
+          current::get, fixture.transport, List.of()))) {
+        assertThat(client.client()).isNotNull();
+        request(client.client());
+        current.set("PRIVATE_REFRESHED");
+        request(client.client());
+      }
+      assertThat(fixture.authorizations).containsExactly("Bearer PRIVATE_FIRST", "Bearer PRIVATE_REFRESHED");
+    }
+  }
+
+  @Test
+  void redirectCannotResendTheConversationToAnotherReceiver() throws Exception {
+    try (var original = new Fixture(); var foreign = new Fixture()) {
+      original.redirect.set(foreign.baseUrl() + "/responses");
+      try (var client = new Owned(PinnedOpenAiClients.open(original.endpoint(), LlmAuthentication.API_KEY,
+          () -> "PRIVATE_FIRST", original.transport, List.of()))) {
+        assertThat(client.client()).isNotNull();
+        assertThatThrownBy(() -> request(client.client())).isInstanceOf(RuntimeException.class);
+      }
+      assertThat(original.requests).hasValue(1);
+      assertThat(foreign.requests).hasValue(0);
+    }
+  }
+
+  @Test
+  void aManagedInterceptorCannotRewriteThePinnedDestination() throws Exception {
+    try (var original = new Fixture(); var foreign = new Fixture()) {
+      okhttp3.Interceptor changed = chain -> chain.proceed(chain.request().newBuilder()
+          .url(foreign.baseUrl() + "/responses").build());
+      try (var client = new Owned(PinnedOpenAiClients.open(original.endpoint(), LlmAuthentication.NONE,
+          () -> "PRIVATE_UNUSED", original.transport, List.of(changed)))) {
+        assertThat(client.client()).isNotNull();
+        assertThatThrownBy(() -> request(client.client())).isInstanceOf(RuntimeException.class);
+      }
+      assertThat(original.requests).hasValue(0);
+      assertThat(foreign.requests).hasValue(0);
+    }
+  }
+
+  @Test
+  void unauthenticatedProfileRejectsAnInjectedCredentialBeforeHttp() throws Exception {
+    try (var fixture = new Fixture()) {
+      okhttp3.Interceptor changed = chain -> chain.proceed(chain.request().newBuilder()
+          .header("Authorization", "Bearer PRIVATE_INJECTED").build());
+      try (var client = new Owned(PinnedOpenAiClients.open(fixture.endpoint(), LlmAuthentication.NONE,
+          () -> "PRIVATE_UNUSED", fixture.transport, List.of(changed)))) {
+        assertThat(client.client()).isNotNull();
+        assertThatThrownBy(() -> request(client.client())).isInstanceOf(RuntimeException.class);
+      }
+      assertThat(fixture.requests).hasValue(0);
+    }
+  }
+
+  private String request(OpenAIClient client) {
+    return client.responses().create(ResponseCreateParams.builder().model("fixture-model").store(false)
+        .inputOfResponse(List.of(ResponseInputItem.ofEasyInputMessage(EasyInputMessage.builder()
+            .role(EasyInputMessage.Role.USER).content("fixture").build()))).build()).id();
+  }
+
+  private static final class Fixture implements AutoCloseable {
+    final com.sun.net.httpserver.HttpServer server;
+    final okhttp3.OkHttpClient transport = new okhttp3.OkHttpClient.Builder()
+        .followRedirects(false).followSslRedirects(false).retryOnConnectionFailure(false).build();
+    final AtomicInteger requests = new AtomicInteger();
+    final AtomicReference<String> redirect = new AtomicReference<>();
+    final List<String> authorizations = new CopyOnWriteArrayList<>();
+    final List<String> alternativeKeys = new CopyOnWriteArrayList<>();
+
+    Fixture() throws Exception {
+      server = com.sun.net.httpserver.HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+      server.createContext("/v1/responses", exchange -> {
+        requests.incrementAndGet();
+        authorizations.add(java.util.Objects.toString(exchange.getRequestHeaders().getFirst("Authorization"), "<none>"));
+        alternativeKeys.add(java.util.Objects.toString(exchange.getRequestHeaders().getFirst("api-key"), "<none>"));
+        alternativeKeys.add(java.util.Objects.toString(exchange.getRequestHeaders().getFirst("x-api-key"), "<none>"));
+        exchange.getRequestBody().readAllBytes();
+        if (redirect.get() != null) {
+          exchange.getResponseHeaders().set("Location", redirect.get());
+          exchange.sendResponseHeaders(307, -1);
+          exchange.close();
+          return;
+        }
+        byte[] body = ("{\"id\":\"resp_fixture\",\"object\":\"response\",\"created_at\":0,"
+            + "\"status\":\"completed\",\"model\":\"fixture-model\",\"output\":[]}")
+            .getBytes(StandardCharsets.UTF_8);
+        exchange.getResponseHeaders().set("Content-Type", "application/json");
+        exchange.sendResponseHeaders(200, body.length);
+        try (var output = exchange.getResponseBody()) { output.write(body); }
+        finally { exchange.close(); }
+      });
+      server.start();
+    }
+
+    String baseUrl() { return "http://127.0.0.1:" + server.getAddress().getPort() + "/v1"; }
+
+    ResolvedLlmEndpoint endpoint() {
+      return new ResolvedLlmEndpoint("fixture", 1, LlmApiType.RESPONSES, baseUrl(), "fixture",
+          "fixture-model", new LlmCapabilities(ReasoningReplayMode.NONE, 36, Set.of()),
+          null, null, Duration.ofSeconds(5));
+    }
+
+    public void close() {
+      server.stop(0);
+      transport.connectionPool().evictAll();
+      transport.dispatcher().executorService().shutdownNow();
+    }
+  }
+}
