@@ -25,8 +25,12 @@ final class ResponsesLiveBudget {
   int reserve(long bodyBytes, int outputTokens) throws IOException {
     if (bodyBytes < 0 || bodyBytes + 2048 > 10000 || outputTokens < 1 || outputTokens > 2000)
       throw rejected();
-    try (var channel = FileChannel.open(ledger, StandardOpenOption.CREATE, StandardOpenOption.READ,
-            StandardOpenOption.WRITE);
+    try (var channel =
+            FileChannel.open(
+                ledger,
+                StandardOpenOption.CREATE,
+                StandardOpenOption.READ,
+                StandardOpenOption.WRITE);
         var lock = channel.lock()) {
       if (!lock.isValid() || channel.size() > 4096) throw rejected();
       var bytes = ByteBuffer.allocate((int) channel.size());
@@ -52,8 +56,10 @@ final class ResponsesLiveBudget {
       long elapsed = clock.millis() - started;
       if (count >= 10 || elapsed < 0 || elapsed >= 900000) throw rejected();
       deadline = started + 900000;
-      var next = ByteBuffer.wrap(
-          (started + "," + (count + 1) + "," + binding + "\n").getBytes(StandardCharsets.UTF_8));
+      var next =
+          ByteBuffer.wrap(
+              (started + "," + (count + 1) + "," + binding + "\n")
+                  .getBytes(StandardCharsets.UTF_8));
       channel.position(channel.size());
       while (next.hasRemaining()) channel.write(next);
       channel.force(true);

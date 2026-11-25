@@ -3,11 +3,51 @@
 更新日: 2026-11-25（Asia/Tokyo）。基準: `38a13f1d38f0759049290e37df40cdd078a58e54`。
 Spring AI 2.1.0 / OpenAI Java SDK 4.101.0。依存更新、本番設定・DB・プロセスの変更は行わない。
 
-この文書は Phase 7〜10 の準備記録である。実 API 要求は **0件**、実 API 受入は両社とも
-`BLOCKED`（試験条件未確定）。fixture 成功を実接続成功として転記しない。
+この文書は Phase 7〜10 の進行記録である。下記の初期実接続試験を実施したが、フェーズ全体の
+受入は未完了。fixture 成功と、指定した実接続先での成功を区別する。
 本番 factory の gate と、fixture factory のローカル接続先制限を維持する。
 
-## フェーズと承認の状態
+## 初期実接続試験（2026-11-25）
+
+対象の本体コードは main `38a13f1d38f0759049290e37df40cdd078a58e54`。
+ユーザーが接続先・モデルを指定し、各10要求・入力10万/出力2万・15分、OpenAI USD2、
+ローカルAPI課金なし、合成データだけの送信を承認した。キーは明示した環境変数から
+別JVMへ注入し、設定ファイル全体・本番環境変数・利用者データを継承しない。
+
+| 項目 | OpenAI | ユーザー指定ローカルDeepSeek互換サービス |
+| --- | --- | --- |
+| 接続先 | `https://api.openai.com` | `http://gx10-707e.local:8888` |
+| モデル | `gpt-5.6-sol` | `deepseek-v4.1-flash-1017` |
+| 推論設定 | 通常low、ツール課題medium | 提供先の既定値 |
+| 要求数 | 7（HTTP200×7） | 7（HTTP200×5、HTTP400×2） |
+| 非stream / stream通常会話 | PASSED | PASSED |
+| SQLite原本一致 / 別JVM履歴再送 | PASSED | PASSED |
+| 推論の取得・再送受理 | encrypted、別JVM保存復元後の再送もPASSED | plaintext、tool往復と別JVM再送がPASSED |
+| Function Calling | 既存ToolCatalog・READ権限・ToolLoop・保存・Run Budget、操作1回 | 同左、操作1回 |
+| JSON Schema | PASSED、整数型と余分なfieldなしを検査 | FAILED、HTTP400。固定語診断に非対応メッセージ。詳細な能力境界は継続調査 |
+| Input / Output / Reasoning | 559 / 178 / 123 | 確認済み912 / 414 / 384、400の2要求はusage不明 |
+| Cached Tokens | 0、短い試験でcache性能を評価しない | 確認できた値0 |
+| 可視本文のTTFT（1標本） | 1521.189ms | 928.1236ms |
+| API料金 | usageに基づく通常単価推定USD0.005796、請求未照合 | ユーザー確認によりAPI課金なし |
+
+OpenAIでは、ツール課題の最終応答に2596 UTF-8 bytesの暗号化推論を取得し、SQLite保存後、
+別JVMで所有者とendpointを照合して1件を再送した。HTTP200と正解7418を確認した。
+payload本文は報告せず、ハッシュ・件数・サイズで照合した。平文推論も全文をログへ出していない。
+
+これは単一の初期試験である。動的公開・承認継続・Checkpoint・Goal・SubAgent・長時間Run・
+圧縮・異常系・画像・意味的推論継続性の比較は未完了。ローカルの結果をDeepSeek公式APIの
+対応判定へ流用しない。SDK単体/既存BoundedToolLoopを経由した結果を実アプリ全体の受入に読み替えない。
+
+試験ハーネスの読取カーソルを開いたままPayloadStoreの検証を呼び、SQLiteの書込検証と競合する
+問題を外部通信なしのfixtureで再現した（1 assertion failure、error0）。カーソルを閉じてから
+正規store.loadを呼ぶ最小修正後、予算5件と復元1件が成功した。本体の拒否契約は変更していない。
+失敗した2回のハーネス復元試行はHTTP送信前に停止しており、要求数へ加算しない。
+
+ユーザーは続く受入群について、各接続先に**追加200要求・入力100万/出力30万・3時間、
+OpenAI追加USD20、ローカルAPI課金なし、最大50往復のLongを含む合成データ試験**を承認した。
+初期の台帳をリセットせず、追加枠を別台帳で追跡する。本番適用の許可ではない。
+
+## 準備開始時点の状態（履歴）
 
 | Phase | ソース作業 | 実 API 受入 | PR / マージ | 本番適用 |
 | --- | --- | --- | --- | --- |

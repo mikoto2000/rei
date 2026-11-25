@@ -14,6 +14,11 @@
 
 ## Phase 7〜10 開始時の状態確認（2026-11-25）
 
+最新の実接続到達点は [初期実接続試験](responses-api-live-validation.md#初期実接続試験2026-11-25) を参照。
+OpenAI `gpt-5.6-sol` と指定ローカル `deepseek-v4.1-flash-1017` に各7要求を実施した。
+通常/stream、別JVM・SQLite、Function Calling と推論再送が成功。OpenAI JSON Schemaも成功。
+ローカルJSON SchemaはHTTP400で拒否されており成功扱いしない。フェーズ全体の受入と本番gate解禁は未完了。
+
 上表は各実装時点の記録。Phase 6 は実 Git と GitHub で通常 merge
 `38a13f1d38f0759049290e37df40cdd078a58e54` を再確認した。
 exact SHA の [Java](https://github.com/mikoto2000/rei/actions/runs/45492903619)、

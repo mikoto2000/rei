@@ -27,15 +27,24 @@ class ResponsesLiveStoredAnswerTest {
     source.setUrl("jdbc:sqlite:" + root.resolve("payload.db"));
     var store = new ModelMessagePayloadStore(source);
     var scope = new ModelMessagePayloadStore.Scope("project", root.toString(), "session");
-    var message = AssistantMessage.builder().parts(List.of(
-        new ReasoningPart(null, null, new OpaquePayload("openai", "reasoning", "fixture"),
-            Map.of("id", "reasoning-fixture")),
-        new TextPart("7417", null, Map.of()))).build();
+    var message =
+        AssistantMessage.builder()
+            .parts(
+                List.of(
+                    new ReasoningPart(
+                        null,
+                        null,
+                        new OpaquePayload("openai", "reasoning", "fixture"),
+                        Map.of("id", "reasoning-fixture")),
+                    new TextPart("7417", null, Map.of())))
+            .build();
     var ref = store.save(scope, "run", "final", message);
-    assertThatCode(() -> {
-      var selected = ResponsesLiveAcceptance.storedAnswer(store, source, scope, "run");
-      assertThat(selected.sha256()).isEqualTo(ref.sha256());
-      assertThat(selected.message().getParts()).hasSize(2);
-    }).doesNotThrowAnyException();
+    assertThatCode(
+            () -> {
+              var selected = ResponsesLiveAcceptance.storedAnswer(store, source, scope, "run");
+              assertThat(selected.sha256()).isEqualTo(ref.sha256());
+              assertThat(selected.message().getParts()).hasSize(2);
+            })
+        .doesNotThrowAnyException();
   }
 }

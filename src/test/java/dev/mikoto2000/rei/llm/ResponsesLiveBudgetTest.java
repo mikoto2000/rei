@@ -27,8 +27,7 @@ class ResponsesLiveBudgetTest {
   void failedOrRestartedRequestsDoNotRefundOrResetReservations() throws Exception {
     assertThat(budget().reserve(500, 2000)).isEqualTo(1);
     assertThat(budget().reserve(500, 2000)).isEqualTo(2);
-    for (int call = 3; call <= 10; call++)
-      assertThat(budget().reserve(500, 2000)).isEqualTo(call);
+    for (int call = 3; call <= 10; call++) assertThat(budget().reserve(500, 2000)).isEqualTo(call);
     assertThatThrownBy(() -> budget().reserve(500, 2000)).isInstanceOf(IllegalStateException.class);
   }
 
@@ -43,7 +42,8 @@ class ResponsesLiveBudgetTest {
 
   @Test
   void oversizedInputOrOutputIsRejectedBeforeAReservationIsWritten() throws Exception {
-    assertThatThrownBy(() -> budget().reserve(7953, 2000)).isInstanceOf(IllegalStateException.class);
+    assertThatThrownBy(() -> budget().reserve(7953, 2000))
+        .isInstanceOf(IllegalStateException.class);
     assertThatThrownBy(() -> budget().reserve(500, 2001)).isInstanceOf(IllegalStateException.class);
     assertThat(budget().reserve(500, 2000)).isEqualTo(1);
   }
