@@ -22,6 +22,18 @@ public record RunLlmConnection(
     generation = RunGenerationSettings.copy(generation);
   }
 
+  public RunLlmConnection(String profileId, boolean named, LlmProvider provider,
+      LlmAuthentication authentication, String accountRef, String accountRegistration,
+      ResolvedLlmEndpoint endpoint,
+      Map<LlmEndpointCapabilities.Capability, LlmEndpointCapabilities.Support> capabilities,
+      Map<String, Object> generation, Map<String, String> transport) {
+    this(profileId, named, provider, authentication, accountRef, accountRegistration, endpoint, capabilities, generation);
+  }
+
+  public Map<String, String> transport() { return Map.of(); }
+
+  public java.time.Duration requestTimeout() { return endpoint.readTimeout(); }
+
   @Override
   public Map<LlmEndpointCapabilities.Capability, LlmEndpointCapabilities.Support> capabilities() {
     return Map.copyOf(capabilities);
