@@ -27,59 +27,82 @@ import org.springframework.ai.openai.responses.OpenAiResponsesChatOptions;
 import reactor.core.publisher.Flux;
 
 class RunLlmConnectionModelTest {
-  @ParameterizedTest @EnumSource(LlmApiType.class)
+  @ParameterizedTest
+  @EnumSource(LlmApiType.class)
   void callUsesTheAcceptedSnapshotAndDoesNotReadMutableSelection(LlmApiType api) {
     var delegate = mock(ChatModel.class);
     var response = new ChatResponse(List.of());
     when(delegate.call(any(Prompt.class))).thenReturn(response);
     var observed = new AtomicReference<RunLlmConnection>();
-    var routing = new RunLlmConnectionModel(connection -> {
-      observed.set(connection);
-      return delegate;
-    }, connection -> {});
+    var routing =
+        new RunLlmConnectionModel(
+            connection -> {
+              observed.set(connection);
+              return delegate;
+            },
+            connection -> {});
     var accepted = connection(api);
     assertThat(routing.call(prompt(api, accepted))).isSameAs(response);
     assertThat(observed.get()).isEqualTo(accepted);
     verify(delegate).call(any(Prompt.class));
   }
 
-  @ParameterizedTest @EnumSource(LlmApiType.class)
+  @ParameterizedTest
+  @EnumSource(LlmApiType.class)
   void missingOrMismatchedConnectionNeverResolvesATransport(LlmApiType api) {
     var resolutions = new java.util.concurrent.atomic.AtomicInteger();
-    var routing = new RunLlmConnectionModel(connection -> {
-      resolutions.incrementAndGet();
-      return mock(ChatModel.class);
-    }, connection -> {});
+    var routing =
+        new RunLlmConnectionModel(
+            connection -> {
+              resolutions.incrementAndGet();
+              return mock(ChatModel.class);
+            },
+            connection -> {});
     assertThatThrownBy(() -> routing.call(new Prompt("request", options(api))))
-        .isInstanceOf(IllegalStateException.class).hasMessageContaining("connection");
-    var bad = options(api).mutate().model("other-model")
-        .toolContext(Map.of(ModelOptions.RUN_CONNECTION_CONTEXT_KEY, connection(api))).build();
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("connection");
+    var bad =
+        options(api)
+            .mutate()
+            .model("other-model")
+            .toolContext(Map.of(ModelOptions.RUN_CONNECTION_CONTEXT_KEY, connection(api)))
+            .build();
     assertThatThrownBy(() -> routing.call(new Prompt("request", bad)))
-        .isInstanceOf(IllegalStateException.class).hasMessageContaining("model");
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("model");
     assertThat(resolutions).hasValue(0);
   }
 
-  @ParameterizedTest @EnumSource(LlmApiType.class)
+  @ParameterizedTest
+  @EnumSource(LlmApiType.class)
   void streamVerifiesBindingAtEachSubscriptionRatherThanAtAssembly(LlmApiType api) {
     var available = new AtomicBoolean(true);
     var delegate = mock(ChatModel.class);
     var response = new ChatResponse(List.of());
     when(delegate.stream(any(Prompt.class))).thenReturn(Flux.just(response));
-    var routing = new RunLlmConnectionModel(connection -> delegate, connection -> {
-      if (!available.get()) throw new IllegalStateException("registration unavailable");
-    });
+    var routing =
+        new RunLlmConnectionModel(
+            connection -> delegate,
+            connection -> {
+              if (!available.get()) throw new IllegalStateException("registration unavailable");
+            });
     var stream = routing.stream(prompt(api, connection(api)));
     verifyNoInteractions(delegate);
     assertThat(stream.blockFirst()).isSameAs(response);
     available.set(false);
-    assertThatThrownBy(stream::blockFirst).isInstanceOf(IllegalStateException.class)
+    assertThatThrownBy(stream::blockFirst)
+        .isInstanceOf(IllegalStateException.class)
         .hasMessageContaining("registration unavailable");
     verify(delegate, times(1)).stream(any(Prompt.class));
   }
 
   private Prompt prompt(LlmApiType api, RunLlmConnection connection) {
-    return new Prompt("request", options(api).mutate()
-        .toolContext(Map.of(ModelOptions.RUN_CONNECTION_CONTEXT_KEY, connection)).build());
+    return new Prompt(
+        "request",
+        options(api)
+            .mutate()
+            .toolContext(Map.of(ModelOptions.RUN_CONNECTION_CONTEXT_KEY, connection))
+            .build());
   }
 
   private ToolCallingChatOptions options(LlmApiType api) {
@@ -89,10 +112,25 @@ class RunLlmConnectionModelTest {
   }
 
   private RunLlmConnection connection(LlmApiType api) {
-    return new RunLlmConnection("local", true, LlmProvider.OPENAI_COMPATIBLE,
-        LlmAuthentication.NONE, null, null,
-        new ResolvedLlmEndpoint("local", 1, api, "http://local.invalid/v1", "local", "model",
-            new LlmCapabilities(ReasoningReplayMode.NONE, 36, Set.of()), 512, null,
-            Duration.ofSeconds(30)), Map.of(), Map.of());
+    return new RunLlmConnection(
+        "local",
+        true,
+        LlmProvider.OPENAI_COMPATIBLE,
+        LlmAuthentication.NONE,
+        null,
+        null,
+        new ResolvedLlmEndpoint(
+            "local",
+            1,
+            api,
+            "http://local.invalid/v1",
+            "local",
+            "model",
+            new LlmCapabilities(ReasoningReplayMode.NONE, 36, Set.of()),
+            512,
+            null,
+            Duration.ofSeconds(30)),
+        Map.of(),
+        Map.of());
   }
 }

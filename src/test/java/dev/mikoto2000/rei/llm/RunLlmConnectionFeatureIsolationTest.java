@@ -15,19 +15,25 @@ class RunLlmConnectionFeatureIsolationTest {
   @ParameterizedTest
   @EnumSource(LlmApiType.class)
   void helperContextDropsTheParentsAcceptedRunConnection(LlmApiType api) {
-    var prepared = ModelOptions.singleRequest(options(api),
-        Map.of(ModelOptions.RUN_CONNECTION_CONTEXT_KEY, "PARENT_PIN"));
-    assertThat(prepared.getToolContext()).doesNotContainKey(ModelOptions.RUN_CONNECTION_CONTEXT_KEY);
+    var prepared =
+        ModelOptions.singleRequest(
+            options(api), Map.of(ModelOptions.RUN_CONNECTION_CONTEXT_KEY, "PARENT_PIN"));
+    assertThat(prepared.getToolContext())
+        .doesNotContainKey(ModelOptions.RUN_CONNECTION_CONTEXT_KEY);
     assertThat(prepared.getModel()).isEqualTo("static-helper-model");
   }
 
   @ParameterizedTest
   @EnumSource(LlmApiType.class)
   void acceptedRunOptionsCannotBeRelabeledAsAnIndependentFeatureCall(LlmApiType api) {
-    var accepted = options(api).mutate().toolContext(
-        Map.of(ModelOptions.RUN_CONNECTION_CONTEXT_KEY, "ACCEPTED_PIN")).build();
+    var accepted =
+        options(api)
+            .mutate()
+            .toolContext(Map.of(ModelOptions.RUN_CONNECTION_CONTEXT_KEY, "ACCEPTED_PIN"))
+            .build();
     assertThatThrownBy(() -> ModelOptions.singleRequest(accepted))
-        .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("Run connection");
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("Run connection");
   }
 
   private ToolCallingChatOptions options(LlmApiType api) {

@@ -20,13 +20,16 @@ import org.springframework.boot.context.properties.source.MapConfigurationProper
 class ChatRunConnectionQueueTest {
   @TempDir Path root;
 
-  @ParameterizedTest @EnumSource(AgentRunContext.Mode.class)
+  @ParameterizedTest
+  @EnumSource(AgentRunContext.Mode.class)
   void queueCapturesConnectionBeforeAnyDispatchInEveryMode(AgentRunContext.Mode mode) {
     var connections = connections();
     var scheduled = new ArrayList<Runnable>();
     var used = new ArrayList<String>();
-    var router = new ConversationInputRouter(scheduled::add, (owner, prompt, queue) ->
-        used.add(connections.require(owner).profileId()));
+    var router =
+        new ConversationInputRouter(
+            scheduled::add,
+            (owner, prompt, queue) -> used.add(connections.require(owner).profileId()));
     router.setChatRunAdmission(admission(connections));
     var first = owner("first-run", mode);
     router.submit(first, "request");
@@ -44,8 +47,12 @@ class ChatRunConnectionQueueTest {
   @Test
   void rejectedDispatchDoesNotLeaveAnAcceptedConnection() {
     var connections = connections();
-    var router = new ConversationInputRouter(task -> { throw new RejectedExecutionException(); },
-        (owner, prompt, queue) -> {});
+    var router =
+        new ConversationInputRouter(
+            task -> {
+              throw new RejectedExecutionException();
+            },
+            (owner, prompt, queue) -> {});
     router.setChatRunAdmission(admission(connections));
     var owner = owner("rejected", AgentRunContext.Mode.EXCLUSIVE);
     assertThatThrownBy(() -> router.submit(owner, "request"))
@@ -55,30 +62,39 @@ class ChatRunConnectionQueueTest {
 
   private ChatRunAdmission admission(ChatRunConnections connections) {
     return new ChatRunAdmission() {
-      public void accept(AgentRunContext owner, String prompt) { connections.accept(owner); }
-      public void release(AgentRunContext owner) { connections.release(owner); }
+      public void accept(AgentRunContext owner, String prompt) {
+        connections.accept(owner);
+      }
+
+      public void release(AgentRunContext owner) {
+        connections.release(owner);
+      }
     };
   }
 
   @Test
   void rejectedAdmissionOwnershipCannotRetireAnotherRunsReservation() {
     var scheduled = new ArrayList<Runnable>();
-    var admissions = org.mockito.Mockito.mock(
-        dev.mikoto2000.rei.conversation.ConversationAdmissionStore.class);
+    var admissions =
+        org.mockito.Mockito.mock(dev.mikoto2000.rei.conversation.ConversationAdmissionStore.class);
     org.mockito.Mockito.doThrow(new IllegalStateException("owner mismatch"))
-        .when(admissions).reserveKnownSession(org.mockito.ArgumentMatchers.any(AgentRunContext.class));
+        .when(admissions)
+        .reserveKnownSession(org.mockito.ArgumentMatchers.any(AgentRunContext.class));
     var connectionAdmission = org.mockito.Mockito.mock(ChatRunAdmission.class);
     var router = new ConversationInputRouter(scheduled::add, (owner, prompt, queue) -> {});
     router.setAdmissions(admissions);
     router.setChatRunAdmission(connectionAdmission);
-    assertThatThrownBy(() -> router.submit(owner("foreign", AgentRunContext.Mode.EXCLUSIVE), "request"))
-        .isInstanceOf(IllegalStateException.class).hasMessageContaining("owner mismatch");
+    assertThatThrownBy(
+            () -> router.submit(owner("foreign", AgentRunContext.Mode.EXCLUSIVE), "request"))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("owner mismatch");
     assertThat(scheduled).isEmpty();
     org.mockito.Mockito.verifyNoInteractions(connectionAdmission);
     org.mockito.Mockito.verify(admissions, org.mockito.Mockito.never()).release("foreign");
-    org.mockito.Mockito.verify(admissions, org.mockito.Mockito.never()).transition(
-        org.mockito.ArgumentMatchers.anyString(),
-        org.mockito.ArgumentMatchers.any(dev.mikoto2000.rei.application.run.RunStatus.class));
+    org.mockito.Mockito.verify(admissions, org.mockito.Mockito.never())
+        .transition(
+            org.mockito.ArgumentMatchers.anyString(),
+            org.mockito.ArgumentMatchers.any(dev.mikoto2000.rei.application.run.RunStatus.class));
   }
 
   @Test
@@ -101,14 +117,20 @@ class ChatRunConnectionQueueTest {
     var scheduled = new ArrayList<Runnable>();
     var released = new java.util.concurrent.atomic.AtomicInteger();
     var router = new ConversationInputRouter(scheduled::add, (owner, prompt, queue) -> {});
-    router.setChatRunAdmission(new ChatRunAdmission() {
-      public void accept(AgentRunContext owner, String prompt) {
-        throw new IllegalStateException("connection unavailable");
-      }
-      public void release(AgentRunContext owner) { released.incrementAndGet(); }
-    });
-    assertThatThrownBy(() -> router.submit(owner("rejected", AgentRunContext.Mode.EXCLUSIVE), "request"))
-        .isInstanceOf(IllegalStateException.class).hasMessageContaining("connection unavailable");
+    router.setChatRunAdmission(
+        new ChatRunAdmission() {
+          public void accept(AgentRunContext owner, String prompt) {
+            throw new IllegalStateException("connection unavailable");
+          }
+
+          public void release(AgentRunContext owner) {
+            released.incrementAndGet();
+          }
+        });
+    assertThatThrownBy(
+            () -> router.submit(owner("rejected", AgentRunContext.Mode.EXCLUSIVE), "request"))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("connection unavailable");
     assertThat(scheduled).isEmpty();
     assertThat(released).hasValue(1);
   }
@@ -117,22 +139,24 @@ class ChatRunConnectionQueueTest {
   void independentOperationsDoNotAcceptAChatConnection() {
     var scheduled = new ArrayList<Runnable>();
     var router = new ConversationInputRouter(scheduled::add, (owner, prompt, queue) -> {});
-    router.setChatRunAdmission(new ChatRunAdmission() {
-      public void accept(AgentRunContext owner, String prompt) {
-        throw new AssertionError("Independent operation used normal-chat selection");
-      }
-      public void release(AgentRunContext owner) {}
-    });
+    router.setChatRunAdmission(
+        new ChatRunAdmission() {
+          public void accept(AgentRunContext owner, String prompt) {
+            throw new AssertionError("Independent operation used normal-chat selection");
+          }
+
+          public void release(AgentRunContext owner) {}
+        });
     var called = new java.util.concurrent.atomic.AtomicBoolean();
-    router.submitOperation(owner("operation", AgentRunContext.Mode.EXCLUSIVE),
-        () -> called.set(true), Runnable::run);
+    router.submitOperation(
+        owner("operation", AgentRunContext.Mode.EXCLUSIVE), () -> called.set(true), Runnable::run);
     scheduled.removeFirst().run();
     assertThat(called).isTrue();
   }
 
   private AgentRunContext owner(String run, AgentRunContext.Mode mode) {
-    return new AgentRunContext(run, "session", root, "project",
-        AgentRunContext.RequestSource.SHELL, mode);
+    return new AgentRunContext(
+        run, "session", root, "project", AgentRunContext.RequestSource.SHELL, mode);
   }
 
   private ChatRunConnections connections() {
@@ -144,10 +168,19 @@ class ChatRunConnectionQueueTest {
       values.put(prefix + "authentication", "none");
       values.put(prefix + "model", name + "-model");
     }
-    var props = new Binder(new MapConfigurationPropertySource(values))
-        .bind("rei.llm", LlmProperties.class).get();
+    var props =
+        new Binder(new MapConfigurationPropertySource(values))
+            .bind("rei.llm", LlmProperties.class)
+            .get();
     var catalog = new ChatEndpointCatalog(props);
-    return new ChatRunConnections(catalog, new RunLlmConnectionFactory(catalog, props,
-        ignored -> { throw new AssertionError("No legacy fallback"); }, ignored -> null));
+    return new ChatRunConnections(
+        catalog,
+        new RunLlmConnectionFactory(
+            catalog,
+            props,
+            ignored -> {
+              throw new AssertionError("No legacy fallback");
+            },
+            ignored -> null));
   }
 }

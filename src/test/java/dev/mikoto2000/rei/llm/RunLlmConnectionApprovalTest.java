@@ -23,13 +23,30 @@ class RunLlmConnectionApprovalTest {
     var source = new org.sqlite.SQLiteDataSource();
     source.setUrl("jdbc:sqlite:" + root.resolve("approval.db"));
     var store = new ApprovalContinuationStore(source);
-    var owner = new AgentRunContext("run", "conversation", root, "project",
-        AgentRunContext.RequestSource.SHELL, AgentRunContext.Mode.EXCLUSIVE);
-    var pending = new RunContinuation.PendingTools("", List.of(
-        new AssistantMessage.ToolCall("call", "function", "read", "{}")), List.of());
+    var owner =
+        new AgentRunContext(
+            "run",
+            "conversation",
+            root,
+            "project",
+            AgentRunContext.RequestSource.SHELL,
+            AgentRunContext.Mode.EXCLUSIVE);
+    var pending =
+        new RunContinuation.PendingTools(
+            "",
+            List.of(new AssistantMessage.ToolCall("call", "function", "read", "{}")),
+            List.of());
     var connection = connection();
-    store.save("approval", owner, "request", List.of(new UserMessage("request")), pending,
-        new OutputLimitRunBudget.Snapshot(0, 1, 0, false), false, null, connection);
+    store.save(
+        "approval",
+        owner,
+        "request",
+        List.of(new UserMessage("request")),
+        pending,
+        new OutputLimitRunBudget.Snapshot(0, 1, 0, false),
+        false,
+        null,
+        connection);
     var reopened = new ApprovalContinuationStore(source);
     var entry = reopened.find("approval").orElseThrow();
     assertThat(reopened.document(entry).connection()).isEqualTo(connection);
@@ -38,16 +55,35 @@ class RunLlmConnectionApprovalTest {
 
   @Test
   void legacyContinuationStillHasNoConnection() {
-    assertThat(new RunContinuation.Saved("request", List.of(),
-        new OutputLimitRunBudget.Snapshot(0, 1, 0, false)).connection()).isNull();
+    assertThat(
+            new RunContinuation.Saved(
+                    "request", List.of(), new OutputLimitRunBudget.Snapshot(0, 1, 0, false))
+                .connection())
+        .isNull();
   }
 
   private RunLlmConnection connection() {
-    var endpoint = new ResolvedLlmEndpoint("local", 1, LlmApiType.CHAT_COMPLETIONS,
-        "http://local.invalid/v1", "chat-endpoint:local", "model",
-        new LlmCapabilities(ReasoningReplayMode.NONE, 36, Set.of()),
-        512, null, Duration.ofSeconds(30));
-    return new RunLlmConnection("local", true, LlmProvider.OPENAI_COMPATIBLE,
-        LlmAuthentication.NONE, null, null, endpoint, Map.of(), Map.of("max_tokens", 512));
+    var endpoint =
+        new ResolvedLlmEndpoint(
+            "local",
+            1,
+            LlmApiType.CHAT_COMPLETIONS,
+            "http://local.invalid/v1",
+            "chat-endpoint:local",
+            "model",
+            new LlmCapabilities(ReasoningReplayMode.NONE, 36, Set.of()),
+            512,
+            null,
+            Duration.ofSeconds(30));
+    return new RunLlmConnection(
+        "local",
+        true,
+        LlmProvider.OPENAI_COMPATIBLE,
+        LlmAuthentication.NONE,
+        null,
+        null,
+        endpoint,
+        Map.of(),
+        Map.of("max_tokens", 512));
   }
 }

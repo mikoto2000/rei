@@ -23,8 +23,11 @@ class RunLlmConnectionProgressTest {
   void progressSnapshotCarriesTheAcceptedConnectionRatherThanCurrentSelection() {
     var connection = connection();
     var execution = execution();
-    execution.setModelOptions(OpenAiChatOptions.builder().model("model")
-        .toolContext(Map.of(ModelOptions.RUN_CONNECTION_CONTEXT_KEY, connection)).build());
+    execution.setModelOptions(
+        OpenAiChatOptions.builder()
+            .model("model")
+            .toolContext(Map.of(ModelOptions.RUN_CONNECTION_CONTEXT_KEY, connection))
+            .build());
     assertThat(execution.progressSnapshot().connection()).isEqualTo(connection);
   }
 
@@ -32,11 +35,16 @@ class RunLlmConnectionProgressTest {
   void durableProgressAndExplicitResumePreserveTheSameConnection() throws Exception {
     var connection = connection();
     var execution = execution();
-    execution.setModelOptions(OpenAiChatOptions.builder().model("model")
-        .toolContext(Map.of(ModelOptions.RUN_CONNECTION_CONTEXT_KEY, connection)).build());
+    execution.setModelOptions(
+        OpenAiChatOptions.builder()
+            .model("model")
+            .toolContext(Map.of(ModelOptions.RUN_CONNECTION_CONTEXT_KEY, connection))
+            .build());
     var mapper = new ObjectMapper().findAndRegisterModules();
-    var restored = mapper.readValue(mapper.writeValueAsBytes(execution.progressSnapshot()),
-        RunExecutionContext.ProgressState.class);
+    var restored =
+        mapper.readValue(
+            mapper.writeValueAsBytes(execution.progressSnapshot()),
+            RunExecutionContext.ProgressState.class);
     assertThat(restored.connection()).isEqualTo(connection);
     assertThat(restored.forExplicitResume().connection()).isEqualTo(connection);
   }
@@ -52,18 +60,38 @@ class RunLlmConnectionProgressTest {
   }
 
   private RunExecutionContext execution() {
-    return new RunExecutionContext("run", new OutputLimitRunBudget(1, 10),
-        new ProgressEvaluator(root), new AgentEventFactory(Clock.systemUTC()), event -> {});
+    return new RunExecutionContext(
+        "run",
+        new OutputLimitRunBudget(1, 10),
+        new ProgressEvaluator(root),
+        new AgentEventFactory(Clock.systemUTC()),
+        event -> {});
   }
 
   private RunLlmConnection connection() {
-    var endpoint = new ResolvedLlmEndpoint("local", 1, LlmApiType.CHAT_COMPLETIONS,
-        "http://local.invalid/v1", "chat-endpoint:local", "model",
-        new LlmCapabilities(ReasoningReplayMode.NONE, 36, Set.of()),
-        512, null, Duration.ofSeconds(30));
-    return new RunLlmConnection("local", true, LlmProvider.OPENAI_COMPATIBLE,
-        LlmAuthentication.NONE, null, null, endpoint,
-        Map.of(LlmEndpointCapabilities.Capability.CHAT_COMPLETIONS, LlmEndpointCapabilities.Support.SUPPORTED),
+    var endpoint =
+        new ResolvedLlmEndpoint(
+            "local",
+            1,
+            LlmApiType.CHAT_COMPLETIONS,
+            "http://local.invalid/v1",
+            "chat-endpoint:local",
+            "model",
+            new LlmCapabilities(ReasoningReplayMode.NONE, 36, Set.of()),
+            512,
+            null,
+            Duration.ofSeconds(30));
+    return new RunLlmConnection(
+        "local",
+        true,
+        LlmProvider.OPENAI_COMPATIBLE,
+        LlmAuthentication.NONE,
+        null,
+        null,
+        endpoint,
+        Map.of(
+            LlmEndpointCapabilities.Capability.CHAT_COMPLETIONS,
+            LlmEndpointCapabilities.Support.SUPPORTED),
         Map.of("max_tokens", 512));
   }
 }

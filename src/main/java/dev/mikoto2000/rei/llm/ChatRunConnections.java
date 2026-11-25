@@ -66,26 +66,34 @@ final class ChatRunConnections {
   RunLlmConnection require(AgentRunContext owner) {
     var entry = accepted.get(owner.runId());
     if (entry == null) throw new IllegalStateException("Run connection snapshot is unavailable");
-    if (!entry.owner().equals(owner)) throw new IllegalStateException("Run connection owner mismatch");
+    if (!entry.owner().equals(owner))
+      throw new IllegalStateException("Run connection owner mismatch");
     return entry.connection();
   }
 
   void release(AgentRunContext owner) {
-    accepted.computeIfPresent(owner.runId(), (run, entry) -> {
-      if (!entry.owner().equals(owner)) throw new IllegalStateException("Run connection owner mismatch");
-      return null;
-    });
+    accepted.computeIfPresent(
+        owner.runId(),
+        (run, entry) -> {
+          if (!entry.owner().equals(owner))
+            throw new IllegalStateException("Run connection owner mismatch");
+          return null;
+        });
   }
 
   void restore(AgentRunContext owner, RunLlmConnection saved) {
     java.util.Objects.requireNonNull(saved, "saved connection");
-    accepted.compute(owner.runId(), (run, prior) -> {
-      if (prior != null) {
-        if (!prior.owner().equals(owner)) throw new IllegalStateException("Run connection owner mismatch");
-        if (!prior.connection().equals(saved)) throw new IllegalStateException("Run connection cannot be replaced");
-      }
-      factory.verifyBinding(saved);
-      return prior == null ? new Accepted(owner, saved) : prior;
-    });
+    accepted.compute(
+        owner.runId(),
+        (run, prior) -> {
+          if (prior != null) {
+            if (!prior.owner().equals(owner))
+              throw new IllegalStateException("Run connection owner mismatch");
+            if (!prior.connection().equals(saved))
+              throw new IllegalStateException("Run connection cannot be replaced");
+          }
+          factory.verifyBinding(saved);
+          return prior == null ? new Accepted(owner, saved) : prior;
+        });
   }
 }

@@ -124,7 +124,8 @@ public interface RunContinuation {
       List<dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ReplayReference>
           replayReferences,
       dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.History protocolHistory,
-      @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+      @com.fasterxml.jackson.annotation.JsonInclude(
+              com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
           dev.mikoto2000.rei.llm.RunLlmConnection connection) {
     public Saved {
       messages = messages == null ? null : Collections.unmodifiableList(new ArrayList<>(messages));
@@ -132,9 +133,12 @@ public interface RunContinuation {
     }
 
     public Saved(
-        String request, List<Message> messages, OutputLimitRunBudget.Snapshot budget,
+        String request,
+        List<Message> messages,
+        OutputLimitRunBudget.Snapshot budget,
         PendingTools pendingTools,
-        List<dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ReplayReference> replayReferences,
+        List<dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ReplayReference>
+            replayReferences,
         dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.History protocolHistory) {
       this(request, messages, budget, pendingTools, replayReferences, protocolHistory, null);
     }

@@ -26,7 +26,8 @@ public final class ConversationInputRouter {
 
   @org.springframework.beans.factory.annotation.Autowired(required = false)
   public void setChatRunAdmission(ChatRunAdmission admission) {
-    if (chatRunAdmission != null) throw new IllegalStateException("Chat admission already configured");
+    if (chatRunAdmission != null)
+      throw new IllegalStateException("Chat admission already configured");
     chatRunAdmission = Objects.requireNonNull(admission);
     onCleanup(admission::release);
   }
@@ -436,11 +437,11 @@ public final class ConversationInputRouter {
     var context = slot.context();
     if (admissions != null) admissions.reserveKnownSession(context);
     try {
-    if (chatRunAdmission != null) chatRunAdmission.accept(context, slot.prompt());
-    var admitted = beforeExecution.getOrDefault(context.runId(), () -> {});
-    agentSlots.put(context.runId(), slot);
-    String key =
-        context.projectId() == null ? context.projectRoot().toString() : context.projectId();
+      if (chatRunAdmission != null) chatRunAdmission.accept(context, slot.prompt());
+      var admitted = beforeExecution.getOrDefault(context.runId(), () -> {});
+      agentSlots.put(context.runId(), slot);
+      String key =
+          context.projectId() == null ? context.projectRoot().toString() : context.projectId();
       boolean first =
           projectQueue.enqueue(
               key,

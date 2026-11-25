@@ -47,8 +47,11 @@ public class RunExecutionContext {
       throw new IllegalStateException("Run model options cannot be replaced");
     var prepared = options.mutate().build();
     var suppliedContext = prepared.getToolContext();
-    var connection = suppliedContext == null ? null : suppliedContext.get(
-        dev.mikoto2000.rei.modeloptions.ModelOptions.RUN_CONNECTION_CONTEXT_KEY);
+    var connection =
+        suppliedContext == null
+            ? null
+            : suppliedContext.get(
+                dev.mikoto2000.rei.modeloptions.ModelOptions.RUN_CONNECTION_CONTEXT_KEY);
     if (connection != null && !(connection instanceof dev.mikoto2000.rei.llm.RunLlmConnection))
       throw new IllegalArgumentException("Invalid accepted Run connection");
     if (acceptedConnection != null && !acceptedConnection.equals(connection))
@@ -463,13 +466,25 @@ public class RunExecutionContext {
               com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
           dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.History protocolHistory,
       @com.fasterxml.jackson.annotation.JsonInclude(
-          com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+              com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
           dev.mikoto2000.rei.llm.RunLlmConnection connection) {
-    public ProgressState(InformationLedger.State information, OutputLimitRunBudget.Snapshot budget,
-        int acquisitionOnlyIterations, int unknownIterations, int unknownReplanNotices,
-        Continuity continuity, dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.History protocolHistory) {
-      this(information, budget, acquisitionOnlyIterations, unknownIterations, unknownReplanNotices,
-          continuity, protocolHistory, null);
+    public ProgressState(
+        InformationLedger.State information,
+        OutputLimitRunBudget.Snapshot budget,
+        int acquisitionOnlyIterations,
+        int unknownIterations,
+        int unknownReplanNotices,
+        Continuity continuity,
+        dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.History protocolHistory) {
+      this(
+          information,
+          budget,
+          acquisitionOnlyIterations,
+          unknownIterations,
+          unknownReplanNotices,
+          continuity,
+          protocolHistory,
+          null);
     }
 
     public ProgressState(

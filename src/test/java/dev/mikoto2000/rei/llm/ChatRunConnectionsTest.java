@@ -16,7 +16,8 @@ class ChatRunConnectionsTest {
   void continuationWithoutAnAcceptedConnectionMustStopInsteadOfSamplingSelection() {
     var connections = connections();
     assertThatThrownBy(() -> connections.require(owner("not-accepted", "session")))
-        .isInstanceOf(IllegalStateException.class).hasMessageContaining("unavailable");
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("unavailable");
   }
 
   @Test
@@ -27,7 +28,8 @@ class ChatRunConnectionsTest {
     connections.release(owner);
     connections.select("second");
     assertThatThrownBy(() -> connections.require(owner))
-        .isInstanceOf(IllegalStateException.class).hasMessageContaining("unavailable");
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("unavailable");
   }
 
   @Test
@@ -49,7 +51,8 @@ class ChatRunConnectionsTest {
     connections.select("second");
     var different = connections.accept(owner("other-run", "session"));
     assertThatThrownBy(() -> connections.restore(owner, different))
-        .isInstanceOf(IllegalStateException.class).hasMessageContaining("replaced");
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("replaced");
     assertThat(connections.require(owner)).isSameAs(original);
   }
 
@@ -58,7 +61,8 @@ class ChatRunConnectionsTest {
     var original = connections().accept(owner("old-run", "session"));
     var restarted = connections("second");
     assertThatThrownBy(() -> restarted.restore(owner("resumed", "session"), original))
-        .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("endpoint-name");
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("endpoint-name");
   }
 
   @TempDir Path root;
