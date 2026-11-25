@@ -51,11 +51,11 @@ class ScopedCapturingChatModelTest {
         var delegate = OpenAiChatModel.builder().options(defaultOptions)
             .openAiClient(pinned).openAiClientAsync(pinned.async()).build();
         var creations = new AtomicInteger();
-        var captured = new CapturingChatModel(delegate, store, logical -> {
+        var captured = new CapturingChatModel(delegate, store, capture -> {
           creations.incrementAndGet();
           if (failCapture) throw new IllegalStateException("fixture capture initialization failed");
           return PinnedOpenAiClients.open(actual.endpoint(), LlmAuthentication.NONE,
-              () -> "PRIVATE_UNUSED", actual.transport, List.of(new CaptureInterceptor(store, logical)));
+              () -> "PRIVATE_UNUSED", actual.transport, List.of(capture));
         });
         var prompt = new Prompt("fixture", requestOptions);
         if (streaming) assertThat(captured.stream(prompt).collectList().block(Duration.ofSeconds(5))).isNotEmpty();
