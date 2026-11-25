@@ -487,7 +487,7 @@ public class LlmModelProvider implements dev.mikoto2000.rei.secretary.SecretaryP
     return bindRunOptions(requestOptions(feature, selected, streamUsage), owner);
   }
 
-  private org.springframework.ai.model.tool.ToolCallingChatOptions bindRunOptions(
+  org.springframework.ai.model.tool.ToolCallingChatOptions bindRunOptions(
       org.springframework.ai.model.tool.ToolCallingChatOptions options,
       dev.mikoto2000.rei.tooldelivery.ReadingRun owner) {
     if (!(options instanceof org.springframework.ai.openai.responses.OpenAiResponsesChatOptions))
