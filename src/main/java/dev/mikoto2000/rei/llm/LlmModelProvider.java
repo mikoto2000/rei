@@ -513,7 +513,7 @@ public class LlmModelProvider implements dev.mikoto2000.rei.secretary.SecretaryP
     context.put(
         dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ORIGIN_CONTEXT_KEY,
         new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Origin(
-            exchange.ownerKey(), endpoint.fingerprint()));
+            exchange.ownerKey(), ResponsesReasoningReplay.identity(options, endpoint)));
     context.put(
         dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.EXCHANGE_CONTEXT_KEY, exchange);
     return options.mutate().toolContext(null).toolContext(context).build();
