@@ -2,8 +2,8 @@ package dev.mikoto2000.rei.llm;
 
 import java.util.Map;
 import org.springframework.ai.model.tool.ToolCallingChatOptions;
-import org.springframework.ai.openai.OpenAiChatOptions;
 import org.springframework.ai.openai.OpenAiChatModel;
+import org.springframework.ai.openai.OpenAiChatOptions;
 import org.springframework.ai.openai.responses.OpenAiResponsesChatOptions;
 
 /** Native request generation rebuilt from a credential-free accepted snapshot. */
@@ -15,7 +15,8 @@ final class RunNativeOptions {
     put(values, "temperature", options.getTemperature());
     put(values, "top_p", options.getTopP());
     if (options instanceof OpenAiChatOptions chat) {
-      if (chat.getExtraBody() != null && !chat.getExtraBody().isEmpty()) throw unsupported("extra_body");
+      if (chat.getExtraBody() != null && !chat.getExtraBody().isEmpty())
+        throw unsupported("extra_body");
       put(values, "response_format", formatSettings(chat.getResponseFormat()));
       put(values, "max_tokens", chat.getMaxTokens());
       put(values, "max_completion_tokens", chat.getMaxCompletionTokens());
@@ -34,7 +35,8 @@ final class RunNativeOptions {
       put(values, "parallel_tool_calls", chat.getParallelToolCalls());
       put(values, "store", chat.getStore());
     } else if (options instanceof OpenAiResponsesChatOptions responses) {
-      if (responses.getExtraBody() != null && !responses.getExtraBody().isEmpty()) throw unsupported("extra_body");
+      if (responses.getExtraBody() != null && !responses.getExtraBody().isEmpty())
+        throw unsupported("extra_body");
       put(values, "response_format", formatSettings(responses.getResponseFormat()));
       put(values, "max_output_tokens", responses.getMaxOutputTokens());
       put(values, "reasoning_effort", responses.getReasoningEffort());
@@ -56,59 +58,73 @@ final class RunNativeOptions {
 
   static ToolCallingChatOptions options(RunLlmConnection connection) {
     var context = new java.util.HashMap<String, Object>();
-    context.put(dev.mikoto2000.rei.modeloptions.ModelOptions.RUN_CONNECTION_CONTEXT_KEY, connection);
+    context.put(
+        dev.mikoto2000.rei.modeloptions.ModelOptions.RUN_CONNECTION_CONTEXT_KEY, connection);
     context.put(ResolvedLlmEndpoint.CONTEXT_KEY, connection.endpoint());
     if (connection.endpoint().capabilities().maxTools() != null)
-      context.put(LlmCapabilities.MAX_TOOLS_CONTEXT_KEY, connection.endpoint().capabilities().maxTools());
+      context.put(
+          LlmCapabilities.MAX_TOOLS_CONTEXT_KEY, connection.endpoint().capabilities().maxTools());
     if (connection.endpoint().apiType() == LlmApiType.CHAT_COMPLETIONS) {
-      var builder = OpenAiChatOptions.builder().model(connection.endpoint().model())
-          .maxRetries(0).timeout(connection.endpoint().readTimeout()).toolContext(context);
-      connection.generation().forEach((name, value) -> {
-        switch (name) {
-          case "temperature" -> builder.temperature(number(name, value));
-          case "top_p" -> builder.topP(number(name, value));
-          case "max_tokens" -> builder.maxTokens(integer(name, value));
-          case "max_completion_tokens" -> builder.maxCompletionTokens(integer(name, value));
-          case "reasoning_effort" -> builder.reasoningEffort(string(name, value));
-          case "service_tier" -> builder.serviceTier(string(name, value));
-          case "frequency_penalty" -> builder.frequencyPenalty(number(name, value));
-          case "presence_penalty" -> builder.presencePenalty(number(name, value));
-          case "stop" -> builder.stop(strings(name, value));
-          case "seed" -> builder.seed(signedInteger(name, value));
-          case "n" -> builder.n(integer(name, value));
-          case "logit_bias" -> builder.logitBias(integerMap(name, value));
-          case "logprobs" -> builder.logprobs(bool(name, value));
-          case "top_logprobs" -> builder.topLogprobs(signedInteger(name, value));
-          case "verbosity" -> builder.verbosity(string(name, value));
-          case "strict" -> builder.strict(bool(name, value));
-          case "parallel_tool_calls" -> builder.parallelToolCalls(bool(name, value));
-          case "store" -> builder.store(bool(name, value));
-          case "response_format" -> builder.responseFormat(format(value));
-          default -> throw unsupported(name);
-        }
-      });
+      var builder =
+          OpenAiChatOptions.builder()
+              .model(connection.endpoint().model())
+              .maxRetries(0)
+              .timeout(connection.endpoint().readTimeout())
+              .toolContext(context);
+      connection
+          .generation()
+          .forEach((name, value) -> {
+            switch (name) {
+              case "temperature" -> builder.temperature(number(name, value));
+              case "top_p" -> builder.topP(number(name, value));
+              case "max_tokens" -> builder.maxTokens(integer(name, value));
+              case "max_completion_tokens" -> builder.maxCompletionTokens(integer(name, value));
+              case "reasoning_effort" -> builder.reasoningEffort(string(name, value));
+              case "service_tier" -> builder.serviceTier(string(name, value));
+              case "frequency_penalty" -> builder.frequencyPenalty(number(name, value));
+              case "presence_penalty" -> builder.presencePenalty(number(name, value));
+              case "stop" -> builder.stop(strings(name, value));
+              case "seed" -> builder.seed(signedInteger(name, value));
+              case "n" -> builder.n(integer(name, value));
+              case "logit_bias" -> builder.logitBias(integerMap(name, value));
+              case "logprobs" -> builder.logprobs(bool(name, value));
+              case "top_logprobs" -> builder.topLogprobs(signedInteger(name, value));
+              case "verbosity" -> builder.verbosity(string(name, value));
+              case "strict" -> builder.strict(bool(name, value));
+              case "parallel_tool_calls" -> builder.parallelToolCalls(bool(name, value));
+              case "store" -> builder.store(bool(name, value));
+              case "response_format" -> builder.responseFormat(format(value));
+              default -> throw unsupported(name);
+            }
+          });
       return builder.build();
     }
-    var builder = OpenAiResponsesChatOptions.builder().model(connection.endpoint().model())
-        .maxRetries(0).timeout(connection.endpoint().readTimeout()).toolContext(context);
-    connection.generation().forEach((name, value) -> {
-      switch (name) {
-        case "temperature" -> builder.temperature(number(name, value));
-        case "top_p" -> builder.topP(number(name, value));
-        case "max_output_tokens" -> builder.maxOutputTokens(integer(name, value));
-        case "reasoning_effort" -> builder.reasoningEffort(string(name, value));
-        case "service_tier" -> builder.serviceTier(string(name, value));
-        case "reasoning_summary" -> builder.reasoningSummary(string(name, value));
-        case "verbosity" -> builder.verbosity(string(name, value));
-        case "strict" -> builder.strict(bool(name, value));
-        case "parallel_tool_calls" -> builder.parallelToolCalls(bool(name, value));
-        case "max_tool_calls" -> builder.maxToolCalls(integer(name, value));
-        case "include" -> builder.include(strings(name, value));
-        case "truncation" -> builder.truncation(string(name, value));
-        case "response_format" -> builder.responseFormat(format(value));
-        default -> throw unsupported(name);
-      }
-    });
+    var builder =
+        OpenAiResponsesChatOptions.builder()
+            .model(connection.endpoint().model())
+            .maxRetries(0)
+            .timeout(connection.endpoint().readTimeout())
+            .toolContext(context);
+    connection
+        .generation()
+        .forEach((name, value) -> {
+          switch (name) {
+            case "temperature" -> builder.temperature(number(name, value));
+            case "top_p" -> builder.topP(number(name, value));
+            case "max_output_tokens" -> builder.maxOutputTokens(integer(name, value));
+            case "reasoning_effort" -> builder.reasoningEffort(string(name, value));
+            case "service_tier" -> builder.serviceTier(string(name, value));
+            case "reasoning_summary" -> builder.reasoningSummary(string(name, value));
+            case "verbosity" -> builder.verbosity(string(name, value));
+            case "strict" -> builder.strict(bool(name, value));
+            case "parallel_tool_calls" -> builder.parallelToolCalls(bool(name, value));
+            case "max_tool_calls" -> builder.maxToolCalls(integer(name, value));
+            case "include" -> builder.include(strings(name, value));
+            case "truncation" -> builder.truncation(string(name, value));
+            case "response_format" -> builder.responseFormat(format(value));
+            default -> throw unsupported(name);
+          }
+        });
     return builder.build();
   }
 
@@ -160,13 +176,6 @@ final class RunNativeOptions {
     values.put("type", format.getType().name().toLowerCase(java.util.Locale.ROOT));
     put(values, "json_schema", format.getJsonSchema());
     put(values, "strict", format.getStrict());
-    return RunGenerationSettings.copy(Map.of("response_format", values))
-        .get("response_format") instanceof Map<?, ?> copied ? stringMap(copied) : null;
-  }
-
-  private static Map<String, Object> stringMap(Map<?, ?> source) {
-    var values = new java.util.LinkedHashMap<String, Object>();
-    source.forEach((key, value) -> values.put(string("response_format", key), value));
     return java.util.Collections.unmodifiableMap(values);
   }
 
@@ -174,17 +183,20 @@ final class RunNativeOptions {
     if (!(value instanceof Map<?, ?> values)) throw unsupported("response_format");
     if (!java.util.Set.of("type", "json_schema", "strict").containsAll(values.keySet()))
       throw unsupported("response_format");
-    var type = switch (string("response_format", values.get("type"))) {
-      case "text" -> OpenAiChatModel.ResponseFormat.Type.TEXT;
-      case "json_object" -> OpenAiChatModel.ResponseFormat.Type.JSON_OBJECT;
-      case "json_schema" -> OpenAiChatModel.ResponseFormat.Type.JSON_SCHEMA;
-      default -> throw unsupported("response_format");
-    };
+    var type =
+        switch (string("response_format", values.get("type"))) {
+          case "text" -> OpenAiChatModel.ResponseFormat.Type.TEXT;
+          case "json_object" -> OpenAiChatModel.ResponseFormat.Type.JSON_OBJECT;
+          case "json_schema" -> OpenAiChatModel.ResponseFormat.Type.JSON_SCHEMA;
+          default -> throw unsupported("response_format");
+        };
     var builder = OpenAiChatModel.ResponseFormat.builder().type(type);
     if (values.containsKey("json_schema")) {
-      if (type != OpenAiChatModel.ResponseFormat.Type.JSON_SCHEMA) throw unsupported("response_format");
+      if (type != OpenAiChatModel.ResponseFormat.Type.JSON_SCHEMA)
+        throw unsupported("response_format");
       builder.jsonSchema(string("response_format", values.get("json_schema")));
-    } else if (type == OpenAiChatModel.ResponseFormat.Type.JSON_SCHEMA) throw unsupported("response_format");
+    } else if (type == OpenAiChatModel.ResponseFormat.Type.JSON_SCHEMA)
+      throw unsupported("response_format");
     if (values.containsKey("strict")) builder.strict(bool("response_format", values.get("strict")));
     return builder.build();
   }

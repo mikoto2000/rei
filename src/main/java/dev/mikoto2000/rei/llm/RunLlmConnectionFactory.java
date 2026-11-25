@@ -17,7 +17,9 @@ final class RunLlmConnectionFactory {
   }
 
   static RunLlmConnectionFactory withLegacySettings(
-      ChatEndpointCatalog catalog, LlmProperties properties, LegacySettingsResolver legacy,
+      ChatEndpointCatalog catalog,
+      LlmProperties properties,
+      LegacySettingsResolver legacy,
       Function<String, String> registration) {
     return new RunLlmConnectionFactory(catalog, properties, legacy, registration);
   }
@@ -33,14 +35,21 @@ final class RunLlmConnectionFactory {
       LlmProperties properties,
       Function<String, ResolvedLlmEndpoint> legacy,
       Function<String, String> registration) {
-    this(catalog, properties, (LegacySettingsResolver) selected -> {
-      var endpoint = legacy.apply(selected);
-      return new LegacySettings(endpoint, generation(endpoint));
-    }, registration);
+    this(
+        catalog,
+        properties,
+        (LegacySettingsResolver)
+            selected -> {
+              var endpoint = legacy.apply(selected);
+              return new LegacySettings(endpoint, generation(endpoint));
+            },
+        registration);
   }
 
   private RunLlmConnectionFactory(
-      ChatEndpointCatalog catalog, LlmProperties properties, LegacySettingsResolver legacy,
+      ChatEndpointCatalog catalog,
+      LlmProperties properties,
+      LegacySettingsResolver legacy,
       Function<String, String> registration) {
     this.catalog = catalog;
     this.readTimeout = properties.getReadTimeout();
