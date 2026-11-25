@@ -288,6 +288,24 @@ class PinnedOpenAiClientsTest {
         attributes);
   }
 
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.EnumSource(LlmApiType.class)
+  void aRetryAfterZeroServiceFailureCannotResendAnInference(LlmApiType api) throws Exception {
+    try (var fixture = new Fixture()) {
+      fixture.unavailableOnce.set(true);
+      try (var client = new Owned(PinnedOpenAiClients.open(fixture.endpoint(api), LlmAuthentication.NONE,
+          () -> { throw new AssertionError("No-auth read credentials"); }, fixture.transport, List.of()))) {
+        assertThatThrownBy(() -> {
+          if (api == LlmApiType.RESPONSES) request(client.client());
+          else client.client().chat().completions().create(
+              com.openai.models.chat.completions.ChatCompletionCreateParams.builder()
+                  .model("fixture-model").addUserMessage("fixture").build()).id();
+        }).isInstanceOf(RuntimeException.class);
+      }
+      assertThat(fixture.requests).hasValue(1);
+    }
+  }
+
   private String request(OpenAIClient client) {
     return client
         .responses()
@@ -316,13 +334,14 @@ class PinnedOpenAiClientsTest {
             .build();
     final AtomicInteger requests = new AtomicInteger();
     final AtomicReference<String> redirect = new AtomicReference<>();
+    final java.util.concurrent.atomic.AtomicBoolean unavailableOnce = new java.util.concurrent.atomic.AtomicBoolean();
     final List<String> authorizations = new CopyOnWriteArrayList<>();
     final List<String> alternativeKeys = new CopyOnWriteArrayList<>();
 
     Fixture() throws Exception {
       server = com.sun.net.httpserver.HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
       server.createContext(
-          "/v1/responses",
+          "/v1",
           exchange -> {
             requests.incrementAndGet();
             authorizations.add(
@@ -335,6 +354,12 @@ class PinnedOpenAiClientsTest {
                 java.util.Objects.toString(
                     exchange.getRequestHeaders().getFirst("x-api-key"), "<none>"));
             exchange.getRequestBody().readAllBytes();
+            if (unavailableOnce.compareAndSet(true, false)) {
+              exchange.getResponseHeaders().set("Retry-After", "0");
+              exchange.sendResponseHeaders(503, -1);
+              exchange.close();
+              return;
+            }
             if (redirect.get() != null) {
               exchange.getResponseHeaders().set("Location", redirect.get());
               exchange.sendResponseHeaders(307, -1);
@@ -361,10 +386,14 @@ class PinnedOpenAiClientsTest {
     }
 
     ResolvedLlmEndpoint endpoint() {
+      return endpoint(LlmApiType.RESPONSES);
+    }
+
+    ResolvedLlmEndpoint endpoint(LlmApiType api) {
       return new ResolvedLlmEndpoint(
           "fixture",
           1,
-          LlmApiType.RESPONSES,
+          api,
           baseUrl(),
           "fixture",
           "fixture-model",
