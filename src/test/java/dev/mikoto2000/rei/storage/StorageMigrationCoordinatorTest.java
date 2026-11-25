@@ -284,8 +284,8 @@ class StorageMigrationCoordinatorTest {
     try (var first = new StorageMigrationCoordinator(root)) {
       first.prepare();
       assertThatThrownBy(() -> new StorageMigrationCoordinator(root))
-          .isInstanceOf(IOException.class)
-          .hasMessageContaining("another");
+          .isInstanceOf(StorageInUseException.class)
+          .hasMessageContaining("Storage is owned by another application");
     }
     try (var next = new StorageMigrationCoordinator(root)) {
       assertThat(next.prepare().schemaVersion())

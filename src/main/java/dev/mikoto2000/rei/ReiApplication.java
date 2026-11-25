@@ -86,8 +86,8 @@ public class ReiApplication {
   /** 生成元。 */
   private final CommandLine.IFactory factory;
 
-  /** 現在モデル保持先。 */
-  private final Supplier<String> readSelectedModel;
+  /** 通常チャットで使うモデル名の表示。 */
+  private final Supplier<String> readChatModel;
 
   /** escキャンセル排他制御。 */
   private final EscCancellationMonitor escCancellationMonitor;
@@ -174,7 +174,7 @@ public class ReiApplication {
       Environment environment) {
     this.rootCommand = rootCommand;
     this.factory = factory;
-    this.readSelectedModel = () -> currentModelHolder.get();
+    this.readChatModel = () -> currentModelHolder.getChatModel();
     this.escCancellationMonitor = escCancellationMonitor;
     this.cancelCommand = () -> commandCancellationService.cancel();
     this.commandCompletionNotificationPolicy = commandCompletionNotificationPolicy;
@@ -803,7 +803,7 @@ public class ReiApplication {
         + (activeRunDisplay == null ? "" : activeRunDisplay.promptStatus() + "\n")
         + now().format(PROMPT_TIME_FORMATTER)
         + " "
-        + readSelectedModel.get()
+        + readChatModel.get()
         + "> ";
   }
 

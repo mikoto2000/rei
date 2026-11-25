@@ -1,5 +1,5 @@
 # Diagnostic configuration only: this target FAILED the combined research trial twice.
-# There is deliberately no accepted-responses-profile; production construction stays blocked.
+# The production Responses policy permits only the OpenAI endpoint.
 # This is the user's local service, not the official DeepSeek API.
 rei:
   llm:

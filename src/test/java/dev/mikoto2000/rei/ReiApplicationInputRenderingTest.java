@@ -7,6 +7,11 @@ import dev.mikoto2000.rei.core.service.CommandCancellationService;
 import dev.mikoto2000.rei.core.service.CommandCompletionNotificationPolicy;
 import dev.mikoto2000.rei.core.service.CommandUserInputDisplayPolicy;
 import dev.mikoto2000.rei.core.service.ModelHolderService;
+import dev.mikoto2000.rei.llm.ChatModelResolver;
+import dev.mikoto2000.rei.llm.LlmApiType;
+import dev.mikoto2000.rei.llm.LlmFeature;
+import dev.mikoto2000.rei.llm.LlmModelProvider;
+import dev.mikoto2000.rei.llm.LlmProperties;
 import dev.mikoto2000.rei.ui.shell.RootCommand;
 import dev.mikoto2000.rei.ui.shell.sound.ChatResponseNarrator;
 import dev.mikoto2000.rei.ui.shell.sound.SoundNotificationService;
@@ -39,6 +44,37 @@ class ReiApplicationInputRenderingTest {
     ReiApplication app = newAppWithFixedTime("gpt-5.4", LocalTime.of(9, 42));
 
     assertEquals("09:42 gpt-5.4> ", app.buildPrompt());
+  }
+
+  @Test
+  void promptShowsTheConfiguredResponsesChatModel() {
+    var selected = new ModelHolderService("deepseek-v4.1-flash-1017");
+    ReiApplication app = newAppWithFixedTime(selected, LocalTime.of(9, 42));
+    var properties = new LlmProperties();
+    var chat = new LlmProperties.Server();
+    chat.setApi(LlmApiType.RESPONSES);
+    chat.setModel("gpt-6.2-sol");
+    properties.setFeatures(java.util.Map.of(LlmFeature.CHAT, chat));
+    org.springframework.test.util.ReflectionTestUtils.invokeMethod(
+        selected,
+        "setChatModelResolver",
+        new ChatModelResolver(new LlmModelProvider(null, properties)));
+
+    assertEquals("09:42 gpt-6.2-sol> ", app.buildPrompt());
+  }
+
+  @Test
+  void promptFollowsTheSelectedModelWhenChatHasNoDedicatedModel() {
+    var selected = new ModelHolderService("default-model");
+    ReiApplication app = newAppWithFixedTime(selected, LocalTime.of(9, 42));
+    org.springframework.test.util.ReflectionTestUtils.invokeMethod(
+        selected,
+        "setChatModelResolver",
+        new ChatModelResolver(new LlmModelProvider(null, new LlmProperties())));
+
+    assertEquals("09:42 default-model> ", app.buildPrompt());
+    selected.set("another-model");
+    assertEquals("09:42 another-model> ", app.buildPrompt());
   }
 
   /** れいの起動で、入力や保存形式を契約に従って解釈し、情報を受け渡すことを確認する。 */
@@ -91,11 +127,14 @@ class ReiApplicationInputRenderingTest {
 
   /** 指定された条件を再現するための検証対象や入力情報を作成する。 */
   private ReiApplication newAppWithFixedTime(String modelName, LocalTime fixedTime) {
+    return newAppWithFixedTime(new ModelHolderService(modelName), fixedTime);
+  }
+
+  private ReiApplication newAppWithFixedTime(
+      ModelHolderService modelHolderService, LocalTime fixedTime) {
     AsyncVectorDocumentService asyncVectorDocumentService =
         Mockito.mock(AsyncVectorDocumentService.class);
     when(asyncVectorDocumentService.hasActiveEmbeddings()).thenReturn(false);
-    ModelHolderService modelHolderService = Mockito.mock(ModelHolderService.class);
-    when(modelHolderService.get()).thenReturn(modelName);
     return new ReiApplication(
         Mockito.mock(RootCommand.class),
         CommandLine.defaultFactory(),

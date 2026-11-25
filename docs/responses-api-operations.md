@@ -2,23 +2,22 @@
 
 最新の接続先判定・有効化条件・設定例は [本番利用準備](responses-api-production-readiness.md) を参照。
 Phase7〜9の実接続証拠は [実 API 受入試験](responses-api-live-validation.md) と各Phase記録を参照。
-オフライン計画検査の成功は本番 gate の解除条件ではない。
 
 ## 本番利用の判定
 
 Phase7〜9でOpenAIと指定ローカルの通信・推論再送・永続化・再開・圧縮・50操作を実APIで確認した。
 指定ローカルの圧縮/動的公開/調査の結合は2試行FAILEDで、公式DeepSeek APIはUNVERIFIED。
-既定の本番gateは閉じたまま。受入済みOpenAIの固定profileを明示した2用途だけが構成可能になる。
+本番では `chat` と `output-limit-planner` で `api: responses` を明示し、OpenAIの接続先と下記の条件を満たす構成を使用できる。
 任意の推論品質、キャッシュ率、全LongのTTFTを認定したとは扱わない。
 fixture factoryは所有済みloopback/`.invalid`の試験用であり、本番有効化には使わない。
 本番プロセスの停止・再起動、JAR 配置、外部 application.yaml の書き換え、本番 DB migration は実施しない。
 
 ## 設定と API 切り替え
 
-以下は汎用の受入試験向け概念例であり、profileなしでは本番gateを通過しない。
-実装とbind試験を照合する有効化例は [OpenAI overlay](responses-openai-accepted.example.yaml)。
-MODEL_ID は利用アカウントで受入確認する実際の ID に置き換える。提供元名・ホスト・モデル名から
-API 形式や能力を推測しない。実効設定は Run 受付時に固定する。
+既存のResponses設定では、`rei.llm.features.chat.model` と `rei.llm.features.output-limit-planner.model` に利用するモデルIDを設定する。
+旧設定の `accepted-responses-profile` は削除できる。既存ファイルに残っていても参照しない。
+モデルごとの実API対応状況は、利用アカウントで確認する。YAMLの構成検査はモデルの利用権限や実APIの互換性を確認しない。
+実効設定は Run 受付時に固定する。
 
 ```yaml
 rei:
@@ -26,23 +25,19 @@ rei:
     features:
       chat:
         api: responses
-        base-url: ${RESPONSES_BASE_URL}
-        api-key: ${RESPONSES_API_KEY}
-        model: ${RESPONSES_MODEL_ID}
-        max-output-tokens: 8192
-        max-tools: 128
+        base-url: https://api.openai.com
+        api-key: ${OPENAI_API_KEY:}
+        model: gpt-6.2-sol
         endpoint-generation: 1
         reasoning-replay: encrypted
-        supported-settings: []
+        max-output-tokens: 2048
+        max-tools: 36
+        supported-settings: [reasoning-effort]
+        fallback-to-default: false
 ```
 
-OpenAI の例では [公式移行ガイド](https://developers.openai.com/api/docs/guides/migrate-to-responses) に沿い
-base URL と model ID を受入環境で確認する。max-output-tokens は推論と表示本文を合わせた生成枠。
-8192 は試験時に評価する設定例であり、全モデルの推奨値・利用可能枠を保証しない。
-DeepSeek は [公式 Responses 仕様](https://api-docs.deepseek.com/guides/responses_api/) に沿って
-独立した接続構成に `reasoning-replay: plaintext` を明示する。
-encrypted_content / summary / verbosity / parallel_tool_calls 等を対応能力へ追加しない。
-外部設定のreasoning-effort値の項目は提供しない。受入profileがlowへ固定する。架空の項目は追加しない。
+OpenAI Responsesの推論設定は `low`、サービス層は `default`。temperatureは指定しない。
+`max-output-tokens` は推論と表示本文を合わせた生成枠。指定ローカルResponsesは本番構成の対象外。
 SDK の型が存在することと、特定接続先・モデル・thinking mode がその設定を受理することは別である。
 
 `max-tools` は接続先の要求上限。動的公開の枠は `rei.llm.tool-discovery.max-active-tools` で別に制限する。
@@ -55,7 +50,6 @@ feature の接頭辞は `rei.llm.features.<feature>.`。既存 feature 名を使
 | 項目 | 値と注意 |
 | --- | --- |
 | api | `chat-completions` / `responses`。未指定の既存設定は従来 API |
-| accepted-responses-profile | 既定は未指定。現在は`openai-gpt-5.6-sol-low-20261125`だけ。完全な実効設定と用途も照合し、ローカル/未検証構成は拒否 |
 | base-url / api-key / model | 接続先固有。キーは fingerprint・診断へ含めない |
 | reasoning-replay | `encrypted` / `plaintext` / `none`。Responses は明示必須 |
 | endpoint-generation | 1 以上。同じ接続先の所有者・再送互換性を変えた時だけ更新。キー更新だけで増やさない |
@@ -65,7 +59,7 @@ feature の接頭辞は `rei.llm.features.<feature>.`。既存 feature 名を使
 | temperature | 明示した対応能力が必要。DeepSeek のモデル / thinking mode による制約も別途受入する |
 | fallback-to-default | Responses から別 API へ自動継続しない。既存 CC の明示動作は維持 |
 
-`rei.llm.read-timeout` は正のDuration、既定5分。受入native profileは共通値との小さい方で最大120秒、実効120秒の受入構成だけを許可する。
+`rei.llm.read-timeout` は正のDuration、既定5分。本番Responsesは共通値と120秒の小さい方を使い、実効120秒の構成を許可する。
 CCの共通timeoutを変更する必要はない。機能側の短い期限があれば短い方を適用し、
 受付済み Run の snapshot を設定変更で書き換えない。
 `rei.llm.max-stream-timeout-retries` は既存 Main の read timeout 許可回数（0〜3、既定2）。
@@ -78,7 +72,7 @@ CCの共通timeoutを変更する必要はない。機能側の短い期限が�
 2. 別のデータディレクトリと所有済みデータを使い、固定 SDK の契約 fixture と実接続受入を実施する。
 3. API 形式、endpoint ID / 世代、model、再送方式、能力、生成上限、timeout を確定する。
 4. 新規 Run だけを移行する。実行中・承認待ち・不明な副作用を持つ Run の接続先を変更しない。
-5. 全条件・固定profile・設定例を確認し、利用者の本番適用承認後に有効化する。JAR版/API形式/DBの切戻しを別々に計画する。
+5. 全条件と設定例を確認し、利用者の本番適用承認後に有効化する。JAR版/API形式/DBの切戻しを別々に計画する。
 
 切り戻しは新規 Run の API 設定を既存 Chat Completions に戻す。保存済み payload / receipt /
 承認・Checkpoint を削除しない。旧コードが新 schema を更新できると推測しない。

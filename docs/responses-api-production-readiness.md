@@ -1,5 +1,9 @@
 # Responses API: 本番利用準備と段階的導入
 
+> この文書はPhase 10の受入結果と当時の制限を記録する。現在のモデル選択と有効化条件は
+> [運用手順](responses-api-operations.md) を参照。現行ソースは旧 `accepted-responses-profile` を参照せず、
+> YAMLの `model` を使う。以下の実API受入結果は当時のモデルと条件に限る。
+
 更新: 2026-11-25。Phase10のソース・設定例・移行試験・ローカル全検証は完了。
 この文書はソースcommit時点の記録。最新PR head/マージ後exact SHAのCI・merge commit・cleanupは当該PRとworktree外の最終報告で照合する。
 [Phase10 PR #638](https://github.com/mikoto2000/rei/pull/638) に最終のGit/CI/後片付けを記録する。
