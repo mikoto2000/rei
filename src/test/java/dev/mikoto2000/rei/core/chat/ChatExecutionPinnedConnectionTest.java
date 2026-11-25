@@ -65,6 +65,30 @@ class ChatExecutionPinnedConnectionTest {
   }
 
   @Test
+  void checkpointHasTheAcceptedConnectionBeforeTheFirstHttpRequest() throws Exception {
+    try (var first = new Server(); var second = new Server(); var fixture = fixture(first, second)) {
+      var owner = owner("durable", AgentRunContext.Mode.EXCLUSIVE);
+      fixture.engine.accept(owner, "fixture");
+      var expected = fixture.connections.require(owner);
+      var saved = new java.util.concurrent.atomic.AtomicReference<dev.mikoto2000.rei.core.stagnation.RunExecutionContext.ProgressState>();
+      var observed = new java.util.concurrent.atomic.AtomicReference<dev.mikoto2000.rei.core.stagnation.RunExecutionContext.ProgressState>();
+      var checkpoints = mock(dev.mikoto2000.rei.checkpoint.PersistentCheckpointService.class);
+      org.mockito.Mockito.doAnswer(invocation -> {
+        saved.set(invocation.getArgument(2));
+        return null;
+      }).when(checkpoints).preserveResults(org.mockito.ArgumentMatchers.eq(owner),
+          org.mockito.ArgumentMatchers.anyList(),
+          org.mockito.ArgumentMatchers.any(dev.mikoto2000.rei.core.stagnation.RunExecutionContext.ProgressState.class));
+      first.beforeReply = () -> observed.set(saved.get());
+      fixture.engine.setCheckpoints(checkpoints);
+      assertThat(fixture.engine.execute(owner, "fixture", new UserInterventionQueue()).success()).isTrue();
+      assertThat(observed.get()).isNotNull();
+      assertThat(observed.get().connection()).isEqualTo(expected);
+      assertThat(observed.get().budget().llmCalls()).isEqualTo(1);
+    }
+  }
+
+  @Test
   void anAvailableStructuredDoctorCommandDoesNotCaptureAnInferenceConnection() throws Exception {
     try (var first = new Server(); var second = new Server(); var fixture = fixture(first, second)) {
       fixture.engine.setDoctor(mock(dev.mikoto2000.rei.doctor.DoctorActiveService.class));
@@ -180,12 +204,14 @@ class ChatExecutionPinnedConnectionTest {
 
   private static final class Server implements AutoCloseable {
     final com.sun.net.httpserver.HttpServer server;
+    volatile Runnable beforeReply = () -> {};
     final List<com.fasterxml.jackson.databind.JsonNode> requests = new CopyOnWriteArrayList<>();
     Server() throws Exception {
       server = com.sun.net.httpserver.HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
       server.createContext("/v1/chat/completions", exchange -> {
         var body = new com.fasterxml.jackson.databind.ObjectMapper().readTree(exchange.getRequestBody().readAllBytes());
         requests.add(body);
+        beforeReply.run();
         var reply = "data: {\"id\":\"fixture\",\"object\":\"chat.completion.chunk\",\"created\":0,\"model\":\"fixture\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\"fixture-answer\"},\"finish_reason\":null}]}\n\n"
             + "data: {\"id\":\"fixture\",\"object\":\"chat.completion.chunk\",\"created\":0,\"model\":\"fixture\",\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"stop\"}]}\n\n"
             + "data: [DONE]\n\n";
