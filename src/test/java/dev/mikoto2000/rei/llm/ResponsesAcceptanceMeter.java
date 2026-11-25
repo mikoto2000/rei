@@ -16,6 +16,10 @@ final class ResponsesAcceptanceMeter implements ChatModel {
     this.budget = budget;
   }
 
+  ResponsesAcceptanceMeter(ChatModel delegate, ResponsesAcceptanceBudget budget, boolean defaultTierOnly) {
+    this(delegate, budget);
+  }
+
   private ResponsesAcceptanceBudget.Slot reserve(Prompt prompt) {
     long bytes = 0;
     var codec = new dev.mikoto2000.rei.modelmessage.ModelMessageCodec();
