@@ -101,6 +101,30 @@ final class RunLlmConnectionFactory {
         generation(resolved));
   }
 
+  /** Validate the credential binding, retaining the saved model/options rather than current choices. */
+  void verifyBinding(RunLlmConnection saved) {
+    var source = catalog.connection(saved.profileId());
+    var metadata = catalog.profiles().stream().filter(p -> p.id().equals(saved.profileId())).findFirst().orElseThrow();
+    if (saved.named() != catalog.hasNamedProfiles())
+      throw new IllegalStateException("Run connection source changed");
+    if (saved.endpoint().generation() != metadata.generation())
+      throw new IllegalStateException("Run connection generation changed");
+    if (saved.provider() != metadata.provider() || saved.authentication() != metadata.authentication()
+        || !java.util.Objects.equals(saved.accountRef(), metadata.accountRef()))
+      throw new IllegalStateException("Run connection authentication binding changed");
+    var current = saved.named() ? null : legacy.apply(saved.endpoint().model());
+    var baseUrl = saved.named() ? source.getBaseUrl() : current.baseUrl();
+    var api = saved.named() ? metadata.api() : current.apiType();
+    var credentialRef = saved.named() ? "chat-endpoint:" + saved.profileId() : current.credentialRef();
+    if (!java.util.Objects.equals(baseUrl, saved.endpoint().baseUrl()) || api != saved.endpoint().apiType()
+        || !credentialRef.equals(saved.endpoint().credentialRef()))
+      throw new IllegalStateException("Run connection destination changed");
+    var identity = metadata.accountRef() == null ? null : registration.apply(metadata.accountRef());
+    if (!java.util.Objects.equals(identity, saved.accountRegistration())
+        || metadata.provider() == LlmProvider.CHATGPT_PLAN && identity == null)
+      throw new IllegalStateException("Run account registration changed or unavailable");
+  }
+
   private static java.util.Map<String, Object> generation(ResolvedLlmEndpoint endpoint) {
     var values = new java.util.LinkedHashMap<String, Object>();
     if (endpoint.maxOutputTokens() != null)
