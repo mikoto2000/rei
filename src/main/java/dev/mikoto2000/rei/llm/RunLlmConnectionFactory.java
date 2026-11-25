@@ -4,6 +4,20 @@ import java.util.function.Function;
 
 /** Resolves immutable settings only; credentials are obtained at the HTTP boundary. */
 final class RunLlmConnectionFactory {
+  record LegacySettings(ResolvedLlmEndpoint endpoint, java.util.Map<String, Object> generation) {}
+
+  @FunctionalInterface
+  interface LegacySettingsResolver {
+    LegacySettings resolve(String model);
+  }
+
+  static RunLlmConnectionFactory withLegacySettings(
+      ChatEndpointCatalog catalog, LlmProperties properties, LegacySettingsResolver legacy,
+      Function<String, String> registration) {
+    return new RunLlmConnectionFactory(catalog, properties,
+        selected -> legacy.resolve(selected).endpoint(), registration);
+  }
+
   private final ChatEndpointCatalog catalog;
   private final java.time.Duration readTimeout;
   private final int defaultOutputTokens;
