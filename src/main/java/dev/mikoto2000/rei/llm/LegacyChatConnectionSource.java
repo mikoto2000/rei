@@ -86,8 +86,9 @@ final class LegacyChatConnectionSource {
       url = OpenAiCompatibleEndpoint.baseUrl(url);
       keys = globalKeys(connection);
       if (timeout == null) timeout = connection.getTimeout();
-      if (connection.getOrganizationId() != null && !connection.getOrganizationId().isBlank())
-        transport.put("organization_id", connection.getOrganizationId());
+      var organization = connection.getOrganizationId();
+      if (organization != null && !organization.isBlank())
+        transport.put("organization_id", organization);
       var headers = connection.getCustomHeaders();
       if (headers != null)
         headers.forEach((name, value) -> {
@@ -106,7 +107,10 @@ final class LegacyChatConnectionSource {
         });
     }
     ChatEndpointCatalog.validateBaseUrl("legacy chat base-url", url);
-    transport.put("request_timeout", timeout.toString());
+    transport.put(
+        "request_timeout",
+        java.util.Objects.requireNonNull(timeout, "Legacy request timeout is unavailable")
+            .toString());
     var endpoint =
         new ResolvedLlmEndpoint(
             previous.endpointId(),

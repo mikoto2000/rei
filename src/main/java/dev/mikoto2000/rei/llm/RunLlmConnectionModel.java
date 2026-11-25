@@ -33,11 +33,11 @@ final class RunLlmConnectionModel implements ChatModel {
   }
 
   private ChatModel resolve(Prompt prompt) {
-    if (!(prompt.getOptions() instanceof ToolCallingChatOptions options)
-        || options.getToolContext() == null
-        || !(options
-                .getToolContext()
-                .get(dev.mikoto2000.rei.modeloptions.ModelOptions.RUN_CONNECTION_CONTEXT_KEY)
+    if (!(prompt.getOptions() instanceof ToolCallingChatOptions options))
+      throw new IllegalStateException("Accepted Run connection is unavailable");
+    var context = options.getToolContext();
+    if (context == null
+        || !(context.get(dev.mikoto2000.rei.modeloptions.ModelOptions.RUN_CONNECTION_CONTEXT_KEY)
             instanceof RunLlmConnection connection))
       throw new IllegalStateException("Accepted Run connection is unavailable");
     if (!Objects.equals(options.getModel(), connection.endpoint().model()))
@@ -50,10 +50,7 @@ final class RunLlmConnectionModel implements ChatModel {
     if (!matchingApi) throw new IllegalStateException("Request API differs from accepted Run API");
     if (!connection
         .endpoint()
-        .equals(
-            options
-                .getToolContext()
-                .get(dev.mikoto2000.rei.modeloptions.ModelOptions.ENDPOINT_CONTEXT_KEY)))
+        .equals(context.get(dev.mikoto2000.rei.modeloptions.ModelOptions.ENDPOINT_CONTEXT_KEY)))
       throw new IllegalStateException(
           "Run request endpoint context differs from accepted connection");
     boolean override;
@@ -97,7 +94,7 @@ final class RunLlmConnectionModel implements ChatModel {
     if (override)
       throw new IllegalStateException("Run request cannot override accepted connection");
     verify.accept(connection);
-    if (options.getToolContext().get(dev.mikoto2000.rei.core.stagnation.RunExecutionContext.KEY)
+    if (context.get(dev.mikoto2000.rei.core.stagnation.RunExecutionContext.KEY)
         instanceof dev.mikoto2000.rei.core.stagnation.RunExecutionContext execution)
       execution.preserveInferenceProgress(connection);
     return Objects.requireNonNull(models.apply(connection), "Run transport is unavailable");

@@ -14,7 +14,9 @@ import org.springframework.beans.factory.ObjectProvider;
 @org.springframework.stereotype.Component
 public final class ChatConnectionService implements AutoCloseable {
   private final ChatEndpointCatalog catalog;
-  private final LlmModelProvider models;
+  private final java.util.function.BiFunction<
+          ToolCallingChatOptions, AgentRunContext, ToolCallingChatOptions>
+      bindRunOptions;
   private final LegacyChatConnectionSource legacy;
   private final RunLlmConnectionFactory factory;
   private final ChatRunConnections connections;
@@ -35,7 +37,7 @@ public final class ChatConnectionService implements AutoCloseable {
       ObjectProvider<OpenAiChatProperties> chat,
       ObjectProvider<dev.mikoto2000.rei.llm.capture.CaptureStore> captures) {
     this.catalog = catalog;
-    this.models = models;
+    this.bindRunOptions = models::bindRunOptions;
     this.legacy =
         new LegacyChatConnectionSource(
             models,
@@ -86,9 +88,12 @@ public final class ChatConnectionService implements AutoCloseable {
 
   public ToolCallingChatOptions options(AgentRunContext owner) {
     var options = RunNativeOptions.options(require(owner));
-    var context = new java.util.HashMap<>(options.getToolContext());
+    var context =
+        new java.util.HashMap<>(
+            java.util.Objects.requireNonNull(
+                options.getToolContext(), "Accepted Run request context is unavailable"));
     context.put(AgentRunContext.class.getName(), owner);
-    return models.bindRunOptions(
+    return bindRunOptions.apply(
         options.mutate().toolContext(null).toolContext(context).build(), owner);
   }
 

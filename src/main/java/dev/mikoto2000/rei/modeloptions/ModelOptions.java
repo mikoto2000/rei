@@ -39,7 +39,7 @@ public final class ModelOptions {
     var acceptedContext = options.getToolContext();
     if (acceptedContext != null && acceptedContext.containsKey(RUN_CONNECTION_CONTEXT_KEY)) {
       if (!(acceptedContext.get(RUN_CONNECTION_CONTEXT_KEY)
-          instanceof dev.mikoto2000.rei.llm.RunLlmConnection connection))
+          instanceof AcceptedRunOptions connection))
         throw new IllegalArgumentException("Invalid accepted Run connection");
       add.accept(connection.fingerprint());
     }
@@ -121,7 +121,7 @@ public final class ModelOptions {
     var acceptedContext = options.getToolContext();
     if (acceptedContext != null && acceptedContext.containsKey(RUN_CONNECTION_CONTEXT_KEY)) {
       if (!(acceptedContext.get(RUN_CONNECTION_CONTEXT_KEY)
-          instanceof dev.mikoto2000.rei.llm.RunLlmConnection connection))
+          instanceof AcceptedRunOptions connection))
         throw new IllegalArgumentException("Invalid accepted Run connection");
       return connection.fingerprint();
     }
@@ -163,8 +163,8 @@ public final class ModelOptions {
 
   public static ToolCallingChatOptions singleRequest(
       ToolCallingChatOptions options, java.util.Map<String, Object> callerContext) {
-    if (options.getToolContext() != null
-        && options.getToolContext().containsKey(RUN_CONNECTION_CONTEXT_KEY))
+    var suppliedContext = options.getToolContext();
+    if (suppliedContext != null && suppliedContext.containsKey(RUN_CONNECTION_CONTEXT_KEY))
       throw new IllegalArgumentException("Run connection cannot become a feature request");
     var clean = withoutTools(options);
     var context = new java.util.HashMap<String, Object>(callerContext);
@@ -204,15 +204,11 @@ public final class ModelOptions {
     if (tokens < 1) throw new IllegalArgumentException("Output limit must be positive");
     var context = options.getToolContext();
     if (context != null
-        && context.get(RUN_CONNECTION_CONTEXT_KEY)
-            instanceof dev.mikoto2000.rei.llm.RunLlmConnection connection
+        && context.get(RUN_CONNECTION_CONTEXT_KEY) instanceof AcceptedRunOptions connection
         && connection.named()) {
-      if (connection
-              .capabilities()
-              .get(dev.mikoto2000.rei.llm.LlmEndpointCapabilities.Capability.MAX_OUTPUT_TOKENS)
-          != dev.mikoto2000.rei.llm.LlmEndpointCapabilities.Support.SUPPORTED) return options;
-      if (connection.endpoint().maxOutputTokens() != null)
-        tokens = Math.min(tokens, connection.endpoint().maxOutputTokens());
+      if (!connection.supportsOutputLimit()) return options;
+      var acceptedLimit = connection.maxOutputTokens();
+      if (acceptedLimit != null) tokens = Math.min(tokens, acceptedLimit);
     }
     if (options instanceof OpenAiResponsesChatOptions responses) {
       var configured = responses.getMaxOutputTokens();

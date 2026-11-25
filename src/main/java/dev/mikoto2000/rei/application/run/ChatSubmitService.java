@@ -52,10 +52,11 @@ public final class ChatSubmitService {
     this.dotDelegations = dots;
   }
 
-  private dev.mikoto2000.rei.core.chat.ChatRunAdmission chatRunAdmission;
+  private dev.mikoto2000.rei.runadmission.RunAdmission<AgentRunContext> chatRunAdmission;
 
   @org.springframework.beans.factory.annotation.Autowired(required = false)
-  public void setChatRunAdmission(dev.mikoto2000.rei.core.chat.ChatRunAdmission admission) {
+  public void setChatRunAdmission(
+      dev.mikoto2000.rei.runadmission.RunAdmission<AgentRunContext> admission) {
     this.chatRunAdmission = admission;
   }
 

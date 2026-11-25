@@ -184,7 +184,7 @@ public final class SessionLifecycle {
       String key,
       String fingerprint,
       dev.mikoto2000.rei.mcp.McpAdmission mcp,
-      dev.mikoto2000.rei.core.chat.ChatRunAdmission admission,
+      dev.mikoto2000.rei.runadmission.RunAdmission<AgentRunContext> admission,
       Consumer<AgentRunContext> enqueue) {
     if (message == null || message.isBlank())
       throw new IllegalArgumentException("message is required");

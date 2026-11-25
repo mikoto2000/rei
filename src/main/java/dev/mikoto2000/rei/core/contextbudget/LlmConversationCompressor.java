@@ -151,14 +151,16 @@ public class LlmConversationCompressor implements ConversationCompressor {
               : provider.isolatedChatModel(feature);
       dev.mikoto2000.rei.core.chat.ToolLoopSupport.requireNoDefaultTools(model);
       var ownerOptions = owner.getOptions();
-      boolean pinnedMain =
+      var ownerContext =
           ownerOptions
                   instanceof org.springframework.ai.model.tool.ToolCallingChatOptions nativeOptions
-              && nativeOptions.getToolContext() != null
-              && nativeOptions
-                      .getToolContext()
-                      .get(dev.mikoto2000.rei.modeloptions.ModelOptions.RUN_CONNECTION_CONTEXT_KEY)
-                  instanceof dev.mikoto2000.rei.llm.RunLlmConnection;
+              ? nativeOptions.getToolContext()
+              : null;
+      boolean pinnedMain =
+          ownerContext != null
+              && ownerContext.get(
+                      dev.mikoto2000.rei.modeloptions.ModelOptions.RUN_CONNECTION_CONTEXT_KEY)
+                  instanceof dev.mikoto2000.rei.modeloptions.AcceptedRunOptions;
       var baseOptions =
           provider.requestOptions(
               feature,

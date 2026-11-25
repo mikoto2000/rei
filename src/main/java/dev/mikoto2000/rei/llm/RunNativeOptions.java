@@ -15,11 +15,11 @@ final class RunNativeOptions {
     put(values, "temperature", options.getTemperature());
     put(values, "top_p", options.getTopP());
     if (options instanceof OpenAiChatOptions chat) {
-      if (chat.getOutputModalities() != null && !chat.getOutputModalities().isEmpty())
-        throw unsupported("modalities");
+      var modalities = chat.getOutputModalities();
+      if (modalities != null && !modalities.isEmpty()) throw unsupported("modalities");
       if (chat.getOutputAudio() != null) throw unsupported("audio");
-      if (chat.getExtraBody() != null && !chat.getExtraBody().isEmpty())
-        throw unsupported("extra_body");
+      var extraBody = chat.getExtraBody();
+      if (extraBody != null && !extraBody.isEmpty()) throw unsupported("extra_body");
       put(values, "tool_choice", chat.getToolChoice());
       put(values, "metadata", chat.getMetadata());
       put(values, "prompt_cache_key", chat.getPromptCacheKey());
@@ -44,10 +44,10 @@ final class RunNativeOptions {
       put(values, "parallel_tool_calls", chat.getParallelToolCalls());
       put(values, "store", chat.getStore());
     } else if (options instanceof OpenAiResponsesChatOptions responses) {
-      if (responses.getHostedTools() != null && !responses.getHostedTools().isEmpty())
-        throw unsupported("hosted_tools");
-      if (responses.getExtraBody() != null && !responses.getExtraBody().isEmpty())
-        throw unsupported("extra_body");
+      var hostedTools = responses.getHostedTools();
+      if (hostedTools != null && !hostedTools.isEmpty()) throw unsupported("hosted_tools");
+      var extraBody = responses.getExtraBody();
+      if (extraBody != null && !extraBody.isEmpty()) throw unsupported("extra_body");
       put(values, "tool_choice", responses.getToolChoice());
       put(values, "metadata", responses.getMetadata());
       put(values, "prompt_cache_key", responses.getPromptCacheKey());
@@ -80,12 +80,11 @@ final class RunNativeOptions {
       context.put(
           LlmCapabilities.MAX_TOOLS_CONTEXT_KEY, connection.endpoint().capabilities().maxTools());
     if (connection.endpoint().apiType() == LlmApiType.CHAT_COMPLETIONS) {
-      var builder =
-          OpenAiChatOptions.builder()
-              .model(connection.endpoint().model())
-              .maxRetries(0)
-              .timeout(connection.requestTimeout())
-              .toolContext(context);
+      var builder = OpenAiChatOptions.builder();
+      builder.model(connection.endpoint().model());
+      builder.maxRetries(0);
+      builder.timeout(connection.requestTimeout());
+      builder.toolContext(context);
       connection
           .generation()
           .forEach((name, value) -> {
@@ -120,12 +119,11 @@ final class RunNativeOptions {
           });
       return builder.build();
     }
-    var builder =
-        OpenAiResponsesChatOptions.builder()
-            .model(connection.endpoint().model())
-            .maxRetries(0)
-            .timeout(connection.requestTimeout())
-            .toolContext(context);
+    var builder = OpenAiResponsesChatOptions.builder();
+    builder.model(connection.endpoint().model());
+    builder.maxRetries(0);
+    builder.timeout(connection.requestTimeout());
+    builder.toolContext(context);
     connection
         .generation()
         .forEach((name, value) -> {
@@ -172,8 +170,8 @@ final class RunNativeOptions {
 
   private static Map<String, Object> streamSettings(OpenAiChatOptions.StreamOptions stream) {
     if (stream == null) return null;
-    if (stream.additionalProperties() != null && !stream.additionalProperties().isEmpty())
-      throw unsupported("stream_options");
+    var additional = stream.additionalProperties();
+    if (additional != null && !additional.isEmpty()) throw unsupported("stream_options");
     var values = new java.util.LinkedHashMap<String, Object>();
     put(values, "include_usage", stream.includeUsage());
     put(values, "include_obfuscation", stream.includeObfuscation());

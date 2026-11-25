@@ -80,12 +80,13 @@ final class ResponsesAdapter implements LlmProtocolAdapter, ChatModel {
       com.openai.client.OpenAIClient client,
       boolean production) {
     if (production) ResponsesProductionPolicy.requireEndpoint(endpoint);
+    var customHeaders = options.getCustomHeaders();
     if (endpoint.apiType() != LlmApiType.RESPONSES
         || options.getBaseUrl() != null
         || options.getApiKey() != null
         || options.getCredential() != null
         || options.getOrganizationId() != null
-        || options.getCustomHeaders() != null && !options.getCustomHeaders().isEmpty()
+        || customHeaders != null && !customHeaders.isEmpty()
         || options.getDeploymentName() != null
         || options.isMicrosoftFoundry()
         || options.getMicrosoftFoundryServiceVersion() != null

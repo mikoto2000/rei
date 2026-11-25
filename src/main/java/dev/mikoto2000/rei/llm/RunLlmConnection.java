@@ -15,7 +15,8 @@ public record RunLlmConnection(
     Map<String, Object> generation,
     @com.fasterxml.jackson.annotation.JsonInclude(
             com.fasterxml.jackson.annotation.JsonInclude.Include.NON_EMPTY)
-        Map<String, String> transport) {
+        Map<String, String> transport)
+    implements dev.mikoto2000.rei.modeloptions.AcceptedRunOptions {
   public RunLlmConnection {
     java.util.Objects.requireNonNull(profileId, "profileId");
     java.util.Objects.requireNonNull(provider, "provider");
@@ -49,6 +50,17 @@ public record RunLlmConnection(
         Map.of());
   }
 
+  @Override
+  public boolean supportsOutputLimit() {
+    return capabilities.get(LlmEndpointCapabilities.Capability.MAX_OUTPUT_TOKENS)
+        == LlmEndpointCapabilities.Support.SUPPORTED;
+  }
+
+  @Override
+  public Integer maxOutputTokens() {
+    return endpoint.maxOutputTokens();
+  }
+
   public java.time.Duration requestTimeout() {
     var value = transport.get("request_timeout");
     return value == null ? endpoint.readTimeout() : RunTransportSettings.timeout(value);
@@ -61,7 +73,12 @@ public record RunLlmConnection(
 
   @Override
   public Map<String, Object> generation() {
-    return generation;
+    return java.util.Collections.unmodifiableMap(new java.util.LinkedHashMap<>(generation));
+  }
+
+  @Override
+  public Map<String, String> transport() {
+    return Map.copyOf(transport);
   }
 
   @Override

@@ -433,16 +433,19 @@ public class LlmChatClientProvider {
         switch (api) {
           // Native constructors substitute an OpenAI model for null. Leave this unresolved until
           // the caller supplies accepted options; the Run dispatcher rejects unbound requests.
-          case CHAT_COMPLETIONS ->
-              org.springframework.ai.openai.OpenAiChatOptions.builder()
-                  .model("")
-                  .maxRetries(0)
-                  .build();
-          case RESPONSES ->
-              org.springframework.ai.openai.responses.OpenAiResponsesChatOptions.builder()
-                  .model("")
-                  .maxRetries(0)
-                  .build();
+          case CHAT_COMPLETIONS -> {
+            var builder = org.springframework.ai.openai.OpenAiChatOptions.builder();
+            builder.model("");
+            builder.maxRetries(0);
+            yield builder.build();
+          }
+          case RESPONSES -> {
+            var builder =
+                org.springframework.ai.openai.responses.OpenAiResponsesChatOptions.builder();
+            builder.model("");
+            builder.maxRetries(0);
+            yield builder.build();
+          }
         };
     model = new ProtocolDefaultsChatModel(java.util.Objects.requireNonNull(model), defaults);
     return mode == dev.mikoto2000.rei.core.chat.AgentRunContext.Mode.EXCLUSIVE
