@@ -111,6 +111,10 @@ public class ApprovalContinuationStore {
       history = history == null ? null : Collections.unmodifiableList(new ArrayList<>(history));
     }
 
+    public dev.mikoto2000.rei.llm.RunLlmConnection connection() {
+      return null;
+    }
+
     public Document(
         AgentRunContext owner,
         String request,
@@ -167,6 +171,14 @@ public class ApprovalContinuationStore {
       OutputLimitRunBudget.Snapshot budget,
       boolean managed) {
     save(id, owner, request, history, pending, budget, managed, null);
+  }
+
+  public void save(
+      String id, AgentRunContext owner, String request, List<Message> history,
+      RunContinuation.PendingTools pending, OutputLimitRunBudget.Snapshot budget,
+      boolean managed, ModelMessagePayloadStore.History protocolHistory,
+      dev.mikoto2000.rei.llm.RunLlmConnection connection) {
+    save(id, owner, request, history, pending, budget, managed, protocolHistory);
   }
 
   /** 後から参照できるよう、指定された情報を保存する。 */

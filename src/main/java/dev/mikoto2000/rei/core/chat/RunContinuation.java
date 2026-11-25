@@ -129,6 +129,10 @@ public interface RunContinuation {
       replayReferences = replayReferences == null ? null : List.copyOf(replayReferences);
     }
 
+    public dev.mikoto2000.rei.llm.RunLlmConnection connection() {
+      return null;
+    }
+
     public Saved(
         String request,
         List<Message> messages,
