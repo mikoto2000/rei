@@ -237,17 +237,28 @@ public final class ResponsesCoreLiveAcceptance {
 
   private static void checkpoint(ResponsesAcceptanceRuntime runtime, boolean writer)
       throws Exception {
-    Path nonceFile = runtime.root.resolve("checkpoint-nonce.txt");
+    checkpoint(runtime, writer, "", false);
+  }
+
+  private static void checkpoint(
+      ResponsesAcceptanceRuntime runtime, boolean writer, String namespace, boolean abrupt)
+      throws Exception {
+    if (!List.of("", "operational-").contains(namespace))
+      throw new IllegalArgumentException("Owned checkpoint namespace required");
+    Path nonceFile = runtime.root.resolve(namespace + "checkpoint-nonce.txt");
     if (!java.nio.file.Files.exists(nonceFile))
       java.nio.file.Files.writeString(
           nonceFile,
           "checkpoint-" + java.util.UUID.randomUUID(),
           java.nio.file.StandardOpenOption.CREATE_NEW);
     String nonce = java.nio.file.Files.readString(nonceFile);
-    Path effects = runtime.root.resolve("checkpoint-effects.txt");
+    Path effects = runtime.root.resolve(namespace + "checkpoint-effects.txt");
     var owner =
         new dev.mikoto2000.rei.core.chat.AgentRunContext(
-            "checkpoint-before", "checkpoint-session", runtime.root, "acceptance-project");
+            namespace + "checkpoint-before",
+            namespace + "checkpoint-session",
+            runtime.root,
+            "acceptance-project");
     var guard =
         new dev.mikoto2000.rei.core.policy.ToolPermissionGuard(
             new dev.mikoto2000.rei.core.policy.ToolPermissionPolicy(
@@ -283,6 +294,8 @@ public final class ResponsesCoreLiveAcceptance {
         };
     var catalog = dev.mikoto2000.rei.llm.discovery.ToolCatalog.standard(List.of(callback));
     var core = core(runtime, List.of(catalog.callback("now")), null);
+    org.springframework.test.util.ReflectionTestUtils.invokeMethod(
+        core, "setToolPermissionGuard", guard);
     var settings = new dev.mikoto2000.rei.checkpoint.CheckpointProperties();
     var repository =
         new dev.mikoto2000.rei.checkpoint.PersistentCheckpointRepository(
@@ -329,7 +342,7 @@ public final class ResponsesCoreLiveAcceptance {
                     .anyMatch(entry -> entry.key().endsWith("/TOOL"))) {
               try {
                 java.nio.file.Files.writeString(
-                    runtime.root.resolve("checkpoint-task.txt"),
+                    runtime.root.resolve(namespace + "checkpoint-task.txt"),
                     repository.findByRun(run.projectId(), run.runId()).orElseThrow().taskId(),
                     java.nio.file.StandardOpenOption.CREATE_NEW);
                 runtime.report(
@@ -337,6 +350,12 @@ public final class ResponsesCoreLiveAcceptance {
                     Map.of(
                         "status",
                         "SAVED",
+                        "operational_profile",
+                        runtime.operational,
+                        "abrupt",
+                        abrupt,
+                        "namespace",
+                        namespace,
                         "effects",
                         java.nio.file.Files.readAllLines(effects).size(),
                         "budget",
@@ -344,6 +363,7 @@ public final class ResponsesCoreLiveAcceptance {
               } catch (java.io.IOException failure) {
                 throw new IllegalStateException("Checkpoint evidence write failed");
               }
+              if (abrupt) Runtime.getRuntime().halt(0);
               System.out.println("CHECKPOINT_WRITER_EXITED_AFTER_DURABLE_RESULT");
               System.exit(0);
             }
@@ -352,7 +372,7 @@ public final class ResponsesCoreLiveAcceptance {
       org.springframework.test.util.ReflectionTestUtils.invokeMethod(
           core, "setCheckpoints", checkpoints);
       if (writer) {
-        if (java.nio.file.Files.exists(runtime.root.resolve("checkpoint-task.txt")))
+        if (java.nio.file.Files.exists(runtime.root.resolve(namespace + "checkpoint-task.txt")))
           throw new IllegalStateException("Checkpoint fixture already started");
         core.execute(
             owner,
@@ -360,7 +380,8 @@ public final class ResponsesCoreLiveAcceptance {
             new dev.mikoto2000.rei.core.chat.UserInterventionQueue());
         throw new IllegalStateException("Checkpoint writer did not reach durable tool boundary");
       }
-      String task = java.nio.file.Files.readString(runtime.root.resolve("checkpoint-task.txt"));
+      String task =
+          java.nio.file.Files.readString(runtime.root.resolve(namespace + "checkpoint-task.txt"));
       var resumed =
           checkpoints.resume(
               "acceptance-project",
@@ -374,12 +395,16 @@ public final class ResponsesCoreLiveAcceptance {
           Map.of(
               "success",
               correct,
+              "operational_profile",
+              runtime.operational,
+              "namespace",
+              namespace,
               "effects",
               java.nio.file.Files.readAllLines(effects).size(),
               "task_status",
               repository.get("acceptance-project", task).status(),
               "previous_run_matches",
-              "checkpoint-before".equals(resumed.previousRunId()),
+              (namespace + "checkpoint-before").equals(resumed.previousRunId()),
               "budget",
               runtime.budget.snapshot()));
       if (!correct || java.nio.file.Files.readAllLines(effects).size() != 1)
@@ -395,7 +420,13 @@ public final class ResponsesCoreLiveAcceptance {
     try {
       if (args.length != 3)
         throw new IllegalArgumentException("Target, owned root and action required");
-      runtime = new ResponsesAcceptanceRuntime(args[0], Path.of(args[1]));
+      runtime =
+          new ResponsesAcceptanceRuntime(
+              args[0],
+              Path.of(args[1]),
+              args[2].startsWith("checkpoint-operational-")
+                  ? ResponsesAcceptanceRuntime.Candidate.OPERATIONAL
+                  : ResponsesAcceptanceRuntime.Candidate.BASE);
       final var tracingRuntime = runtime;
       try (var diagnostics =
           org.mockito.Mockito.mockStatic(
@@ -414,6 +445,10 @@ public final class ResponsesCoreLiveAcceptance {
         else if (args[2].equals("discovery-metrics")) discovery(runtime, "metrics");
         else if (args[2].equals("checkpoint-write")) checkpoint(runtime, true);
         else if (args[2].equals("checkpoint-read")) checkpoint(runtime, false);
+        else if (args[2].equals("checkpoint-operational-write"))
+          checkpoint(runtime, true, "operational-", true);
+        else if (args[2].equals("checkpoint-operational-read"))
+          checkpoint(runtime, false, "operational-", false);
         else if (args[2].startsWith("approval-"))
           ResponsesApprovalLiveScenario.run(runtime, args[2]);
         else if (args[2].equals("features")) ResponsesFeatureLiveScenario.run(runtime);

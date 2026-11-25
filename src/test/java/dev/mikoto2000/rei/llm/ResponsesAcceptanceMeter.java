@@ -11,6 +11,7 @@ final class ResponsesAcceptanceMeter implements ChatModel {
   private final ChatModel delegate;
   private final ResponsesAcceptanceBudget budget;
   private final boolean defaultTierOnly;
+  private final boolean lowEffortOnly;
 
   ResponsesAcceptanceMeter(ChatModel delegate, ResponsesAcceptanceBudget budget) {
     this(delegate, budget, false);
@@ -18,19 +19,37 @@ final class ResponsesAcceptanceMeter implements ChatModel {
 
   ResponsesAcceptanceMeter(
       ChatModel delegate, ResponsesAcceptanceBudget budget, boolean defaultTierOnly) {
+    this(delegate, budget, defaultTierOnly, false);
+  }
+
+  ResponsesAcceptanceMeter(
+      ChatModel delegate,
+      ResponsesAcceptanceBudget budget,
+      boolean defaultTierOnly,
+      boolean lowEffortOnly) {
     this.delegate = delegate;
     this.budget = budget;
     this.defaultTierOnly = defaultTierOnly;
+    this.lowEffortOnly = lowEffortOnly;
   }
 
   private Prompt priced(Prompt prompt) {
-    if (!defaultTierOnly) return prompt;
+    if (!defaultTierOnly && !lowEffortOnly) return prompt;
     if (!(prompt.getOptions()
         instanceof org.springframework.ai.openai.responses.OpenAiResponsesChatOptions options))
       throw new IllegalArgumentException("Explicit native acceptance options required");
-    if (options.getServiceTier() != null && !options.getServiceTier().equals("default"))
+    if (defaultTierOnly
+        && options.getServiceTier() != null
+        && !options.getServiceTier().equals("default"))
       throw new IllegalArgumentException("Acceptance requires the approved default service tier");
-    return new Prompt(prompt.getInstructions(), options.mutate().serviceTier("default").build());
+    if (lowEffortOnly
+        && options.getReasoningEffort() != null
+        && !options.getReasoningEffort().equals("low"))
+      throw new IllegalArgumentException("Operational acceptance requires low reasoning effort");
+    var accepted = options.mutate();
+    if (defaultTierOnly) accepted.serviceTier("default");
+    if (lowEffortOnly) accepted.reasoningEffort("low");
+    return new Prompt(prompt.getInstructions(), accepted.build());
   }
 
   private ResponsesAcceptanceBudget.Slot reserve(Prompt prompt) {

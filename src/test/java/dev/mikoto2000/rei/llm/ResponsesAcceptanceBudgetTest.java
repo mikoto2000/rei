@@ -57,6 +57,7 @@ class ResponsesAcceptanceBudgetTest {
   void unfinishedReservationsAreChargedAfterProcessRestartWithoutInventingUsage() {
     budget().reserve(600, 400);
     assertThat(budget().snapshot().completed()).isZero();
+    assertThat(budget().snapshot().unknown()).isEqualTo(1);
     assertThatThrownBy(() -> budget().reserve(401, 1)).isInstanceOf(IllegalStateException.class);
   }
 
