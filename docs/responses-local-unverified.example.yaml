@@ -1,0 +1,17 @@
+# Diagnostic configuration only: this target FAILED the combined research trial twice.
+# There is deliberately no accepted-responses-profile; production construction stays blocked.
+# This is the user's local service, not the official DeepSeek API.
+rei:
+  llm:
+    features:
+      chat:
+        api: responses
+        base-url: http://gx10-707e.local:8888
+        api-key: ${REI_OPENAI_API_KEY:dummy-key}
+        model: deepseek-v4.1-flash-1017
+        endpoint-generation: 1
+        reasoning-replay: plaintext
+        max-output-tokens: 2048
+        max-tools: 36
+        supported-settings: [reasoning-effort]
+        fallback-to-default: false

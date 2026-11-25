@@ -1,5 +1,9 @@
 # Responses API 検証記録
 
+2026-11-25更新: 現在の接続先別受入・固定profile・設定/移行の判定は
+[本番利用準備](responses-api-production-readiness.md)とPhase7〜9の実試験記録を参照。
+以下はPhase6時点のfixture記録であり、現在の実API未実施を意味しない。
+
 この文書は Phase 6 PR 作成前のローカル実測を記録する。最終全回帰・PR・マージ後 CI の結果は進捗台帳と PR に照合する。
 
 ## 接続先別の対応

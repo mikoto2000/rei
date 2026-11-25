@@ -152,6 +152,7 @@ public class LlmProperties {
       copy.maxTools = maxTools;
       copy.reasoningReplay = reasoningReplay;
       copy.supportedSettings = supportedSettings;
+      copy.acceptedResponsesProfile = acceptedResponsesProfile;
       return copy;
     }
 
@@ -159,6 +160,17 @@ public class LlmProperties {
     private Integer maxOutputTokens;
 
     private LlmApiType api;
+    private String acceptedResponsesProfile;
+
+    /** Explicit, versioned operational acceptance; absent keeps native production closed. */
+    public String getAcceptedResponsesProfile() {
+      return acceptedResponsesProfile;
+    }
+
+    public void setAcceptedResponsesProfile(String value) {
+      acceptedResponsesProfile = value;
+    }
+
     private ReasoningReplayMode reasoningReplay;
     private java.util.Set<LlmCapabilities.Setting> supportedSettings = java.util.Set.of();
 

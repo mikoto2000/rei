@@ -13,14 +13,17 @@
 | 6 | MERGED | codex/responses-api-phase-6-operational-validation / 削除済み | [#634](https://github.com/mikoto2000/rei/pull/634) | 38a13f1d38f0759049290e37df40cdd078a58e54 | exact SHAのJava/品質/Client CI成功。全回帰8,273件、成功8,261・期待skip12・failure/error0 |
 | 7 | MERGED | codex/responses-api-phase-7-openai-validation / 削除済み | [#635](https://github.com/mikoto2000/rei/pull/635) | 6e104b3d434d22873c8f45083d78063c07d0edb2 | PR/merge全CI成功。Backend8,301・成功8,289・期待skip12・failure/error0、品質0/0、全Client成功。実OpenAI初期7＋追加65要求 |
 | 8 | MERGED | codex/responses-api-phase-8-deepseek-validation / 削除済み | [#636](https://github.com/mikoto2000/rei/pull/636) | 64e2d4095154ac5a4f4b43fa3ff578e69573dfe1 | PR/merge全CI成功。Backend8,304・成功8,292・期待skip12・failure/error0。品質0/0、全Client成功。最初のmerge-B timeoutは同一SHA再試行成功、証拠保持 |
-| 9 | IN_PROGRESS | codex/responses-api-phase-9-long-acceptance / .worktrees/responses-api-phase-9 | 作成中 | 未マージ | 実Spring/Coreで両Short/修正後Medium成功、OpenAI Long50操作・実圧縮7回成功。最初のMedium失敗と2要約修正を記録。残ケース/全CI未完了 |
+| 9 | MERGED | codex/responses-api-phase-9-long-acceptance / 削除済み | [#637](https://github.com/mikoto2000/rei/pull/637) | 18fb7d27ef0c98f337ad3be9647ddb0dd364ba2c | PR/merge全CI成功。Backend8,316・成功8,304・期待skip12・failure/error0、品質0/0。両Long50操作成功。ローカル調査結合2試行FAILEDは保護を維持 |
+| 10 | SOURCE_READY / 本番未適用 | codex/responses-api-phase-10-production-readiness / 最終cleanupは当該PR参照 | [#638](https://github.com/mikoto2000/rei/pull/638) | 当該PR参照 | ソース・設定例・移行/旧バイナリ検証を実装。ローカル全8354/成功8342/期待skip12/failure・error0、品質0/0。本番未承認・未変更。最終head/merge CIはPRと外部報告で照合 |
+
+現在の接続先別判定・設定・導入/切戻しは [本番利用準備](responses-api-production-readiness.md)。
+Phase9の工程完了と、ローカル調査のFAILED判定を分ける。既定gateは閉鎖、受入済みOpenAIの明示profileだけをソースで選択可能にする。
 
 ## Phase 7〜10 開始時の状態確認（2026-11-25）
 
-最新の実接続到達点は [Phase8ローカル受入記録](responses-api-phase8-acceptance.md) と [Phase7受入記録](responses-api-phase7-acceptance.md) を参照。
-OpenAI `gpt-5.6-sol` と指定ローカル `deepseek-v4.1-flash-1017` に各7要求を実施した。
-通常/stream、別JVM・SQLite、Function Calling と推論再送が成功。OpenAI JSON Schemaも成功。
-ローカルJSON SchemaはHTTP400で拒否されており成功扱いしない。フェーズ全体の受入と本番gate解禁は未完了。
+最新の実接続到達点は [Phase9受入記録](responses-api-phase9-acceptance.md)、[Phase8ローカル受入記録](responses-api-phase8-acceptance.md)、[Phase7受入記録](responses-api-phase7-acceptance.md) を参照。
+初期各7要求に加え、追加枠の累積はOpenAI198/ローカル187要求で終了した。不明usage予約を保持し、期限14:27:42後の実APIは実行しない。
+Long・Goal・SubAgent・取消・再開等と、ローカルの調査失敗/JSON非対応、公式DeepSeek未検証を区別する。
 
 上表は各実装時点の記録。Phase 6 は実 Git と GitHub で通常 merge
 `38a13f1d38f0759049290e37df40cdd078a58e54` を再確認した。
@@ -31,8 +34,8 @@ Phase 6 の完了を上表の古い IN_PROGRESS 表示だけで判定しない�
 
 Phase 7 専用 worktree を最新 origin/main から作成し、隔離Core・耐久予算・受入試験台帳を実装した。
 詳細は [実接続受入試験](responses-api-live-validation.md)。追加枠は各200要求・3時間、OpenAI USD20を承認済み。
-ローカルの先行試験は公式DeepSeek APIの受入とは区別する。本番 gate は閉じたまま。Phase 9〜10 は未完了であり、
-準備コードや PR の状態を実受入・長時間 Run・本番導入の成功に読み替えない。
+ローカルの先行試験は公式DeepSeek APIの受入とは区別する。Phase9のPR/全CI/後片付けは完了した。
+Phase10のソース準備と実際の本番導入は別工程であり、本番適用は未承認・未実施。
 
 ## Phase 0: 接続先管理・API抽象化
 
