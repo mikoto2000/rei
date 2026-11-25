@@ -140,7 +140,7 @@ worktree 外の作業記録で最終照合する。
 
 ## Phase と公開の条件
 
-### Phase 1 の共通基盤（作業中）
+### Phase 1 の共通基盤（完了）
 
 `ChatEndpointCatalog` は名前付き接続先を起動時に検証・固定し、公開メタデータから
 URL / API key を分離する。`LlmProperties.Server` は既存 flat 設定と併存する。
@@ -174,7 +174,11 @@ Capability は Rei adapter の制約、`server-capabilities`、`model-capabiliti
 
 Phase 1 の関連回帰608件は failure / error / skip 0。Responses の再送169件と通信134件、
 アーキテクチャ検査、実際の Spring アプリ起動を含む。Spotless 3,198ファイルが clean、
-Checkstyle 違反0、SpotBugs 指摘0・解析エラー0。全回帰と最新 head の CI は別に確認する。
+Checkstyle 違反0、SpotBugs 指摘0・解析エラー0。
+全バックエンド回帰8,449件は8,437件成功、既存の予定済み skip 12件、failure / error 0。
+[PR #641](https://github.com/mikoto2000/rei/pull/641) の最新 head の8チェックを確認して通常 merge。
+merge SHA `ad0d810ae1d61fbd0bee0d3e0dea65e38d06dc80` の Java、静的解析、クライアント CI も成功し、
+専用 worktree とブランチの後片付けを完了した。
 
 認証方式が安全な表示値 `api-key` を持つようになったため、旧 JSON メタデータ試験の
 「文字列 api-key が一切ない」という検証は、秘密値の canary と JSON フィールド名
@@ -189,8 +193,9 @@ Run / Checkpoint 統合、認証なしの実 HTTP、Plan の namespace 往復は
 | Phase | 状態 | 完了に必要な証拠 |
 | --- | --- | --- |
 | 0 | [PR #640](https://github.com/mikoto2000/rei/pull/640) を通常 merge。merge SHA `7afd50192bca1b5b4cf3eeb77ab02e2accf55fe7` の CI 成功・後片付け済み | 追加要件の policy 分類は共通基盤設計に反映。local の実互換試験は未実施 |
-| 1 | 共通プロファイルの構成・検証を TDD で作業中 | 認証 / server / model 能力の分離、最新変更の回帰・品質ゲート、PR と CI / merge / 後片付け |
-| 2–3 | 未着手 | Run 固定、CLI と model 統合 |
+| 1 | [PR #641](https://github.com/mikoto2000/rei/pull/641) を通常 merge。merge SHA `ad0d810ae1d61fbd0bee0d3e0dea65e38d06dc80` の CI 成功・後片付け済み | 共通プロファイル、認証 / server / model 能力の分離、回帰・品質ゲートを検証済み |
+| 2 | Run 固定を TDD で作業中 | 受付・モデル / クライアントとの統合、保存・復元、回帰・品質ゲート、PR と CI / merge / 後片付け |
+| 3 | 未着手 | CLI と model 統合 |
 | 4–8 | 未着手 | 認証参照、namespace の完全な往復、権限分離、復旧、履歴・機能 |
 | 9 | 未着手 | 共通サービスを使った GUI とキーボード操作 |
 | 10 | 未着手 | 全回帰・解析・全 Phase のマージ実績と利用者向け手順 |
