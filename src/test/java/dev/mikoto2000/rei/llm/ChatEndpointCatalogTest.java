@@ -9,6 +9,109 @@ import org.springframework.boot.context.properties.bind.Binder;
 import org.springframework.boot.context.properties.source.MapConfigurationPropertySource;
 
 class ChatEndpointCatalogTest {
+  @Test
+  void providerApiAndAccountAreDistinctPublicMetadataWithoutCredentials() throws Exception {
+    var settings = planSettings();
+    settings.put("rei.llm.features.chat.active", "local");
+    settings.put("rei.llm.features.chat.endpoints.local.base-url", "http://localhost:11434");
+    settings.put("rei.llm.features.chat.endpoints.local.model", "local-model");
+    settings.put("rei.llm.features.chat.endpoints.local.api-key", "PRIVATE_CANARY");
+    var catalog = catalog(settings);
+    var json = new com.fasterxml.jackson.databind.ObjectMapper().valueToTree(catalog.profiles());
+    assertThat(json.at("/0/provider").asText()).isEqualTo("openai-compatible");
+    assertThat(json.at("/0/api").asText()).isEqualTo("CHAT_COMPLETIONS");
+    assertThat(json.at("/1/provider").asText()).isEqualTo("chatgpt-plan");
+    assertThat(json.at("/1/api").asText()).isEqualTo("RESPONSES");
+    assertThat(json.at("/1/accountRef").asText()).isEqualTo("personal");
+    assertThat(json.at("/1/generation").asLong()).isEqualTo(1);
+    assertThat(json.toString()).doesNotContain("PRIVATE_CANARY", "apiKey", "api-key");
+  }
+
+  @org.junit.jupiter.params.ParameterizedTest(name = "{0}")
+  @org.junit.jupiter.params.provider.MethodSource("invalidPlanSettings")
+  void planProfilesRejectForbiddenAuthenticationAndUnsupportedTransport(
+      String scenario, Map<String, String> settings, String field) {
+    assertThatThrownBy(() -> catalog(settings))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("rei.llm.features.chat.endpoints.subscription." + field)
+        .hasMessageNotContaining("PRIVATE_CANARY");
+  }
+
+  static java.util.stream.Stream<org.junit.jupiter.params.provider.Arguments> invalidPlanSettings() {
+    var mutations = java.util.List.of(
+        new String[] {"key", "api-key", "PRIVATE_CANARY", "api-key"},
+        new String[] {"blank-key", "api-key", "", "api-key"},
+        new String[] {"url", "base-url", "https://fixture.invalid/PRIVATE_CANARY", "base-url"},
+        new String[] {"blank-url", "base-url", "", "base-url"},
+        new String[] {"chat-completions", "api", "chat-completions", "api"},
+        new String[] {"blank-account", "account-ref", "", "account-ref"},
+        new String[] {"invalid-account", "account-ref", "PRIVATE_CANARY/other", "account-ref"},
+        new String[] {"unknown-provider", "provider", "PRIVATE_CANARY", "provider"});
+    return mutations.stream().map(mutation -> {
+      var settings = planSettings();
+      settings.put("rei.llm.features.chat.endpoints.subscription." + mutation[1], mutation[2]);
+      return org.junit.jupiter.params.provider.Arguments.of(mutation[0], settings, mutation[3]);
+    });
+  }
+
+  @Test
+  void apiKeyConnectionsCannotBorrowAChatGptAccount() {
+    var settings = validSettings();
+    settings.put("rei.llm.features.chat.endpoints.local.account-ref", "personal");
+    assertThatThrownBy(() -> catalog(settings)).isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("rei.llm.features.chat.endpoints.local.account-ref");
+  }
+
+  @Test
+  void aMissingPlanAccountIsDiagnosedBeforeAnyAuthenticationAttempt() {
+    var settings = planSettings();
+    settings.remove("rei.llm.features.chat.endpoints.subscription.account-ref");
+    assertThatThrownBy(() -> catalog(settings)).isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("rei.llm.features.chat.endpoints.subscription.account-ref");
+  }
+
+  @Test
+  void unauthenticatedPlanRegistrationDoesNotPreventStartup() {
+    new org.springframework.boot.test.context.runner.ApplicationContextRunner()
+        .withUserConfiguration(CatalogConfiguration.class)
+        .withPropertyValues(planSettings().entrySet().stream()
+            .map(entry -> entry.getKey() + "=" + entry.getValue()).toArray(String[]::new))
+        .run(context -> {
+          assertThat(context).hasNotFailed();
+          assertThat(context.getBean(ChatEndpointCatalog.class).profiles())
+              .extracting(ChatEndpointCatalog.Profile::id).containsExactly("subscription");
+        });
+  }
+
+  @Test
+  void configurationValidationDoesNotContactTheEndpoint() throws Exception {
+    var requests = new java.util.concurrent.atomic.AtomicInteger();
+    var server = com.sun.net.httpserver.HttpServer.create(new java.net.InetSocketAddress("127.0.0.1", 0), 0);
+    server.createContext("/", exchange -> {
+      requests.incrementAndGet();
+      exchange.sendResponseHeaders(503, -1);
+      exchange.close();
+    });
+    server.start();
+    try {
+      var settings = validSettings();
+      settings.put("rei.llm.features.chat.endpoints.local.base-url", "http://127.0.0.1:" + server.getAddress().getPort());
+      assertThat(catalog(settings).profiles()).hasSize(1);
+      assertThat(requests.get()).isZero();
+    } finally {
+      server.stop(0);
+    }
+  }
+
+  private static java.util.HashMap<String, String> planSettings() {
+    return new java.util.HashMap<>(Map.of(
+        "rei.llm.features.chat.active", "subscription",
+        "rei.llm.features.chat.endpoints.subscription.provider", "chatgpt-plan",
+        "rei.llm.features.chat.endpoints.subscription.api", "responses",
+        "rei.llm.features.chat.endpoints.subscription.account-ref", "personal",
+        "rei.llm.features.chat.endpoints.subscription.model", "fixture-model"));
+  }
+
   @org.junit.jupiter.params.ParameterizedTest(name = "{0}")
   @org.junit.jupiter.params.provider.MethodSource("invalidSettings")
   void invalidConfigurationNamesTheFieldWithoutEchoingValues(
