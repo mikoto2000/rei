@@ -3,33 +3,21 @@ package dev.mikoto2000.rei.llm;
 import java.time.Duration;
 import java.util.Set;
 
-/** Fixed effective envelope accepted by the 2026-11-25 real operational trials. */
-final class ResponsesProductionProfile {
-  static final String OPENAI = "openai-gpt-5.6-sol-low-20261125";
+/** Connection and request constraints for configured OpenAI Responses models. */
+final class ResponsesProductionPolicy {
   private static final Duration TIMEOUT = Duration.ofSeconds(120);
 
-  private ResponsesProductionProfile() {}
+  private ResponsesProductionPolicy() {}
 
-  static boolean declared(LlmProperties.Server server) {
-    return server != null
-        && server.getAcceptedResponsesProfile() != null
-        && !server.getAcceptedResponsesProfile().isBlank();
+  /** Cap only the production Responses connection. */
+  static Duration readTimeout(Duration configured) {
+    return configured.compareTo(TIMEOUT) > 0 ? TIMEOUT : configured;
   }
 
-  /** Cap only the opted-in native connection; never increase an existing timeout. */
-  static Duration readTimeout(LlmProperties.Server server, Duration configured) {
-    return server != null
-            && server.getApi() == LlmApiType.RESPONSES
-            && OPENAI.equals(server.getAcceptedResponsesProfile())
-            && configured.compareTo(TIMEOUT) > 0
-        ? TIMEOUT
-        : configured;
-  }
-
-  static void requireAccepted(
+  static void requireConfigured(
       LlmProperties.Server server, ResolvedLlmEndpoint endpoint, String feature) {
-    if (!OPENAI.equals(server.getAcceptedResponsesProfile())
-        || !Set.of(LlmFeature.CHAT, LlmFeature.OUTPUT_LIMIT_PLANNER).contains(feature)
+    if (server.getModel() == null
+        || server.getModel().isBlank()
         || server.isFallbackToDefault()
         || server.getApiKey() == null
         || server.getApiKey().isBlank()
@@ -40,8 +28,9 @@ final class ResponsesProductionProfile {
 
   static void requireEndpoint(ResolvedLlmEndpoint endpoint) {
     String feature = endpoint.endpointId();
-    if (!Set.of(LlmFeature.CHAT, LlmFeature.OUTPUT_LIMIT_PLANNER).contains(feature))
-      throw unavailable();
+    if (!Set.of(LlmFeature.CHAT, LlmFeature.OUTPUT_LIMIT_PLANNER).contains(feature)
+        || endpoint.model() == null
+        || endpoint.model().isBlank()) throw unavailable();
     var accepted =
         new ResolvedLlmEndpoint(
             feature,
@@ -49,7 +38,7 @@ final class ResponsesProductionProfile {
             LlmApiType.RESPONSES,
             "https://api.openai.com/v1",
             "feature:" + feature,
-            "gpt-5.6-sol",
+            endpoint.model(),
             new LlmCapabilities(
                 ReasoningReplayMode.ENCRYPTED,
                 36,
@@ -74,12 +63,12 @@ final class ResponsesProductionProfile {
             && !include.isEmpty()
             && !include.equals(java.util.List.of("reasoning.encrypted_content")))
       throw new IllegalArgumentException(
-          "Responses request differs from the accepted operational profile");
+          "Responses request differs from the supported OpenAI settings");
     return options.mutate().reasoningEffort("low").serviceTier("default").build();
   }
 
   private static IllegalStateException unavailable() {
     return new IllegalStateException(
-        "Responses requires an accepted operational profile and exact effective settings");
+        "Responses requires an explicit OpenAI model and compatible endpoint settings");
   }
 }

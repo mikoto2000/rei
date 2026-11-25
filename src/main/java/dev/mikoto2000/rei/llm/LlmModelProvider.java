@@ -175,7 +175,9 @@ public class LlmModelProvider implements dev.mikoto2000.rei.secretary.SecretaryP
             api == LlmApiType.RESPONSES ? server.getSupportedSettings() : java.util.Set.of()),
         maxOutputTokens(server),
         temperature,
-        ResponsesProductionProfile.readTimeout(server, readTimeout.get()));
+        api == LlmApiType.RESPONSES && responsesFixtureCustomizers == null
+            ? ResponsesProductionPolicy.readTimeout(readTimeout.get())
+            : readTimeout.get());
   }
 
   private final Map<String, ModelOutageGuard> outageGuards = new ConcurrentHashMap<>();
@@ -261,8 +263,6 @@ public class LlmModelProvider implements dev.mikoto2000.rei.secretary.SecretaryP
 
   private void requireAvailableProtocol(String feature) {
     var server = resolvedServer(feature);
-    if (ResponsesProductionProfile.declared(server) && server.getApi() != LlmApiType.RESPONSES)
-      throw new IllegalStateException("An accepted Responses profile requires the Responses API");
     if (LlmFeature.VOICE_CORRECTION.equals(feature)
         && (server == null || !server.hasCustomServer())) {
       if (server != null && server.getApi() == LlmApiType.RESPONSES)
@@ -278,18 +278,15 @@ public class LlmModelProvider implements dev.mikoto2000.rei.secretary.SecretaryP
         throw new IllegalStateException("Responses acceptance endpoint does not match approval");
       return;
     }
-    if (server != null
-        && server.getApi() == LlmApiType.RESPONSES
-        && ResponsesProductionProfile.declared(server)) {
-      ResponsesProductionProfile.requireAccepted(
+    if (server != null && server.getApi() == LlmApiType.RESPONSES) {
+      ResponsesProductionPolicy.requireConfigured(
           server, endpoint(server, model(server, null), feature), feature);
       return;
     }
-    if ((server != null && server.getApi() == LlmApiType.RESPONSES)
-        || ((server == null || !server.hasCustomServer() || server.isFallbackToDefault())
-            && defaultChatModel != null
-            && defaultChatModel.getOptions()
-                instanceof org.springframework.ai.openai.responses.OpenAiResponsesChatOptions))
+    if ((server == null || !server.hasCustomServer() || server.isFallbackToDefault())
+        && defaultChatModel != null
+        && defaultChatModel.getOptions()
+            instanceof org.springframework.ai.openai.responses.OpenAiResponsesChatOptions)
       throw new IllegalStateException(
           "Responses is unavailable until durable agent integration is verified");
   }

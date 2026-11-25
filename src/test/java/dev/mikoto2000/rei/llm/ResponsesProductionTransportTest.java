@@ -24,7 +24,7 @@ class ResponsesProductionTransportTest {
   private LlmModelProvider provider() {
     return LlmModelProvider.forResponsesProductionTransport(
         org.mockito.Mockito.mock(ChatModel.class),
-        ResponsesProductionGateTest.properties(LlmFeature.CHAT, Map.of()),
+        ResponsesProductionGateTest.properties(LlmFeature.CHAT, Map.of("model", "gpt-6.2-sol")),
         List.of(http ->
             http.interceptor(chain -> {
               assertThat(chain.request().url().toString())
@@ -34,7 +34,7 @@ class ResponsesProductionTransportTest {
               var request = json.readTree(bytes.readByteArray());
               requests.add(request);
               String response =
-                  "{\"id\":\"owned_profile\",\"object\":\"response\",\"created_at\":0,\"status\":\"completed\",\"model\":\"gpt-5.6-sol\",\"output\":[{\"type\":\"message\",\"id\":\"owned_final\",\"role\":\"assistant\",\"status\":\"completed\",\"phase\":\"final_answer\",\"content\":[{\"type\":\"output_text\",\"text\":\"owned profile response\",\"annotations\":[]}]}],\"usage\":{\"input_tokens\":3,\"output_tokens\":2,\"total_tokens\":5,\"input_tokens_details\":{\"cached_tokens\":0},\"output_tokens_details\":{\"reasoning_tokens\":0}}}";
+                  "{\"id\":\"owned_profile\",\"object\":\"response\",\"created_at\":0,\"status\":\"completed\",\"model\":\"gpt-6.2-sol\",\"output\":[{\"type\":\"message\",\"id\":\"owned_final\",\"role\":\"assistant\",\"status\":\"completed\",\"phase\":\"final_answer\",\"content\":[{\"type\":\"output_text\",\"text\":\"owned profile response\",\"annotations\":[]}]}],\"usage\":{\"input_tokens\":3,\"output_tokens\":2,\"total_tokens\":5,\"input_tokens_details\":{\"cached_tokens\":0},\"output_tokens_details\":{\"reasoning_tokens\":0}}}";
               boolean stream = request.path("stream").asBoolean();
               String body =
                   stream
@@ -84,7 +84,7 @@ class ResponsesProductionTransportTest {
     invoke(provider.chatModel(LlmFeature.CHAT), original, stream);
     assertThat(requests).hasSize(1);
     var sent = requests.getFirst();
-    assertThat(sent.path("model").asText()).isEqualTo("gpt-5.6-sol");
+    assertThat(sent.path("model").asText()).isEqualTo("gpt-6.2-sol");
     assertThat(sent.path("reasoning").path("effort").asText()).isEqualTo("low");
     assertThat(sent.path("service_tier").asText()).isEqualTo("default");
     assertThat(sent.path("max_output_tokens").asInt()).isEqualTo(1536);
@@ -132,7 +132,7 @@ class ResponsesProductionTransportTest {
   @Test
   void anExplicitChildModelCannotBorrowTheAcceptedParentProfile() {
     var provider = provider();
-    assertThat(provider.subAgentChatModel("gpt-5.6-sol"))
+    assertThat(provider.subAgentChatModel("gpt-6.2-sol"))
         .isSameAs(provider.chatModel(LlmFeature.CHAT));
     assertThatThrownBy(() -> provider.subAgentChatModel("unverified-child-model"))
         .isInstanceOf(IllegalArgumentException.class);

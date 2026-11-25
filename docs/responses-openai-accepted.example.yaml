@@ -13,7 +13,6 @@ rei:
     features:
       chat:
         api: responses
-        accepted-responses-profile: openai-gpt-5.6-sol-low-20261125
         base-url: https://api.openai.com
         api-key: ${OPENAI_API_KEY:}
         model: gpt-5.6-sol
@@ -25,7 +24,6 @@ rei:
         fallback-to-default: false
       output-limit-planner:
         api: responses
-        accepted-responses-profile: openai-gpt-5.6-sol-low-20261125
         base-url: https://api.openai.com
         api-key: ${OPENAI_API_KEY:}
         model: gpt-5.6-sol
