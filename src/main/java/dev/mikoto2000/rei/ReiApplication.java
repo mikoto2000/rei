@@ -174,7 +174,7 @@ public class ReiApplication {
       Environment environment) {
     this.rootCommand = rootCommand;
     this.factory = factory;
-    this.readChatModel = currentModelHolder::getChatModel;
+    this.readChatModel = () -> currentModelHolder.getChatModel();
     this.escCancellationMonitor = escCancellationMonitor;
     this.cancelCommand = () -> commandCancellationService.cancel();
     this.commandCompletionNotificationPolicy = commandCompletionNotificationPolicy;
