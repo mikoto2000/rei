@@ -64,7 +64,7 @@ class ChatSubmitPinnedAdmissionTest {
       service.setChatRunAdmission(new ChatRunAdmission() {
         public void accept(AgentRunContext owner, String prompt) {
           assertEquals("hello", prompt);
-          assertNull(runs.get(owner.runId()), "must pin before durable admission becomes visible");
+          assertThrows(RunNotFoundException.class, () -> runs.get(owner.runId()), "must pin before durable admission becomes visible");
           verify(runs, never()).register(any());
           if (reject) throw new IllegalStateException("unavailable profile");
           acquired.incrementAndGet();

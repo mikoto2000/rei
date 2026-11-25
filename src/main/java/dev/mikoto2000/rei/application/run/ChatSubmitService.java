@@ -56,6 +56,7 @@ public final class ChatSubmitService {
 
   @org.springframework.beans.factory.annotation.Autowired(required = false)
   public void setChatRunAdmission(dev.mikoto2000.rei.core.chat.ChatRunAdmission admission) {
+    this.chatRunAdmission = admission;
   }
 
   /** 取得記録一覧。 */
@@ -119,11 +120,15 @@ public final class ChatSubmitService {
                     false,
                     request.key(),
                     request.fingerprint(),
+                    null,
+                    chatRunAdmission,
                     context -> {
                       var capture = captureHooks;
                       sessions.remember(context.conversationId(), project.id());
+                      boolean registered = false;
                       try {
                         registerRun.accept(context);
+                        registered = true;
                         if (dotDelegations != null)
                           dotDelegations.ifAvailable(
                               dot -> dot.authoriseHumanInput(context, request.message()));
@@ -138,7 +143,7 @@ public final class ChatSubmitService {
                         dispatch.accept(context, request.message());
                       } catch (RuntimeException | Error error) {
                         if (capture != null) capture.startFailed().accept(context.runId());
-                        forgetRun.accept(context.runId());
+                        if (registered) forgetRun.accept(context.runId());
                         sessions.forget(context.conversationId());
                         throw error;
                       }
@@ -156,13 +161,16 @@ public final class ChatSubmitService {
                     null,
                     null,
                     admission,
+                    chatRunAdmission,
                     context -> {
                       sessions.remember(context.conversationId(), project.id());
+                      boolean registered = false;
                       try {
                         registerRun.accept(context);
+                        registered = true;
                         dispatch.accept(context, request.message());
                       } catch (RuntimeException | Error error) {
-                        forgetRun.accept(context.runId());
+                        if (registered) forgetRun.accept(context.runId());
                         sessions.forget(context.conversationId());
                         throw error;
                       }

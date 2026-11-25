@@ -159,6 +159,17 @@ public final class SessionLifecycle {
       String fingerprint,
       dev.mikoto2000.rei.mcp.McpAdmission mcp,
       Consumer<AgentRunContext> enqueue) {
+    return submit(project, sessionId, message, source, mode, voiceInput, key, fingerprint,
+        mcp, null, enqueue);
+  }
+
+  /** Fix run configuration before a fresh admission is published; replays retain their owner. */
+  public AgentRunContext submit(
+      ProjectContext project, String sessionId, String message, AgentRunContext.RequestSource source,
+      AgentRunContext.Mode mode, boolean voiceInput, String key, String fingerprint,
+      dev.mikoto2000.rei.mcp.McpAdmission mcp,
+      dev.mikoto2000.rei.core.chat.ChatRunAdmission admission,
+      Consumer<AgentRunContext> enqueue) {
     if (message == null || message.isBlank())
       throw new IllegalArgumentException("message is required");
     // 入力元が異なっても、所属確認・会話情報の更新・実行受付の順序を共通の境界で守る。
@@ -188,12 +199,21 @@ public final class SessionLifecycle {
                       ? dev.mikoto2000.rei.core.chat.ResponseStyle.NORMAL
                       : metadata.responseStyle());
       // 重複受付を保証する要求は、受付記録を永続化できる場合だけ受け付ける。
+      boolean[] acquired = {false};
+      Runnable prepare = () -> {
+        if (admission != null) {
+          admission.accept(context, message);
+          acquired[0] = true;
+        }
+      };
+      try {
       if (admissions == null) {
         if (key != null || mcp != null)
           throw new IllegalStateException("Durable admission is unavailable");
+        prepare.run();
         repository.accept(metadata, () -> enqueue.accept(context));
       } else {
-        var receipt = admissions.accept(metadata, context, key, fingerprint, mcp);
+        var receipt = admissions.accept(metadata, context, key, fingerprint, mcp, prepare);
         // 同じ要求が再送された場合は、受け付け済みの実行を再利用する。
         if (receipt.replay()) return receipt.context();
         repository.refreshCompletionSnapshot();
@@ -209,6 +229,13 @@ public final class SessionLifecycle {
           admissions.release(context.runId());
           throw error;
         }
+      }
+      } catch (RuntimeException | Error failure) {
+        if (acquired[0]) {
+          try { admission.release(context); }
+          catch (RuntimeException | Error cleanup) { failure.addSuppressed(cleanup); }
+        }
+        throw failure;
       }
       // 外部からのMCP呼び出しで、利用者が画面上で選んだ会話を切り替えない。
       if (source != AgentRunContext.RequestSource.MCP) selected.accept(context);
