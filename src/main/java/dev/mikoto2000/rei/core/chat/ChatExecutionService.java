@@ -65,7 +65,16 @@ import reactor.core.Disposable;
 
 /** 会話の文脈とモデルを使って応答を生成し、実行の完了・失敗・中断を処理する。 */
 @Component
-public class ChatExecutionService {
+public class ChatExecutionService implements ChatRunAdmission {
+  @Autowired(required = false)
+  void setChatConnections(dev.mikoto2000.rei.llm.ChatConnectionService connections) {}
+
+  @Override
+  public void accept(AgentRunContext owner, String prompt) {}
+
+  @Override
+  public void release(AgentRunContext owner) {}
+
   /** 継続入力提供元。 */
   private org.springframework.beans.factory.ObjectProvider<RunContinuation> continuationProvider;
 
