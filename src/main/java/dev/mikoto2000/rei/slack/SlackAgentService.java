@@ -199,7 +199,7 @@ public final class SlackAgentService implements RunContinuation {
                 execution.userRequest(),
                 wait.history(),
                 execution.budgetSnapshot(),
-                wait.managedParent());
+                wait.managedParent(), execution.progressSnapshot().connection());
     this.cancelContinuation = run -> continuations.cancel(run);
     this.completeContinuation = run -> continuations.complete(run);
     this.appendContinuationGuidance =
@@ -334,7 +334,7 @@ public final class SlackAgentService implements RunContinuation {
                       .build();
             })
             .toList();
-    return new Saved(s.request(), messages, s.budget());
+    return new Saved(s.request(), messages, s.budget(), s.pendingTools(), s.replayReferences(), s.protocolHistory(), s.connection());
   }
 
   /** Slackとの連携において、中断に該当するか判定する。 */
