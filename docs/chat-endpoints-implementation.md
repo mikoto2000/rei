@@ -7,6 +7,11 @@ ChatGPT 利用枠が利用可能になったという意味ではない。実ア
 
 ## 正本と参照資料
 
+2026-11-26: 全体方針を [共通 LLM 接続基盤](llm-connection-foundation-design.md)として整理した。
+OpenAI API、ChatGPT Plan、local の責務を同じプロファイルで表し、Provider、API、認証、
+Capability、Replay を分離する。以下の Phase 0 の記録は調査時点の状態を表す。
+Phase 1 は作業中であり、通常チャットへの接続先選択はまだ提供していない。
+
 コードを正本として、以下を照合した。
 
 - [既存のサブエージェント](chatgpt-plan-subagents.md)
@@ -135,10 +140,57 @@ worktree 外の作業記録で最終照合する。
 
 ## Phase と公開の条件
 
+### Phase 1 の共通基盤（作業中）
+
+`ChatEndpointCatalog` は名前付き接続先を起動時に検証・固定し、公開メタデータから
+URL / API key を分離する。`LlmProperties.Server` は既存 flat 設定と併存する。
+Endpoint ID、モデル、Provider、API、認証方式、account-ref、generation、利用経路、
+実効 Capability を同じカタログで表す。設定検証はネットワーク要求を発行しない。
+
+Provider の `openai-api` / `openai-compatible` / `chatgpt-plan` と、認証の
+`none` / `api-key` / `chatgpt-oauth` は別に検証する。名前付き接続先にキーの指定も
+認証の指定もない場合は `unconfigured` とし、旧 flat の認証解決は `legacy` として隔離する。
+これら二つは内部状態であり、利用者が設定する認証方式ではない。
+未認証 Plan の登録だけでは起動を妨げない。
+
+Capability は Rei adapter の制約、`server-capabilities`、`model-capabilities` の交差とする。
+新規接続先のサーバーは未宣言なら UNKNOWN、モデルの reasoning 再送も未宣言なら UNKNOWN。
+モデル名や URL、API 選択、Replay 選択から、サーバーの互換性を確認済みとは判断しない。
+この宣言を実サーバーでの試験結果として報告しない。
+既存 `LlmCapabilities` の record 構成は変更せず、過去の再送 fingerprint との互換性を維持する。
+
+主な短い TDD サイクルは以下のとおり。コンパイル失敗を Red に数えていない。
+
+| 対象 | Red | Green |
+| --- | --- | --- |
+| 名前付き登録と旧設定 | `cf42fa699`、名前付き登録の assertion failure | `8c3328dcb`、8件成功 |
+| 不正設定の安全な診断 | `b5ddaf7a9`、16件の assertion failure | `46803b7e3`、24件成功 |
+| Provider / API / Plan の境界 | `776b00378` | `543892780`、37件成功 |
+| 不変コピー、補助用途、YAML merge | `ca8f45dfa`、9件の assertion failure | `aa346b0ca`、46件成功 |
+| 能力と利用経路 | `1716e1cbf`、13件の assertion failure | `588ea1654`、既存モデル解決・fingerprint を含む82件成功 |
+| 独立した認証とサーバー契約 | `c26567153`、18件の実行時 failure / error | `da6d21a48`、100件成功 |
+| サーバー / モデルの未確認状態 | `c219c8a8b`、8件の assertion failure | `ae991627e`、110件成功 |
+| 静的経路で認証指定を無視しない | `f99f2caa4`、7件の assertion failure | `019362664`、関連608件と品質ゲート成功 |
+
+Phase 1 の関連回帰608件は failure / error / skip 0。Responses の再送169件と通信134件、
+アーキテクチャ検査、実際の Spring アプリ起動を含む。Spotless 3,198ファイルが clean、
+Checkstyle 違反0、SpotBugs 指摘0・解析エラー0。全回帰と最新 head の CI は別に確認する。
+
+認証方式が安全な表示値 `api-key` を持つようになったため、旧 JSON メタデータ試験の
+「文字列 api-key が一切ない」という検証は、秘密値の canary と JSON フィールド名
+`apiKey` / `api-key` が存在しない検証へ整理した。キー値の非公開要件は維持する。
+サーバー能力の追加時には、前の新規テストの既定値を UNKNOWN に更新し、対応済みを
+検証する fixture は明示的なサーバー宣言を追加した。
+
+これは構成・検証の基盤であり、通常チャットへの新規ルーティング、`/llm chat`、
+Run / Checkpoint 統合、認証なしの実 HTTP、Plan の namespace 往復は後続 Phase の対象。
+これらの実装や実サービス試験が完了したとは扱わない。
+
 | Phase | 状態 | 完了に必要な証拠 |
 | --- | --- | --- |
-| 0 | 棚卸し・SDK 検証・namespace 安全境界の修正とローカル検証済み | PR、最新 head CI、通常 merge、マージ後 CI、後片付けを GitHub と作業記録で照合 |
-| 1–3 | 未着手 | 名前付き構成、Run 固定、CLI と model 統合 |
+| 0 | [PR #640](https://github.com/mikoto2000/rei/pull/640) を通常 merge。merge SHA `7afd50192bca1b5b4cf3eeb77ab02e2accf55fe7` の CI 成功・後片付け済み | 追加要件の policy 分類は共通基盤設計に反映。local の実互換試験は未実施 |
+| 1 | 共通プロファイルの構成・検証を TDD で作業中 | 認証 / server / model 能力の分離、最新変更の回帰・品質ゲート、PR と CI / merge / 後片付け |
+| 2–3 | 未着手 | Run 固定、CLI と model 統合 |
 | 4–8 | 未着手 | 認証参照、namespace の完全な往復、権限分離、復旧、履歴・機能 |
 | 9 | 未着手 | 共通サービスを使った GUI とキーボード操作 |
 | 10 | 未着手 | 全回帰・解析・全 Phase のマージ実績と利用者向け手順 |

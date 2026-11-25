@@ -1,5 +1,9 @@
 # Rei の Responses API 対応設計
 
+2026-11-26: 今回の拡張は [共通 LLM 接続基盤](llm-connection-foundation-design.md)を全体方針とする。
+以下の固定 OpenAI profile の受入記録は既存経路の証拠として保持する。
+その条件を全 Responses 接続先の仕様とは見なさず、共通の安全境界と接続先固有の条件を分離する。
+
 作成日: 2026-11-24
 更新日: 2026-11-25。Phase0〜9はマージ・exact SHA CI・後片付け済み。
 Phase10で受入済みOpenAIの固定profileによる明示選択を実装中。本番環境は未変更。

@@ -139,7 +139,7 @@ public class LlmProperties {
   /** 用途に応じたモデル利用に必要なサーバーを扱う。 */
   public static class Server {
     /** 現在の設定値のコピーを返す。 */
-    private Server copy() {
+    Server copy() {
       var copy = new Server();
       copy.maxOutputTokens = maxOutputTokens;
       copy.baseUrl = baseUrl;
@@ -152,7 +152,89 @@ public class LlmProperties {
       copy.maxTools = maxTools;
       copy.reasoningReplay = reasoningReplay;
       copy.supportedSettings = supportedSettings;
+      copy.active = active;
+      copy.endpoints = endpoints == null ? null : copyFeatures(endpoints);
+      copy.provider = provider;
+      copy.authentication = authentication;
+      copy.accountRef = accountRef;
+      copy.usagePath = usagePath;
+      copy.modelCapabilities = modelCapabilities;
+      copy.serverCapabilities = serverCapabilities;
       return copy;
+    }
+
+    private String active;
+    private Map<String, Server> endpoints;
+    private String provider;
+    private String authentication;
+    private String accountRef;
+    private String usagePath;
+    private Map<String, String> modelCapabilities = Map.of();
+    private Map<String, String> serverCapabilities = Map.of();
+
+    public Map<String, String> getServerCapabilities() {
+      return Map.copyOf(serverCapabilities);
+    }
+
+    public void setServerCapabilities(Map<String, String> serverCapabilities) {
+      this.serverCapabilities =
+          serverCapabilities == null ? Map.of() : Map.copyOf(serverCapabilities);
+    }
+
+    public String getUsagePath() {
+      return usagePath;
+    }
+
+    public void setUsagePath(String usagePath) {
+      this.usagePath = usagePath;
+    }
+
+    public Map<String, String> getModelCapabilities() {
+      return Map.copyOf(modelCapabilities);
+    }
+
+    public void setModelCapabilities(Map<String, String> modelCapabilities) {
+      this.modelCapabilities = modelCapabilities == null ? Map.of() : Map.copyOf(modelCapabilities);
+    }
+
+    public String getProvider() {
+      return provider;
+    }
+
+    public String getAuthentication() {
+      return authentication;
+    }
+
+    public void setAuthentication(String authentication) {
+      this.authentication = authentication;
+    }
+
+    public void setProvider(String provider) {
+      this.provider = provider;
+    }
+
+    public String getAccountRef() {
+      return accountRef;
+    }
+
+    public void setAccountRef(String accountRef) {
+      this.accountRef = accountRef;
+    }
+
+    public String getActive() {
+      return active;
+    }
+
+    public void setActive(String active) {
+      this.active = active;
+    }
+
+    public Map<String, Server> getEndpoints() {
+      return endpoints == null ? null : copyFeatures(endpoints);
+    }
+
+    public void setEndpoints(Map<String, Server> endpoints) {
+      this.endpoints = endpoints == null ? null : copyFeatures(endpoints);
     }
 
     /** 最大出力トークン数。 */
