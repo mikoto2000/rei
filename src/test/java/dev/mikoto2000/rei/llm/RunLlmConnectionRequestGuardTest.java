@@ -23,7 +23,9 @@ class RunLlmConnectionRequestGuardTest {
   static Stream<Arguments> overrides() {
     return Arrays.stream(LlmApiType.values())
         .flatMap(api ->
-            Stream.of("base_url", "api_key", "credential", "custom_headers", "organization")
+            Stream.of("base_url", "api_key", "credential", "custom_headers", "organization",
+                "max_retries", "proxy", "deployment", "cloud", "long_timeout", "zero_timeout", "github")
+                .filter(field -> !field.equals("github") || api == LlmApiType.CHAT_COMPLETIONS)
                 .map(field -> Arguments.of(api, field)));
   }
 
@@ -88,7 +90,7 @@ class RunLlmConnectionRequestGuardTest {
     context.put(ModelOptions.RUN_CONNECTION_CONTEXT_KEY, connection);
     if (withEndpoint) context.put(ModelOptions.ENDPOINT_CONTEXT_KEY, endpoint);
     if (api == LlmApiType.CHAT_COMPLETIONS) {
-      var builder = OpenAiChatOptions.builder().model("model").toolContext(context);
+      var builder = OpenAiChatOptions.builder().model("model").maxRetries(0).toolContext(context);
       switch (field) {
         case "base_url" -> builder.baseUrl("http://foreign.invalid/v1");
         case "api_key" -> builder.apiKey("PRIVATE_CANARY");
@@ -98,11 +100,18 @@ class RunLlmConnectionRequestGuardTest {
         case "custom_headers" ->
             builder.customHeaders(Map.of("Authorization", "Bearer PRIVATE_CANARY"));
         case "organization" -> builder.organizationId("foreign");
+        case "max_retries" -> builder.maxRetries(1);
+        case "proxy" -> builder.proxy(new java.net.Proxy(java.net.Proxy.Type.HTTP, new java.net.InetSocketAddress("127.0.0.1", 1)));
+        case "deployment" -> builder.deploymentName("foreign");
+        case "cloud" -> builder.microsoftFoundry(true);
+        case "github" -> builder.gitHubModels(true);
+        case "long_timeout" -> builder.timeout(Duration.ofMinutes(1));
+        case "zero_timeout" -> builder.timeout(Duration.ZERO);
         default -> {}
       }
       return builder.build();
     }
-    var builder = OpenAiResponsesChatOptions.builder().model("model").toolContext(context);
+    var builder = OpenAiResponsesChatOptions.builder().model("model").maxRetries(0).toolContext(context);
     switch (field) {
       case "base_url" -> builder.baseUrl("http://foreign.invalid/v1");
       case "api_key" -> builder.apiKey("PRIVATE_CANARY");
@@ -111,6 +120,12 @@ class RunLlmConnectionRequestGuardTest {
       case "custom_headers" ->
           builder.customHeaders(Map.of("Authorization", "Bearer PRIVATE_CANARY"));
       case "organization" -> builder.organizationId("foreign");
+      case "max_retries" -> builder.maxRetries(1);
+      case "proxy" -> builder.proxy(new java.net.Proxy(java.net.Proxy.Type.HTTP, new java.net.InetSocketAddress("127.0.0.1", 1)));
+      case "deployment" -> builder.deploymentName("foreign");
+      case "cloud" -> builder.microsoftFoundry(true);
+      case "long_timeout" -> builder.timeout(Duration.ofMinutes(1));
+      case "zero_timeout" -> builder.timeout(Duration.ZERO);
       default -> {}
     }
     return builder.build();
