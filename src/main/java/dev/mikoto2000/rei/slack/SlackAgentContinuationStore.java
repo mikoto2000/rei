@@ -149,6 +149,12 @@ public final class SlackAgentContinuationStore {
     }
   }
 
+  public void save(AgentRunContext owner, String request, List<Message> history,
+      OutputLimitRunBudget.Snapshot budget, boolean managedParent,
+      dev.mikoto2000.rei.llm.RunLlmConnection connection) {
+    save(owner, request, history, budget, managedParent);
+  }
+
   /** Slackとの連携で用いる文書を返す。 */
   public Document document(String run) {
     try {
