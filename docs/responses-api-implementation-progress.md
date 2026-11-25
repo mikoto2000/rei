@@ -11,11 +11,12 @@
 | 4 | MERGED | codex/responses-api-phase-4-agent-integration / 削除済み | [#632](https://github.com/mikoto2000/rei/pull/632) | 2c141910cc251081d46bd391be23587ce575b3d3 | PR・マージ後CI8,185件、成功8,173、期待skip12、failure/error0。全品質ゲート成功 |
 | 5 | MERGED | codex/responses-api-phase-5-deepseek / 削除済み | [#633](https://github.com/mikoto2000/rei/pull/633) | f9fd5a5ebbd4fff2fe65781373d9af4f31027276 | PR・マージ後CI8,215件、成功8,203、期待skip12、failure/error0。全品質ゲート成功 |
 | 6 | MERGED | codex/responses-api-phase-6-operational-validation / 削除済み | [#634](https://github.com/mikoto2000/rei/pull/634) | 38a13f1d38f0759049290e37df40cdd078a58e54 | exact SHAのJava/品質/Client CI成功。全回帰8,273件、成功8,261・期待skip12・failure/error0 |
-| 7 | IN_PROGRESS | codex/responses-api-phase-7-openai-validation / .worktrees/responses-api-phase-7 | [#635](https://github.com/mikoto2000/rei/pull/635) | 未マージ | 実OpenAI初期7＋追加65要求。Core・推論再送・承認/拒否・Checkpoint・画像/構造化・3試行成功。関連370件成功。最新全CI待ち |
+| 7 | MERGED | codex/responses-api-phase-7-openai-validation / 削除済み | [#635](https://github.com/mikoto2000/rei/pull/635) | 6e104b3d434d22873c8f45083d78063c07d0edb2 | PR/merge全CI成功。Backend8,301・成功8,289・期待skip12・failure/error0、品質0/0、全Client成功。実OpenAI初期7＋追加65要求 |
+| 8 | IN_PROGRESS | codex/responses-api-phase-8-deepseek-validation / .worktrees/responses-api-phase-8 | 作成中 | 未マージ | 指定ローカルの独立能力・3試行を実施。新規32要求、JSON系400を区別。fixture25件成功。全CI待ち |
 
 ## Phase 7〜10 開始時の状態確認（2026-11-25）
 
-最新の実接続到達点は [Phase7受入記録](responses-api-phase7-acceptance.md) を参照。
+最新の実接続到達点は [Phase8ローカル受入記録](responses-api-phase8-acceptance.md) と [Phase7受入記録](responses-api-phase7-acceptance.md) を参照。
 OpenAI `gpt-5.6-sol` と指定ローカル `deepseek-v4.1-flash-1017` に各7要求を実施した。
 通常/stream、別JVM・SQLite、Function Calling と推論再送が成功。OpenAI JSON Schemaも成功。
 ローカルJSON SchemaはHTTP400で拒否されており成功扱いしない。フェーズ全体の受入と本番gate解禁は未完了。

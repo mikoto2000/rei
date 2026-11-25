@@ -15,6 +15,13 @@ import org.springframework.ai.chat.model.ChatModel;
 
 /** Owned, explicitly authorized composition; never loads Rei's production configuration. */
 final class ResponsesAcceptanceRuntime {
+  enum Candidate {
+    BASE,
+    STRUCTURED,
+    IMAGE,
+    SUMMARY
+  }
+
   static final ObjectMapper JSON =
       new ObjectMapper().registerModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule());
   final Path root;
@@ -28,7 +35,11 @@ final class ResponsesAcceptanceRuntime {
   final org.springframework.beans.factory.support.StaticListableBeanFactory beans;
 
   ResponsesAcceptanceRuntime(String target, Path root) throws Exception {
-    this(target, root, null);
+    this(target, root, null, Candidate.BASE);
+  }
+
+  ResponsesAcceptanceRuntime(String target, Path root, Candidate candidate) throws Exception {
+    this(target, root, null, candidate);
   }
 
   ResponsesAcceptanceRuntime(
@@ -36,17 +47,21 @@ final class ResponsesAcceptanceRuntime {
       List<org.springframework.ai.openai.http.okhttp.OpenAiHttpClientBuilderCustomizer>
           fixtureTransport)
       throws Exception {
-    this("fixture", root, fixtureTransport);
+    this("fixture", root, fixtureTransport, Candidate.BASE);
   }
 
   private ResponsesAcceptanceRuntime(
       String target,
       Path root,
       List<org.springframework.ai.openai.http.okhttp.OpenAiHttpClientBuilderCustomizer>
-          fixtureTransport)
+          fixtureTransport,
+      Candidate candidate)
       throws Exception {
     boolean fixture =
         fixtureTransport != null && !fixtureTransport.isEmpty() && target.equals("fixture");
+    if (candidate == null || candidate != Candidate.BASE && !target.equals("local-deepseek"))
+      throw new IllegalArgumentException(
+          "Candidate capability probes require the approved local target");
     if (!fixture
         && (!"true".equals(System.getenv("REI_LIVE_APPROVED_EXTENDED"))
             || !List.of("openai", "local-deepseek").contains(target)))
@@ -102,6 +117,10 @@ final class ResponsesAcceptanceRuntime {
               LlmCapabilities.Setting.STRUCTURED_OUTPUT,
               LlmCapabilities.Setting.IMAGE_INPUT,
               LlmCapabilities.Setting.REASONING_SUMMARY));
+    if (candidate == Candidate.STRUCTURED)
+      capabilities.add(LlmCapabilities.Setting.STRUCTURED_OUTPUT);
+    if (candidate == Candidate.IMAGE) capabilities.add(LlmCapabilities.Setting.IMAGE_INPUT);
+    if (candidate == Candidate.SUMMARY) capabilities.add(LlmCapabilities.Setting.REASONING_SUMMARY);
     server.setSupportedSettings(capabilities);
     properties.setFeature(LlmFeature.CHAT, server);
     var defaults =
@@ -135,7 +154,8 @@ final class ResponsesAcceptanceRuntime {
                   || body.hasNonNull("previous_response_id")
                   || body.hasNonNull("conversation")
                   || body.path("max_output_tokens").asInt() < 1
-                  || body.path("max_output_tokens").asInt() > 8192)
+                  || body.path("max_output_tokens").asInt() > 8192
+                  || openai && !"default".equals(body.path("service_tier").asText()))
                 throw new IllegalStateException("Unapproved acceptance request fields");
               int wire = reserveWire();
               chain
@@ -154,25 +174,36 @@ final class ResponsesAcceptanceRuntime {
               int reasoning = 0;
               for (var item : body.path("input"))
                 if ("reasoning".equals(item.path("type").asText())) reasoning++;
-              report(
-                  "WIRE",
-                  Map.of(
-                      "wire",
-                      wire,
-                      "http_status",
-                      response.code(),
-                      "bytes",
-                      bytes.length,
-                      "header_ms",
-                      (System.nanoTime() - start) / 1000000.0,
-                      "sha256",
-                      hash(bytes),
-                      "tools",
-                      body.path("tools").isArray() ? body.path("tools").size() : 0,
-                      "reasoning_items_sent",
-                      reasoning,
-                      "max_output_tokens",
-                      body.path("max_output_tokens").asInt()));
+              var audit = new java.util.LinkedHashMap<String, Object>();
+              audit.put("wire", wire);
+              audit.put("http_status", response.code());
+              audit.put("bytes", bytes.length);
+              audit.put("header_ms", (System.nanoTime() - start) / 1000000.0);
+              audit.put("sha256", hash(bytes));
+              audit.put("tools", body.path("tools").isArray() ? body.path("tools").size() : 0);
+              audit.put("reasoning_items_sent", reasoning);
+              audit.put("max_output_tokens", body.path("max_output_tokens").asInt());
+              audit.put(
+                  "format_type",
+                  body.path("text").path("format").path("type").asText("UNSPECIFIED"));
+              audit.put(
+                  "reasoning_effort", body.path("reasoning").path("effort").asText("UNSPECIFIED"));
+              audit.put("service_tier", body.path("service_tier").asText("UNSPECIFIED"));
+              if (!response.isSuccessful()) {
+                String diagnostic =
+                    response.peekBody(8192).string().toLowerCase(java.util.Locale.ROOT);
+                var flags = new java.util.ArrayList<String>();
+                for (String fixed :
+                    List.of(
+                        "not supported",
+                        "unsupported",
+                        "json_schema",
+                        "json_object",
+                        "image",
+                        "reasoning")) if (diagnostic.contains(fixed)) flags.add(fixed);
+                audit.put("error_flags", flags);
+              }
+              report("WIRE", audit);
               return response;
             }));
     if (fixture) {
@@ -200,7 +231,12 @@ final class ResponsesAcceptanceRuntime {
   }
 
   ChatModel metered() {
-    return new ResponsesAcceptanceMeter(models.chatModel(LlmFeature.CHAT), budget);
+    return metered(LlmFeature.CHAT);
+  }
+
+  ChatModel metered(String feature) {
+    return new ResponsesAcceptanceMeter(
+        models.chatModel(feature), budget, !target.equals("local-deepseek"));
   }
 
   void trace(String stage, Throwable failure) {
