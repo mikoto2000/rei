@@ -61,6 +61,27 @@ class ChatRunConnectionQueueTest {
   }
 
   @Test
+  void rejectedAdmissionOwnershipCannotRetireAnotherRunsReservation() {
+    var scheduled = new ArrayList<Runnable>();
+    var admissions = org.mockito.Mockito.mock(
+        dev.mikoto2000.rei.conversation.ConversationAdmissionStore.class);
+    org.mockito.Mockito.doThrow(new IllegalStateException("owner mismatch"))
+        .when(admissions).reserveKnownSession(org.mockito.ArgumentMatchers.any(AgentRunContext.class));
+    var connectionAdmission = org.mockito.Mockito.mock(ChatRunAdmission.class);
+    var router = new ConversationInputRouter(scheduled::add, (owner, prompt, queue) -> {});
+    router.setAdmissions(admissions);
+    router.setChatRunAdmission(connectionAdmission);
+    assertThatThrownBy(() -> router.submit(owner("foreign", AgentRunContext.Mode.EXCLUSIVE), "request"))
+        .isInstanceOf(IllegalStateException.class).hasMessageContaining("owner mismatch");
+    assertThat(scheduled).isEmpty();
+    org.mockito.Mockito.verifyNoInteractions(connectionAdmission);
+    org.mockito.Mockito.verify(admissions, org.mockito.Mockito.never()).release("foreign");
+    org.mockito.Mockito.verify(admissions, org.mockito.Mockito.never()).transition(
+        org.mockito.ArgumentMatchers.anyString(),
+        org.mockito.ArgumentMatchers.any(dev.mikoto2000.rei.application.run.RunStatus.class));
+  }
+
+  @Test
   void cancelledQueuedRunReleasesItsConnection() {
     var connections = connections();
     var scheduled = new ArrayList<Runnable>();
