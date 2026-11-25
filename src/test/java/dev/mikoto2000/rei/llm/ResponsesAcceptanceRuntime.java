@@ -19,7 +19,8 @@ final class ResponsesAcceptanceRuntime {
     BASE,
     STRUCTURED,
     IMAGE,
-    SUMMARY
+    SUMMARY,
+    OPERATIONAL
   }
 
   static final ObjectMapper JSON =
@@ -28,6 +29,7 @@ final class ResponsesAcceptanceRuntime {
   final String target;
   final String model;
   final String base;
+  final boolean operational;
   final LlmProperties properties;
   final LlmModelProvider models;
   final ModelMessagePayloadStore payloads;
@@ -50,6 +52,12 @@ final class ResponsesAcceptanceRuntime {
     this("fixture", root, fixtureTransport, Candidate.BASE);
   }
 
+  ResponsesAcceptanceRuntime(Path root,
+      List<org.springframework.ai.openai.http.okhttp.OpenAiHttpClientBuilderCustomizer> fixtureTransport,
+      Candidate candidate) throws Exception {
+    this("fixture", root, fixtureTransport, candidate);
+  }
+
   private ResponsesAcceptanceRuntime(
       String target,
       Path root,
@@ -59,7 +67,8 @@ final class ResponsesAcceptanceRuntime {
       throws Exception {
     boolean fixture =
         fixtureTransport != null && !fixtureTransport.isEmpty() && target.equals("fixture");
-    if (candidate == null || candidate != Candidate.BASE && !target.equals("local-deepseek"))
+    if (candidate == null || candidate != Candidate.BASE && candidate != Candidate.OPERATIONAL
+        && !target.equals("local-deepseek"))
       throw new IllegalArgumentException(
           "Candidate capability probes require the approved local target");
     if (!fixture
@@ -67,6 +76,7 @@ final class ResponsesAcceptanceRuntime {
             || !List.of("openai", "local-deepseek").contains(target)))
       throw new IllegalStateException("Explicit extended trial approval required");
     this.target = target;
+    operational = candidate == Candidate.OPERATIONAL;
     this.root = root.toRealPath();
     boolean openai = target.equals("openai") || fixture;
     base =
@@ -95,9 +105,14 @@ final class ResponsesAcceptanceRuntime {
                 openai ? 10 : 0,
                 openai ? 30 : 0),
             Clock.systemUTC());
+    if (!fixture && System.getenv("REI_LIVE_APPROVED_TIME_EXTENSION") != null) {
+      if (!"phase9-time-2h".equals(System.getenv("REI_LIVE_APPROVED_TIME_EXTENSION")))
+        throw new IllegalStateException("Unknown time-only approval");
+      budget.authorizeTimeExtension("user-20261125-phase9-time-2h");
+    }
     properties = new LlmProperties();
     properties.setReadTimeout(Duration.ofSeconds(120));
-    properties.setMaxOutputTokens(8192);
+    properties.setMaxOutputTokens(operational ? 2048 : 8192);
     properties.setMaxStreamTimeoutRetries(0);
     properties.updateOutputLimit(limits -> {
       limits.setMaxLlmCallsPerRun(80);
@@ -110,10 +125,10 @@ final class ResponsesAcceptanceRuntime {
     server.setModel(model);
     server.setReasoningReplay(
         openai ? ReasoningReplayMode.ENCRYPTED : ReasoningReplayMode.PLAINTEXT);
-    server.setMaxOutputTokens(8192);
-    server.setMaxTools(128);
+    server.setMaxOutputTokens(operational ? 2048 : 8192);
+    server.setMaxTools(operational ? 36 : 128);
     var capabilities = java.util.EnumSet.of(LlmCapabilities.Setting.REASONING_EFFORT);
-    if (openai)
+    if (openai && !operational)
       capabilities.addAll(
           java.util.Set.of(
               LlmCapabilities.Setting.STRUCTURED_OUTPUT,
@@ -125,6 +140,7 @@ final class ResponsesAcceptanceRuntime {
     if (candidate == Candidate.SUMMARY) capabilities.add(LlmCapabilities.Setting.REASONING_SUMMARY);
     server.setSupportedSettings(capabilities);
     properties.setFeature(LlmFeature.CHAT, server);
+    if (operational) properties.setFeature(LlmFeature.OUTPUT_LIMIT_PLANNER, server);
     var defaults =
         new ChatModel() {
           public org.springframework.ai.chat.model.ChatResponse call(
@@ -156,7 +172,8 @@ final class ResponsesAcceptanceRuntime {
                   || body.hasNonNull("previous_response_id")
                   || body.hasNonNull("conversation")
                   || body.path("max_output_tokens").asInt() < 1
-                  || body.path("max_output_tokens").asInt() > 8192
+                  || body.path("max_output_tokens").asInt() > (operational ? 2048 : 8192)
+                  || operational && !"low".equals(body.path("reasoning").path("effort").asText())
                   || openai && !"default".equals(body.path("service_tier").asText()))
                 throw new IllegalStateException("Unapproved acceptance request fields");
               int wire = reserveWire();
@@ -212,12 +229,14 @@ final class ResponsesAcceptanceRuntime {
       policies = new java.util.ArrayList<>(policies);
       policies.addAll(fixtureTransport);
     }
-    var descriptor =
-        LlmModelProvider.forResponsesFixture(defaults, properties, policies)
-            .resolvedEndpoint(LlmFeature.CHAT);
+    var descriptors = new java.util.HashMap<String, ResolvedLlmEndpoint>();
+    var snapshot = LlmModelProvider.forResponsesFixture(defaults, properties, policies);
+    descriptors.put(LlmFeature.CHAT, snapshot.resolvedEndpoint(LlmFeature.CHAT));
+    if (operational) descriptors.put(LlmFeature.OUTPUT_LIMIT_PLANNER,
+        snapshot.resolvedEndpoint(LlmFeature.OUTPUT_LIMIT_PLANNER));
     models =
         LlmModelProvider.forResponsesAcceptance(
-            defaults, properties, policies, Map.of(LlmFeature.CHAT, descriptor));
+            defaults, properties, policies, descriptors);
     payloads = new ModelMessagePayloadStore(source("payload.db"));
     beans = new org.springframework.beans.factory.support.StaticListableBeanFactory();
     beans.addBean("payloads", payloads);
@@ -238,7 +257,7 @@ final class ResponsesAcceptanceRuntime {
 
   ChatModel metered(String feature) {
     return new ResponsesAcceptanceMeter(
-        models.chatModel(feature), budget, !target.equals("local-deepseek"));
+        models.chatModel(feature), budget, !target.equals("local-deepseek"), operational);
   }
 
   void trace(String stage, Throwable failure) {

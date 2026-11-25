@@ -189,7 +189,7 @@ public class LlmModelProvider implements dev.mikoto2000.rei.secretary.SecretaryP
     return provider;
   }
 
-  /** Isolated acceptance composition only; never selected by Spring or external configuration. */
+  /** Isolated acceptance only; never selected by production Spring wiring or external configuration. */
   static LlmModelProvider forResponsesAcceptance(
       ChatModel defaults,
       LlmProperties properties,
