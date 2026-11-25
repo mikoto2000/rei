@@ -35,7 +35,21 @@ class ScopedCapturingChatModelTest {
     exercise(streaming, true);
   }
 
+  @ParameterizedTest @ValueSource(booleans = {false, true})
+  void remoteCliWebCaptureUsesTheSamePinnedReceiver(boolean streaming) throws Exception {
+    exercise(streaming, false, AgentRunContext.RequestSource.WEB);
+  }
+
+  @ParameterizedTest @ValueSource(booleans = {false, true})
+  void mcpDoesNotConsumeKeyboardCaptureEvenWithAnOwnedRunEntry(boolean streaming) throws Exception {
+    exercise(streaming, false, AgentRunContext.RequestSource.MCP);
+  }
+
   private void exercise(boolean streaming, boolean failCapture) throws Exception {
+    exercise(streaming, failCapture, AgentRunContext.RequestSource.SHELL);
+  }
+
+  private void exercise(boolean streaming, boolean failCapture, AgentRunContext.RequestSource source) throws Exception {
     try (var actual = new Fixture(streaming); var unrelated = new Fixture(streaming)) {
       var store = new CaptureStore();
       store.reserve("client", "conversation");
@@ -43,7 +57,7 @@ class ScopedCapturingChatModelTest {
       var defaultOptions = OpenAiChatOptions.builder().model("probe").baseUrl(unrelated.url())
           .apiKey("PRIVATE_UNRELATED_DEFAULT").maxRetries(0).build();
       var requestOptions = OpenAiChatOptions.builder().model("probe").maxRetries(0)
-          .toolContext(Map.of(AgentRunContext.class.getName(), new AgentRunContext("run", "conversation", root)))
+          .toolContext(Map.of(AgentRunContext.class.getName(), new AgentRunContext("run", "conversation", root, "project", source)))
           .build();
       var pinned = PinnedOpenAiClients.open(actual.endpoint(), LlmAuthentication.NONE,
           () -> "PRIVATE_UNUSED", actual.transport, List.of());
@@ -60,11 +74,11 @@ class ScopedCapturingChatModelTest {
         var prompt = new Prompt("fixture", requestOptions);
         if (streaming) assertThat(captured.stream(prompt).collectList().block(Duration.ofSeconds(5))).isNotEmpty();
         else assertThat(captured.call(prompt).getResult().getOutput().getText()).isEqualTo("ok");
-        assertThat(creations).hasValue(1);
+        assertThat(creations).hasValue(source == AgentRunContext.RequestSource.MCP ? 0 : 1);
         assertThat(actual.received).hasSize(1);
         assertThat(actual.auth).containsExactly("<none>");
         assertThat(unrelated.received).isEmpty();
-        if (failCapture) assertThat(store.attempts("run")).isEmpty();
+        if (failCapture || source == AgentRunContext.RequestSource.MCP) assertThat(store.attempts("run")).isEmpty();
         else {
           var attempt = store.attempts("run");
           assertThat(attempt).hasSize(1);
