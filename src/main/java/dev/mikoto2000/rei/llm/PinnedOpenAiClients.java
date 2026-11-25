@@ -8,6 +8,11 @@ import java.util.function.Supplier;
 final class PinnedOpenAiClients {
   private PinnedOpenAiClients() {}
 
+  static OpenAIClient open(RunLlmConnection connection, Supplier<String> credential,
+      okhttp3.OkHttpClient transport, List<okhttp3.Interceptor> interceptors, Runnable verify) {
+    return open(connection.endpoint(), connection.authentication(), credential, transport, interceptors);
+  }
+
   static OpenAIClient open(ResolvedLlmEndpoint endpoint, LlmAuthentication authentication,
       Supplier<String> credential, okhttp3.OkHttpClient transport, List<okhttp3.Interceptor> interceptors) {
     if (transport.followRedirects() || transport.followSslRedirects() || transport.retryOnConnectionFailure()

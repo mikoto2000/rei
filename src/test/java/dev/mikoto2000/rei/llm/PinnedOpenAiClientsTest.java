@@ -100,6 +100,86 @@ class PinnedOpenAiClientsTest {
     }
   }
 
+  @Test
+  void acceptedDeadlineReadTimeoutAndAccountAttributesReachTheSdkTransport() throws Exception {
+    try (var fixture = new Fixture()) {
+      var pin = pin(fixture.endpoint(), java.util.Map.of("request_timeout", "PT37S",
+          "organization_id", "org-fixture", "project_id", "proj-fixture", "api_beta", "fixture=v1"));
+      var reads = new AtomicInteger();
+      var deadline = new java.util.concurrent.atomic.AtomicLong();
+      var organization = new AtomicReference<String>();
+      var project = new AtomicReference<String>();
+      var beta = new AtomicReference<String>();
+      okhttp3.Interceptor inspect = chain -> {
+        reads.set(chain.readTimeoutMillis());
+        deadline.set(chain.call().timeout().timeoutNanos());
+        organization.set(chain.request().header("OpenAI-Organization"));
+        project.set(chain.request().header("OpenAI-Project"));
+        beta.set(chain.request().header("OpenAI-Beta"));
+        return chain.proceed(chain.request());
+      };
+      try (var client = new Owned(PinnedOpenAiClients.open(pin, () -> null, fixture.transport,
+          List.of(inspect), () -> {}))) {
+        assertThat(request(client.client())).isEqualTo("resp_fixture");
+      }
+      assertThat(reads).hasValue(5000);
+      assertThat(deadline).hasValue(Duration.ofSeconds(37).toNanos());
+      assertThat(organization).hasValue("org-fixture");
+      assertThat(project).hasValue("proj-fixture");
+      assertThat(beta).hasValue("fixture=v1");
+    }
+  }
+
+  @Test
+  void anInterceptorCannotChangeThePinnedAccountAudience() throws Exception {
+    try (var fixture = new Fixture()) {
+      var pin = pin(fixture.endpoint(), java.util.Map.of("organization_id", "org-fixture"));
+      okhttp3.Interceptor changed = chain -> chain.proceed(chain.request().newBuilder()
+          .header("OpenAI-Organization", "foreign-org").build());
+      try (var client = new Owned(PinnedOpenAiClients.open(pin, () -> null, fixture.transport,
+          List.of(changed), () -> {}))) {
+        assertThatThrownBy(() -> request(client.client())).isInstanceOf(RuntimeException.class);
+      }
+      assertThat(fixture.requests).hasValue(0);
+    }
+  }
+
+  @Test
+  void noAuthBindingIsCheckedAgainImmediatelyBeforeHttp() throws Exception {
+    try (var fixture = new Fixture()) {
+      var valid = new java.util.concurrent.atomic.AtomicBoolean(true);
+      okhttp3.Interceptor changed = chain -> {
+        valid.set(false);
+        return chain.proceed(chain.request());
+      };
+      try (var client = new Owned(PinnedOpenAiClients.open(pin(fixture.endpoint(), java.util.Map.of()),
+          () -> { throw new AssertionError("No-auth read credentials"); }, fixture.transport,
+          List.of(changed), () -> { if (!valid.get()) throw new IllegalStateException("Binding removed"); }))) {
+        assertThatThrownBy(() -> request(client.client())).isInstanceOf(RuntimeException.class);
+      }
+      assertThat(fixture.requests).hasValue(0);
+    }
+  }
+
+  @Test
+  void equivalentUrlCanonicalizationDoesNotRejectTheAcceptedReceiver() throws Exception {
+    try (var fixture = new Fixture()) {
+      var old = fixture.endpoint();
+      var canonical = new ResolvedLlmEndpoint(old.endpointId(), old.generation(), old.apiType(),
+          old.baseUrl().replace("http:", "HTTP:"), old.credentialRef(), old.model(), old.capabilities(),
+          old.maxOutputTokens(), old.temperature(), old.readTimeout());
+      try (var client = new Owned(PinnedOpenAiClients.open(pin(canonical, java.util.Map.of()),
+          () -> null, fixture.transport, List.of(), () -> {}))) {
+        assertThat(request(client.client())).isEqualTo("resp_fixture");
+      }
+    }
+  }
+
+  private RunLlmConnection pin(ResolvedLlmEndpoint endpoint, java.util.Map<String, String> attributes) {
+    return new RunLlmConnection("fixture", true, LlmProvider.OPENAI_COMPATIBLE,
+        LlmAuthentication.NONE, null, null, endpoint, java.util.Map.of(), java.util.Map.of(), attributes);
+  }
+
   private String request(OpenAIClient client) {
     return client.responses().create(ResponseCreateParams.builder().model("fixture-model").store(false)
         .inputOfResponse(List.of(ResponseInputItem.ofEasyInputMessage(EasyInputMessage.builder()
