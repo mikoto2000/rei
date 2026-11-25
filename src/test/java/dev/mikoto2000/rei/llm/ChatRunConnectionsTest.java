@@ -6,7 +6,6 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import dev.mikoto2000.rei.core.chat.AgentRunContext;
 import java.nio.file.Path;
 import java.util.HashMap;
-import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.boot.context.properties.bind.Binder;
@@ -32,12 +31,15 @@ class ChatRunConnectionsTest {
     var connections = connections();
     var original = connections.accept(owner("run-zero", "session"));
     connections.selectModel("first-override");
-    assertThat(connections.accept(owner("run-one", "session")).endpoint().model()).isEqualTo("first-override");
+    assertThat(connections.accept(owner("run-one", "session")).endpoint().model())
+        .isEqualTo("first-override");
     connections.select("second");
     connections.selectModel("second-override");
-    assertThat(connections.accept(owner("run-two", "session")).endpoint().model()).isEqualTo("second-override");
+    assertThat(connections.accept(owner("run-two", "session")).endpoint().model())
+        .isEqualTo("second-override");
     connections.select("first");
-    assertThat(connections.accept(owner("run-three", "session")).endpoint().model()).isEqualTo("first-override");
+    assertThat(connections.accept(owner("run-three", "session")).endpoint().model())
+        .isEqualTo("first-override");
     assertThat(original.endpoint().model()).isEqualTo("first-model");
   }
 
@@ -45,7 +47,8 @@ class ChatRunConnectionsTest {
   void unknownEndpointCannotChangeSelectionOrFallBack() {
     var connections = connections();
     assertThatThrownBy(() -> connections.select("PRIVATE_CANARY"))
-        .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("endpoint-name")
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("endpoint-name")
         .hasMessageNotContaining("PRIVATE_CANARY");
     assertThat(connections.selectedEndpoint()).isEqualTo("first");
   }
@@ -55,7 +58,8 @@ class ChatRunConnectionsTest {
     var connections = connections();
     connections.accept(owner("same-run", "original-session"));
     assertThatThrownBy(() -> connections.accept(owner("same-run", "other-session")))
-        .isInstanceOf(IllegalStateException.class).hasMessageContaining("owner");
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("owner");
   }
 
   @Test
@@ -80,9 +84,19 @@ class ChatRunConnectionsTest {
       values.put(prefix + "authentication", "none");
       values.put(prefix + "model", name + "-model");
     }
-    var props = new Binder(new MapConfigurationPropertySource(values)).bind("rei.llm", LlmProperties.class).get();
+    var props =
+        new Binder(new MapConfigurationPropertySource(values))
+            .bind("rei.llm", LlmProperties.class)
+            .get();
     var catalog = new ChatEndpointCatalog(props);
-    return new ChatRunConnections(catalog,
-        new RunLlmConnectionFactory(catalog, props, ignored -> { throw new AssertionError("No legacy fallback"); }, ignored -> null));
+    return new ChatRunConnections(
+        catalog,
+        new RunLlmConnectionFactory(
+            catalog,
+            props,
+            ignored -> {
+              throw new AssertionError("No legacy fallback");
+            },
+            ignored -> null));
   }
 }

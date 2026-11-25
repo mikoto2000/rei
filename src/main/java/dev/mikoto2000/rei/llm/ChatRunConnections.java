@@ -21,8 +21,9 @@ final class ChatRunConnections {
   ChatRunConnections(ChatEndpointCatalog catalog, RunLlmConnectionFactory factory) {
     this.catalog = catalog;
     this.factory = factory;
-    this.selection = new java.util.concurrent.atomic.AtomicReference<>(
-        new Selection(catalog.initialEndpoint(), java.util.Map.of()));
+    this.selection =
+        new java.util.concurrent.atomic.AtomicReference<>(
+            new Selection(catalog.initialEndpoint(), java.util.Map.of()));
   }
 
   void select(String endpoint) {
@@ -45,13 +46,20 @@ final class ChatRunConnections {
 
   RunLlmConnection accept(AgentRunContext owner) {
     java.util.Objects.requireNonNull(owner, "owner");
-    return accepted.compute(owner.runId(), (run, prior) -> {
-      if (prior != null) {
-        if (!prior.owner().equals(owner)) throw new IllegalStateException("Run connection owner mismatch");
-        return prior;
-      }
-      var chosen = selection.get();
-      return new Accepted(owner, factory.capture(chosen.endpoint(), chosen.models().get(chosen.endpoint())));
-    }).connection();
+    return accepted
+        .compute(
+            owner.runId(),
+            (run, prior) -> {
+              if (prior != null) {
+                if (!prior.owner().equals(owner))
+                  throw new IllegalStateException("Run connection owner mismatch");
+                return prior;
+              }
+              var chosen = selection.get();
+              return new Accepted(
+                  owner,
+                  factory.capture(chosen.endpoint(), chosen.models().get(chosen.endpoint())));
+            })
+        .connection();
   }
 }
