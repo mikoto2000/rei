@@ -87,7 +87,8 @@ public final class ResponsesOperationalLiveAcceptance implements AutoCloseable {
     } finally {
       scope.close();
     }
-    var owner = new AgentRunContext("operational-" + suffix, "operational-" + suffix,
+    String identity = "operational-" + suffix + "-" + java.util.UUID.randomUUID();
+    var owner = new AgentRunContext(identity, identity,
         runtime.root, project.id());
     app.getBean(dev.mikoto2000.rei.application.session.SessionRepository.class).accept(
         new dev.mikoto2000.rei.application.session.SessionMetadata(owner.conversationId(),
