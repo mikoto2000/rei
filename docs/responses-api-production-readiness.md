@@ -2,6 +2,7 @@
 
 更新: 2026-11-25。Phase10のソース・設定例・移行試験・ローカル全検証は完了。
 この文書はソースcommit時点の記録。最新PR head/マージ後exact SHAのCI・merge commit・cleanupは当該PRとworktree外の最終報告で照合する。
+[Phase10 PR #638](https://github.com/mikoto2000/rei/pull/638) に最終のGit/CI/後片付けを記録する。
 **本番プロセス・JAR・クライアント・外部設定・本番DBは未変更。本番適用は未承認。**
 
 ## 接続先ごとの判定
@@ -170,7 +171,7 @@ Checkstyle0 / SpotBugs0 / analysis error0 / missing classes0 / Spotless成功。
 | 7 | [#635](https://github.com/mikoto2000/rei/pull/635) / `6e104b3d434d22873c8f45083d78063c07d0edb2` | 8301 / 成功8289 / skip12 / failure・error0 | 全成功 / 完了 |
 | 8 | [#636](https://github.com/mikoto2000/rei/pull/636) / `64e2d4095154ac5a4f4b43fa3ff578e69573dfe1` | 8304 / 成功8292 / skip12 / failure・error0 | 全成功 / 完了。最初のBのCI制限時間超過は同一SHAの再試行成功として記録 |
 | 9 | [#637](https://github.com/mikoto2000/rei/pull/637) / `18fb7d27ef0c98f337ad3be9647ddb0dd364ba2c` | 8316 / 成功8304 / skip12 / failure・error0 | 全成功 / 完了。ローカル実調査FAILEDは維持 |
-| 10 | 当該PRと外部最終報告を参照 | 8354 / 成功8342 / skip12 / failure・error0（ローカル） | Git/CIの確定値は当該PRに記録。本番適用は未承認 |
+| 10 | [#638](https://github.com/mikoto2000/rei/pull/638)と外部最終報告を参照 | 8354 / 成功8342 / skip12 / failure・error0（ローカル） | Git/CIの確定値は当該PRに記録。本番適用は未承認 |
 
 所有記録: `F:/project/rei/target/responses-api-workflows/phase7-10-20261125/`。
 Phase7 PR635、Phase8 PR636、Phase9 PR637は通常merge/exact SHA全CI/専用worktree・branch削除まで完了。

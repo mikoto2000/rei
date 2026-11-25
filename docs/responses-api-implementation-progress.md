@@ -14,7 +14,7 @@
 | 7 | MERGED | codex/responses-api-phase-7-openai-validation / 削除済み | [#635](https://github.com/mikoto2000/rei/pull/635) | 6e104b3d434d22873c8f45083d78063c07d0edb2 | PR/merge全CI成功。Backend8,301・成功8,289・期待skip12・failure/error0、品質0/0、全Client成功。実OpenAI初期7＋追加65要求 |
 | 8 | MERGED | codex/responses-api-phase-8-deepseek-validation / 削除済み | [#636](https://github.com/mikoto2000/rei/pull/636) | 64e2d4095154ac5a4f4b43fa3ff578e69573dfe1 | PR/merge全CI成功。Backend8,304・成功8,292・期待skip12・failure/error0。品質0/0、全Client成功。最初のmerge-B timeoutは同一SHA再試行成功、証拠保持 |
 | 9 | MERGED | codex/responses-api-phase-9-long-acceptance / 削除済み | [#637](https://github.com/mikoto2000/rei/pull/637) | 18fb7d27ef0c98f337ad3be9647ddb0dd364ba2c | PR/merge全CI成功。Backend8,316・成功8,304・期待skip12・failure/error0、品質0/0。両Long50操作成功。ローカル調査結合2試行FAILEDは保護を維持 |
-| 10 | SOURCE_READY / 本番未適用 | codex/responses-api-phase-10-production-readiness / 最終cleanupは当該PR参照 | 当該PR参照 | 当該PR参照 | ソース・設定例・移行/旧バイナリ検証を実装。ローカル全8354/成功8342/期待skip12/failure・error0、品質0/0。本番未承認・未変更。最終head/merge CIはPRと外部報告で照合 |
+| 10 | SOURCE_READY / 本番未適用 | codex/responses-api-phase-10-production-readiness / 最終cleanupは当該PR参照 | [#638](https://github.com/mikoto2000/rei/pull/638) | 当該PR参照 | ソース・設定例・移行/旧バイナリ検証を実装。ローカル全8354/成功8342/期待skip12/failure・error0、品質0/0。本番未承認・未変更。最終head/merge CIはPRと外部報告で照合 |
 
 現在の接続先別判定・設定・導入/切戻しは [本番利用準備](responses-api-production-readiness.md)。
 Phase9の工程完了と、ローカル調査のFAILED判定を分ける。既定gateは閉鎖、受入済みOpenAIの明示profileだけをソースで選択可能にする。
