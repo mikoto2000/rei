@@ -76,7 +76,26 @@ final class ResponsesAdapter implements LlmProtocolAdapter, ChatModel {
 
   static ResponsesAdapter createWithClient(ResolvedLlmEndpoint endpoint,
       OpenAiResponsesChatOptions options, com.openai.client.OpenAIClient client, boolean production) {
-    throw new IllegalStateException("Pinned Responses client bridge is unavailable");
+    if (production) ResponsesProductionPolicy.requireEndpoint(endpoint);
+    if (endpoint.apiType() != LlmApiType.RESPONSES
+        || options.getBaseUrl() != null || options.getApiKey() != null || options.getCredential() != null
+        || options.getOrganizationId() != null
+        || options.getCustomHeaders() != null && !options.getCustomHeaders().isEmpty()
+        || options.getDeploymentName() != null || options.isMicrosoftFoundry()
+        || options.getMicrosoftFoundryServiceVersion() != null || options.getProxy() != null
+        || !Objects.equals(endpoint.model(), options.getModel())
+        || !Objects.equals(endpoint.maxOutputTokens(), options.getMaxOutputTokens())
+        || !Objects.equals(endpoint.temperature(), options.getTemperature()))
+      throw new IllegalArgumentException("Pinned Responses options must match the accepted client connection");
+    if (options.getMaxRetries() != 0)
+      throw new IllegalArgumentException("Responses SDK retries must stay zero at client construction");
+    Objects.requireNonNull(client, "client");
+    boolean plaintext = endpoint.capabilities().reasoningReplay() == ReasoningReplayMode.PLAINTEXT;
+    var sync = ResponsesSdkBoundary.safe(client, plaintext);
+    var async = ResponsesSdkBoundary.safe(client.async(), plaintext);
+    var model = OpenAiResponsesChatModel.builder().options(options)
+        .openAiClient(sync).openAiClientAsync(async).build();
+    return new ResponsesAdapter(endpoint, model, sync, async, production);
   }
 
   static ResponsesAdapter create(
