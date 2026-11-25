@@ -2,7 +2,10 @@ package dev.mikoto2000.rei.llm;
 
 /** Operator-declared usage classification; it never authorizes external data transfer. */
 public enum LlmUsagePath {
-  LOCAL_LLM("local-llm"), API_BILLING("api-billing"), CHATGPT_PLAN("chatgpt-plan"), UNKNOWN("unknown");
+  LOCAL_LLM("local-llm"),
+  API_BILLING("api-billing"),
+  CHATGPT_PLAN("chatgpt-plan"),
+  UNKNOWN("unknown");
 
   private final String id;
 
@@ -20,7 +23,8 @@ public enum LlmUsagePath {
     for (var path : values()) {
       if (path.id.equals(value.strip().toLowerCase(java.util.Locale.ROOT).replace('_', '-'))) {
         if ((provider == LlmProvider.CHATGPT_PLAN) != (path == CHATGPT_PLAN))
-          throw new IllegalArgumentException(field + ": must match the configured authentication provider");
+          throw new IllegalArgumentException(
+              field + ": must match the configured authentication provider");
         return path;
       }
     }

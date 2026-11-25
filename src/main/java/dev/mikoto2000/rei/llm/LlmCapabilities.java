@@ -11,11 +11,15 @@ public record LlmCapabilities(
   /** Shared existing resolution: another server never borrows the default server's limit. */
   static Integer resolveToolLimit(LlmProperties.Server server, Integer defaultMaxTools) {
     if (server == null || !server.hasCustomServer())
-      return server != null && server.getMaxTools() != null ? server.getMaxTools() : defaultMaxTools;
+      return server != null && server.getMaxTools() != null
+          ? server.getMaxTools()
+          : defaultMaxTools;
     if (!server.isFallbackToDefault()) return server.getMaxTools();
-    return Math.min(server.getMaxTools() == null ? 128 : server.getMaxTools(),
+    return Math.min(
+        server.getMaxTools() == null ? 128 : server.getMaxTools(),
         defaultMaxTools == null ? 128 : defaultMaxTools);
   }
+
   /** Settings whose explicit use requires a declaration rather than a provider guess. */
   public enum Setting {
     TEMPERATURE,

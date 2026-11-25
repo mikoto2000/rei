@@ -20,13 +20,19 @@ public final class ChatEndpointCatalog {
     features.forEach((feature, server) -> {
       if (!LlmFeature.CHAT.equals(feature) && server != null) {
         if (server.getActive() != null)
-          throw invalid(PREFIX + feature + ".active", "dynamic selection is only supported for chat");
+          throw invalid(
+              PREFIX + feature + ".active", "dynamic selection is only supported for chat");
         if (server.getEndpoints() != null)
-          throw invalid(PREFIX + feature + ".endpoints", "named profiles are only supported for chat");
+          throw invalid(
+              PREFIX + feature + ".endpoints", "named profiles are only supported for chat");
         if (provider(server, PREFIX + feature) == LlmProvider.CHATGPT_PLAN)
-          throw invalid(PREFIX + feature + ".provider", "chatgpt-plan is only supported by named chat profiles");
+          throw invalid(
+              PREFIX + feature + ".provider",
+              "chatgpt-plan is only supported by named chat profiles");
         if (server.getAccountRef() != null)
-          throw invalid(PREFIX + feature + ".account-ref", "ChatGPT accounts are not supported by this inference purpose");
+          throw invalid(
+              PREFIX + feature + ".account-ref",
+              "ChatGPT accounts are not supported by this inference purpose");
       }
     });
     var chat = features.get(LlmFeature.CHAT);
@@ -49,13 +55,22 @@ public final class ChatEndpointCatalog {
         throw invalid(CHAT + ".active", "must name a registered chat endpoint");
       endpoints.forEach((name, server) -> validate(CHAT + ".endpoints." + name, server));
       initial = chat.getActive();
-      profiles = endpoints.entrySet().stream().sorted(Map.Entry.comparingByKey())
-          .map(entry -> profile(entry.getKey(), entry.getValue(), CHAT + ".endpoints." + entry.getKey(), properties.getMaxTools())).toList();
+      profiles =
+          endpoints.entrySet().stream()
+              .sorted(Map.Entry.comparingByKey())
+              .map(entry ->
+                  profile(
+                      entry.getKey(),
+                      entry.getValue(),
+                      CHAT + ".endpoints." + entry.getKey(),
+                      properties.getMaxTools()))
+              .toList();
     }
     var resolved = new java.util.LinkedHashMap<String, LlmProperties.Server>();
     if (endpoints == null) resolved.put("default", canonicalConnection(chat, CHAT));
-    else endpoints.forEach((name, server) ->
-        resolved.put(name, canonicalConnection(server, CHAT + ".endpoints." + name)));
+    else
+      endpoints.forEach((name, server) ->
+          resolved.put(name, canonicalConnection(server, CHAT + ".endpoints." + name)));
     connections = java.util.Collections.unmodifiableMap(resolved);
     var staticFeatures = new java.util.LinkedHashMap<>(features);
     if (endpoints != null) {
@@ -70,7 +85,8 @@ public final class ChatEndpointCatalog {
     featureSettings = java.util.Collections.unmodifiableMap(staticFeatures);
   }
 
-  private static LlmProperties.Server canonicalConnection(LlmProperties.Server source, String field) {
+  private static LlmProperties.Server canonicalConnection(
+      LlmProperties.Server source, String field) {
     var copy = source == null ? new LlmProperties.Server() : source.copy();
     var provider = provider(copy, field);
     copy.setProvider(provider.id());
@@ -123,7 +139,8 @@ public final class ChatEndpointCatalog {
       throw invalid(field + ".model", "must not be blank for a named profile");
     requireNoControlCharacters(field + ".model", server.getModel());
     if (server.isFallbackToDefault())
-      throw invalid(field + ".fallback-to-default", "must be false; named profiles cannot fall back");
+      throw invalid(
+          field + ".fallback-to-default", "must be false; named profiles cannot fall back");
     if (provider(server, field) == LlmProvider.CHATGPT_PLAN) {
       if (server.getBaseUrl() != null)
         throw invalid(field + ".base-url", "is not allowed for chatgpt-plan");
@@ -133,7 +150,8 @@ public final class ChatEndpointCatalog {
         throw invalid(field + ".api", "must be responses for chatgpt-plan");
       if (server.getAccountRef() == null || !server.getAccountRef().matches("[a-zA-Z0-9_-]{1,64}"))
         throw invalid(field + ".account-ref", "must name a valid ChatGPT account label");
-      if (server.getReasoningReplay() != null && server.getReasoningReplay() != ReasoningReplayMode.ENCRYPTED)
+      if (server.getReasoningReplay() != null
+          && server.getReasoningReplay() != ReasoningReplayMode.ENCRYPTED)
         throw invalid(field + ".reasoning-replay", "must be encrypted for chatgpt-plan");
     } else {
       if (server.getAccountRef() != null)
@@ -149,15 +167,24 @@ public final class ChatEndpointCatalog {
   }
 
   private static LlmProvider provider(LlmProperties.Server server, String field) {
-    return LlmProvider.configured(server == null ? null : server.getProvider(), field + ".provider");
+    return LlmProvider.configured(
+        server == null ? null : server.getProvider(), field + ".provider");
   }
 
-  private static Profile profile(String name, LlmProperties.Server server, String field, Integer defaultMaxTools) {
+  private static Profile profile(
+      String name, LlmProperties.Server server, String field, Integer defaultMaxTools) {
     var provider = provider(server, field);
-    var api = server == null || server.getApi() == null ? LlmApiType.CHAT_COMPLETIONS : server.getApi();
-    return new Profile(name, server == null ? null : server.getModel(), provider, api,
-        server == null ? null : server.getAccountRef(), server == null ? 1 : server.getEndpointGeneration(),
-        LlmUsagePath.configured(server == null ? null : server.getUsagePath(), provider, field + ".usage-path"),
+    var api =
+        server == null || server.getApi() == null ? LlmApiType.CHAT_COMPLETIONS : server.getApi();
+    return new Profile(
+        name,
+        server == null ? null : server.getModel(),
+        provider,
+        api,
+        server == null ? null : server.getAccountRef(),
+        server == null ? 1 : server.getEndpointGeneration(),
+        LlmUsagePath.configured(
+            server == null ? null : server.getUsagePath(), provider, field + ".usage-path"),
         LlmEndpointCapabilities.resolve(server, provider, api, defaultMaxTools, field));
   }
 
@@ -188,7 +215,7 @@ public final class ChatEndpointCatalog {
   }
 
   public List<Profile> profiles() {
-    return profiles;
+    return List.copyOf(profiles);
   }
 
   LlmProperties.Server connection(String name) {
@@ -203,9 +230,16 @@ public final class ChatEndpointCatalog {
   }
 
   public List<String> diagnostics() {
-    return diagnostics;
+    return List.copyOf(diagnostics);
   }
 
-  public record Profile(String id, String model, LlmProvider provider, LlmApiType api,
-      String accountRef, long generation, LlmUsagePath usagePath, LlmEndpointCapabilities capabilities) {}
+  public record Profile(
+      String id,
+      String model,
+      LlmProvider provider,
+      LlmApiType api,
+      String accountRef,
+      long generation,
+      LlmUsagePath usagePath,
+      LlmEndpointCapabilities capabilities) {}
 }

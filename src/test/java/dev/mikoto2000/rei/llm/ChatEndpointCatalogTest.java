@@ -37,28 +37,32 @@ class ChatEndpointCatalogTest {
         .hasMessageNotContaining("PRIVATE_CANARY");
   }
 
-  static java.util.stream.Stream<org.junit.jupiter.params.provider.Arguments> invalidPlanSettings() {
-    var mutations = java.util.List.of(
-        new String[] {"key", "api-key", "PRIVATE_CANARY", "api-key"},
-        new String[] {"blank-key", "api-key", "", "api-key"},
-        new String[] {"url", "base-url", "https://fixture.invalid/PRIVATE_CANARY", "base-url"},
-        new String[] {"blank-url", "base-url", "", "base-url"},
-        new String[] {"chat-completions", "api", "chat-completions", "api"},
-        new String[] {"blank-account", "account-ref", "", "account-ref"},
-        new String[] {"invalid-account", "account-ref", "PRIVATE_CANARY/other", "account-ref"},
-        new String[] {"unknown-provider", "provider", "PRIVATE_CANARY", "provider"});
-    return mutations.stream().map(mutation -> {
-      var settings = planSettings();
-      settings.put("rei.llm.features.chat.endpoints.subscription." + mutation[1], mutation[2]);
-      return org.junit.jupiter.params.provider.Arguments.of(mutation[0], settings, mutation[3]);
-    });
+  static java.util.stream.Stream<org.junit.jupiter.params.provider.Arguments>
+      invalidPlanSettings() {
+    var mutations =
+        java.util.List.of(
+            new String[] {"key", "api-key", "PRIVATE_CANARY", "api-key"},
+            new String[] {"blank-key", "api-key", "", "api-key"},
+            new String[] {"url", "base-url", "https://fixture.invalid/PRIVATE_CANARY", "base-url"},
+            new String[] {"blank-url", "base-url", "", "base-url"},
+            new String[] {"chat-completions", "api", "chat-completions", "api"},
+            new String[] {"blank-account", "account-ref", "", "account-ref"},
+            new String[] {"invalid-account", "account-ref", "PRIVATE_CANARY/other", "account-ref"},
+            new String[] {"unknown-provider", "provider", "PRIVATE_CANARY", "provider"});
+    return mutations.stream()
+        .map(mutation -> {
+          var settings = planSettings();
+          settings.put("rei.llm.features.chat.endpoints.subscription." + mutation[1], mutation[2]);
+          return org.junit.jupiter.params.provider.Arguments.of(mutation[0], settings, mutation[3]);
+        });
   }
 
   @Test
   void apiKeyConnectionsCannotBorrowAChatGptAccount() {
     var settings = validSettings();
     settings.put("rei.llm.features.chat.endpoints.local.account-ref", "personal");
-    assertThatThrownBy(() -> catalog(settings)).isInstanceOf(IllegalArgumentException.class)
+    assertThatThrownBy(() -> catalog(settings))
+        .isInstanceOf(IllegalArgumentException.class)
         .hasMessageContaining("rei.llm.features.chat.endpoints.local.account-ref");
   }
 
@@ -66,7 +70,8 @@ class ChatEndpointCatalogTest {
   void aMissingPlanAccountIsDiagnosedBeforeAnyAuthenticationAttempt() {
     var settings = planSettings();
     settings.remove("rei.llm.features.chat.endpoints.subscription.account-ref");
-    assertThatThrownBy(() -> catalog(settings)).isInstanceOf(IllegalArgumentException.class)
+    assertThatThrownBy(() -> catalog(settings))
+        .isInstanceOf(IllegalArgumentException.class)
         .hasMessageContaining("rei.llm.features.chat.endpoints.subscription.account-ref");
   }
 
@@ -74,28 +79,36 @@ class ChatEndpointCatalogTest {
   void unauthenticatedPlanRegistrationDoesNotPreventStartup() {
     new org.springframework.boot.test.context.runner.ApplicationContextRunner()
         .withUserConfiguration(CatalogConfiguration.class)
-        .withPropertyValues(planSettings().entrySet().stream()
-            .map(entry -> entry.getKey() + "=" + entry.getValue()).toArray(String[]::new))
+        .withPropertyValues(
+            planSettings().entrySet().stream()
+                .map(entry -> entry.getKey() + "=" + entry.getValue())
+                .toArray(String[]::new))
         .run(context -> {
           assertThat(context).hasNotFailed();
           assertThat(context.getBean(ChatEndpointCatalog.class).profiles())
-              .extracting(ChatEndpointCatalog.Profile::id).containsExactly("subscription");
+              .extracting(ChatEndpointCatalog.Profile::id)
+              .containsExactly("subscription");
         });
   }
 
   @Test
   void configurationValidationDoesNotContactTheEndpoint() throws Exception {
     var requests = new java.util.concurrent.atomic.AtomicInteger();
-    var server = com.sun.net.httpserver.HttpServer.create(new java.net.InetSocketAddress("127.0.0.1", 0), 0);
-    server.createContext("/", exchange -> {
-      requests.incrementAndGet();
-      exchange.sendResponseHeaders(503, -1);
-      exchange.close();
-    });
+    var server =
+        com.sun.net.httpserver.HttpServer.create(new java.net.InetSocketAddress("127.0.0.1", 0), 0);
+    server.createContext(
+        "/",
+        exchange -> {
+          requests.incrementAndGet();
+          exchange.sendResponseHeaders(503, -1);
+          exchange.close();
+        });
     server.start();
     try {
       var settings = validSettings();
-      settings.put("rei.llm.features.chat.endpoints.local.base-url", "http://127.0.0.1:" + server.getAddress().getPort());
+      settings.put(
+          "rei.llm.features.chat.endpoints.local.base-url",
+          "http://127.0.0.1:" + server.getAddress().getPort());
       assertThat(catalog(settings).profiles()).hasSize(1);
       assertThat(requests.get()).isZero();
     } finally {
@@ -104,12 +117,13 @@ class ChatEndpointCatalogTest {
   }
 
   private static java.util.HashMap<String, String> planSettings() {
-    return new java.util.HashMap<>(Map.of(
-        "rei.llm.features.chat.active", "subscription",
-        "rei.llm.features.chat.endpoints.subscription.provider", "chatgpt-plan",
-        "rei.llm.features.chat.endpoints.subscription.api", "responses",
-        "rei.llm.features.chat.endpoints.subscription.account-ref", "personal",
-        "rei.llm.features.chat.endpoints.subscription.model", "fixture-model"));
+    return new java.util.HashMap<>(
+        Map.of(
+            "rei.llm.features.chat.active", "subscription",
+            "rei.llm.features.chat.endpoints.subscription.provider", "chatgpt-plan",
+            "rei.llm.features.chat.endpoints.subscription.api", "responses",
+            "rei.llm.features.chat.endpoints.subscription.account-ref", "personal",
+            "rei.llm.features.chat.endpoints.subscription.model", "fixture-model"));
   }
 
   @org.junit.jupiter.params.ParameterizedTest(name = "{0}")
@@ -124,23 +138,58 @@ class ChatEndpointCatalogTest {
 
   static java.util.stream.Stream<org.junit.jupiter.params.provider.Arguments> invalidSettings() {
     String prefix = "rei.llm.features.chat.";
-    var mutations = java.util.List.of(
-        new String[] {"unknown-active", "active", "missing", "active"},
-        new String[] {"blank-active", "active", "", "active"},
-        new String[] {"blank-model", "endpoints.local.model", "", "endpoints.local.model"},
-        new String[] {"blank-url", "endpoints.local.base-url", "", "endpoints.local.base-url"},
-        new String[] {"url-scheme", "endpoints.local.base-url", "ftp://fixture.invalid", "endpoints.local.base-url"},
-        new String[] {"url-userinfo", "endpoints.local.base-url", "http://user:PRIVATE_CANARY@fixture.invalid", "endpoints.local.base-url"},
-        new String[] {"url-query", "endpoints.local.base-url", "http://fixture.invalid?key=PRIVATE_CANARY", "endpoints.local.base-url"},
-        new String[] {"url-fragment", "endpoints.local.base-url", "http://fixture.invalid/#PRIVATE_CANARY", "endpoints.local.base-url"},
-        new String[] {"url-port", "endpoints.local.base-url", "http://fixture.invalid:99999", "endpoints.local.base-url"},
-        new String[] {"nested-active", "endpoints.local.active", "child", "endpoints.local.active"},
-        new String[] {"fallback", "endpoints.local.fallback-to-default", "true", "endpoints.local.fallback-to-default"});
-    return mutations.stream().map(mutation -> {
-      var settings = validSettings();
-      settings.put(prefix + mutation[1], mutation[2]);
-      return org.junit.jupiter.params.provider.Arguments.of(mutation[0], settings, prefix + mutation[3]);
-    });
+    var mutations =
+        java.util.List.of(
+            new String[] {"unknown-active", "active", "missing", "active"},
+            new String[] {"blank-active", "active", "", "active"},
+            new String[] {"blank-model", "endpoints.local.model", "", "endpoints.local.model"},
+            new String[] {"blank-url", "endpoints.local.base-url", "", "endpoints.local.base-url"},
+            new String[] {
+              "url-scheme",
+              "endpoints.local.base-url",
+              "ftp://fixture.invalid",
+              "endpoints.local.base-url"
+            },
+            new String[] {
+              "url-userinfo",
+              "endpoints.local.base-url",
+              "http://user:PRIVATE_CANARY@fixture.invalid",
+              "endpoints.local.base-url"
+            },
+            new String[] {
+              "url-query",
+              "endpoints.local.base-url",
+              "http://fixture.invalid?key=PRIVATE_CANARY",
+              "endpoints.local.base-url"
+            },
+            new String[] {
+              "url-fragment",
+              "endpoints.local.base-url",
+              "http://fixture.invalid/#PRIVATE_CANARY",
+              "endpoints.local.base-url"
+            },
+            new String[] {
+              "url-port",
+              "endpoints.local.base-url",
+              "http://fixture.invalid:99999",
+              "endpoints.local.base-url"
+            },
+            new String[] {
+              "nested-active", "endpoints.local.active", "child", "endpoints.local.active"
+            },
+            new String[] {
+              "fallback",
+              "endpoints.local.fallback-to-default",
+              "true",
+              "endpoints.local.fallback-to-default"
+            });
+    return mutations.stream()
+        .map(mutation -> {
+          var settings = validSettings();
+          settings.put(prefix + mutation[1], mutation[2]);
+          return org.junit.jupiter.params.provider.Arguments.of(
+              mutation[0], settings, prefix + mutation[3]);
+        });
   }
 
   @Test
@@ -180,8 +229,13 @@ class ChatEndpointCatalogTest {
 
   @Test
   void otherFeaturesCannotAccidentallyAcquireDynamicChatSelection() {
-    assertThatThrownBy(() -> catalog(Map.of(
-        "rei.llm.features.memory.active", "local", "rei.llm.features.memory.model", "memory-model")))
+    assertThatThrownBy(() ->
+            catalog(
+                Map.of(
+                    "rei.llm.features.memory.active",
+                    "local",
+                    "rei.llm.features.memory.model",
+                    "memory-model")))
         .isInstanceOf(IllegalArgumentException.class)
         .hasMessageContaining("rei.llm.features.memory.active");
   }
@@ -190,7 +244,8 @@ class ChatEndpointCatalogTest {
   void startupRejectsAnUnknownActiveProfile() {
     new org.springframework.boot.test.context.runner.ApplicationContextRunner()
         .withUserConfiguration(CatalogConfiguration.class)
-        .withPropertyValues("rei.llm.features.chat.active=missing",
+        .withPropertyValues(
+            "rei.llm.features.chat.active=missing",
             "rei.llm.features.chat.endpoints.local.base-url=http://localhost:11434",
             "rei.llm.features.chat.endpoints.local.model=local-model")
         .run(context -> assertThat(context).hasFailed());
@@ -202,23 +257,28 @@ class ChatEndpointCatalogTest {
   static class CatalogConfiguration {}
 
   private static java.util.HashMap<String, String> validSettings() {
-    return new java.util.HashMap<>(Map.of(
-        "rei.llm.features.chat.active", "local",
-        "rei.llm.features.chat.endpoints.local.base-url", "http://localhost:11434",
-        "rei.llm.features.chat.endpoints.local.model", "local-model"));
+    return new java.util.HashMap<>(
+        Map.of(
+            "rei.llm.features.chat.active", "local",
+            "rei.llm.features.chat.endpoints.local.base-url", "http://localhost:11434",
+            "rei.llm.features.chat.endpoints.local.model", "local-model"));
   }
 
   @Test
   void legacyConnectionRemainsASingleDefaultProfile() {
-    var catalog = catalog(Map.of(
-        "rei.llm.features.chat.base-url", "http://localhost:11434",
-        "rei.llm.features.chat.api-key", "fixture-secret",
-        "rei.llm.features.chat.model", "legacy-model"));
+    var catalog =
+        catalog(
+            Map.of(
+                "rei.llm.features.chat.base-url", "http://localhost:11434",
+                "rei.llm.features.chat.api-key", "fixture-secret",
+                "rei.llm.features.chat.model", "legacy-model"));
     assertThat(catalog.initialEndpoint()).isEqualTo("default");
-    assertThat(catalog.profiles()).singleElement().satisfies(profile -> {
-      assertThat(profile.id()).isEqualTo("default");
-      assertThat(profile.model()).isEqualTo("legacy-model");
-    });
+    assertThat(catalog.profiles())
+        .singleElement()
+        .satisfies(profile -> {
+          assertThat(profile.id()).isEqualTo("default");
+          assertThat(profile.model()).isEqualTo("legacy-model");
+        });
     assertThat(catalog.profiles().toString()).doesNotContain("fixture-secret");
   }
 
@@ -226,30 +286,38 @@ class ChatEndpointCatalogTest {
   void absentChatStillUsesTheSharedConnection() {
     var catalog = new ChatEndpointCatalog(new LlmProperties());
     assertThat(catalog.initialEndpoint()).isEqualTo("default");
-    assertThat(catalog.profiles()).singleElement().satisfies(profile -> {
-      assertThat(profile.id()).isEqualTo("default");
-      assertThat(profile.model()).isNull();
-    });
+    assertThat(catalog.profiles())
+        .singleElement()
+        .satisfies(profile -> {
+          assertThat(profile.id()).isEqualTo("default");
+          assertThat(profile.model()).isNull();
+        });
   }
 
   @Test
   void namedProfilesAreRegisteredSeparatelyInStableOrder() {
-    var catalog = catalog(Map.of(
-        "rei.llm.features.chat.active", "remote",
-        "rei.llm.features.chat.endpoints.remote.base-url", "http://fixture.invalid:8000",
-        "rei.llm.features.chat.endpoints.remote.model", "remote-model",
-        "rei.llm.features.chat.endpoints.local.base-url", "http://localhost:11434",
-        "rei.llm.features.chat.endpoints.local.model", "local-model"));
-    assertThat(catalog.profiles()).extracting(ChatEndpointCatalog.Profile::id)
+    var catalog =
+        catalog(
+            Map.of(
+                "rei.llm.features.chat.active", "remote",
+                "rei.llm.features.chat.endpoints.remote.base-url", "http://fixture.invalid:8000",
+                "rei.llm.features.chat.endpoints.remote.model", "remote-model",
+                "rei.llm.features.chat.endpoints.local.base-url", "http://localhost:11434",
+                "rei.llm.features.chat.endpoints.local.model", "local-model"));
+    assertThat(catalog.profiles())
+        .extracting(ChatEndpointCatalog.Profile::id)
         .containsExactly("local", "remote");
-    assertThat(catalog.profiles()).extracting(ChatEndpointCatalog.Profile::model)
+    assertThat(catalog.profiles())
+        .extracting(ChatEndpointCatalog.Profile::model)
         .containsExactly("local-model", "remote-model");
     assertThat(catalog.initialEndpoint()).isEqualTo("remote");
   }
 
   private ChatEndpointCatalog catalog(Map<String, String> settings) {
-    var properties = new Binder(new MapConfigurationPropertySource(settings))
-        .bind("rei.llm", LlmProperties.class).orElseGet(LlmProperties::new);
+    var properties =
+        new Binder(new MapConfigurationPropertySource(settings))
+            .bind("rei.llm", LlmProperties.class)
+            .orElseGet(LlmProperties::new);
     return new ChatEndpointCatalog(properties);
   }
 }

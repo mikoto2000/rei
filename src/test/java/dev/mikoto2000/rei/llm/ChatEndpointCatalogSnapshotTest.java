@@ -26,17 +26,20 @@ class ChatEndpointCatalogSnapshotTest {
     assertThat(catalog.connection("local").getModel()).isEqualTo("local-model");
     assertThat(catalog.connection("local").getApiKey()).isEqualTo("PRIVATE_ENDPOINT");
     assertThat(catalog.connection("local").getEndpointGeneration()).isEqualTo(1);
-    assertThatThrownBy(() -> catalog.profiles().clear()).isInstanceOf(UnsupportedOperationException.class);
+    assertThatThrownBy(() -> catalog.profiles().clear())
+        .isInstanceOf(UnsupportedOperationException.class);
   }
 
   @Test
   void planConnectionsResolveOnlyTheOfficialDestinationWithoutAStoredToken() {
-    var values = new HashMap<>(Map.of(
-        "rei.llm.features.chat.active", "subscription",
-        "rei.llm.features.chat.endpoints.subscription.provider", "chatgpt-plan",
-        "rei.llm.features.chat.endpoints.subscription.api", "responses",
-        "rei.llm.features.chat.endpoints.subscription.account-ref", "personal",
-        "rei.llm.features.chat.endpoints.subscription.model", "fixture-model"));
+    var values =
+        new HashMap<>(
+            Map.of(
+                "rei.llm.features.chat.active", "subscription",
+                "rei.llm.features.chat.endpoints.subscription.provider", "chatgpt-plan",
+                "rei.llm.features.chat.endpoints.subscription.api", "responses",
+                "rei.llm.features.chat.endpoints.subscription.account-ref", "personal",
+                "rei.llm.features.chat.endpoints.subscription.model", "fixture-model"));
     var connection = new ChatEndpointCatalog(properties(values)).connection("subscription");
     assertThat(connection.getBaseUrl()).isEqualTo(dev.mikoto2000.rei.chatgpt.PlanOAuth.RESOURCE);
     assertThat(connection.getApiKey()).isNull();
@@ -48,7 +51,8 @@ class ChatEndpointCatalogSnapshotTest {
   void unknownNamesCannotFallBackOrEchoTheInput() {
     var catalog = new ChatEndpointCatalog(properties(settings()));
     assertThatThrownBy(() -> catalog.connection("PRIVATE_CANARY"))
-        .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("endpoint-name")
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("endpoint-name")
         .hasMessageNotContaining("PRIVATE_CANARY");
   }
 
@@ -71,37 +75,49 @@ class ChatEndpointCatalogSnapshotTest {
     properties.setFeature(LlmFeature.MEMORY, returned);
     assertThat(catalog.feature(LlmFeature.MEMORY).getModel()).isEqualTo("memory-model");
     assertThat(catalog.connection("local").getModel()).isEqualTo("local-model");
-    assertThat(catalog.diagnostics()).anySatisfy(message -> assertThat(message)
-        .contains("rei.llm.features.chat.model"));
-    assertThat(catalog.diagnostics().toString()).doesNotContain("PRIVATE_LEGACY", "PRIVATE_ENDPOINT");
+    assertThat(catalog.diagnostics())
+        .anySatisfy(message -> assertThat(message).contains("rei.llm.features.chat.model"));
+    assertThat(catalog.diagnostics().toString())
+        .doesNotContain("PRIVATE_LEGACY", "PRIVATE_ENDPOINT");
   }
 
   @Test
-  void externalYamlProfilesMergeWithLegacyDefaultsAndResolveEnvironmentPlaceholders() throws Exception {
+  void externalYamlProfilesMergeWithLegacyDefaultsAndResolveEnvironmentPlaceholders()
+      throws Exception {
     var loader = new org.springframework.boot.env.YamlPropertySourceLoader();
-    var defaults = loader.load("defaults", resource("""
-        rei:
-          llm:
-            features:
-              chat:
-                base-url: http://legacy.invalid:8000
-                model: legacy-helper-model
-                api-key: ${LEGACY_KEY}
-        """));
-    var external = loader.load("external", resource("""
-        rei:
-          llm:
-            features:
-              chat:
-                active: local
-                endpoints:
-                  local:
-                    base-url: http://localhost:11434
-                    model: ${ENDPOINT_MODEL:local-model}
-                    api-key: ${ENDPOINT_KEY}
-        """));
-    var environment = new org.springframework.mock.env.MockEnvironment()
-        .withProperty("LEGACY_KEY", "PRIVATE_LEGACY").withProperty("ENDPOINT_KEY", "PRIVATE_ENDPOINT");
+    var defaults =
+        loader.load(
+            "defaults",
+            resource(
+                """
+                rei:
+                  llm:
+                    features:
+                      chat:
+                        base-url: http://legacy.invalid:8000
+                        model: legacy-helper-model
+                        api-key: ${LEGACY_KEY}
+                """));
+    var external =
+        loader.load(
+            "external",
+            resource(
+                """
+                rei:
+                  llm:
+                    features:
+                      chat:
+                        active: local
+                        endpoints:
+                          local:
+                            base-url: http://localhost:11434
+                            model: ${ENDPOINT_MODEL:local-model}
+                            api-key: ${ENDPOINT_KEY}
+                """));
+    var environment =
+        new org.springframework.mock.env.MockEnvironment()
+            .withProperty("LEGACY_KEY", "PRIVATE_LEGACY")
+            .withProperty("ENDPOINT_KEY", "PRIVATE_ENDPOINT");
     defaults.forEach(source -> environment.getPropertySources().addLast(source));
     external.forEach(source -> environment.getPropertySources().addFirst(source));
     var properties = Binder.get(environment).bind("rei.llm", LlmProperties.class).get();
@@ -111,7 +127,8 @@ class ChatEndpointCatalogSnapshotTest {
     assertThat(catalog.connection("local").getApiKey()).isEqualTo("PRIVATE_ENDPOINT");
     assertThat(catalog.feature(LlmFeature.CHAT).getModel()).isEqualTo("legacy-helper-model");
     assertThat(catalog.feature(LlmFeature.CHAT).getApiKey()).isEqualTo("PRIVATE_LEGACY");
-    var output = new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(catalog.profiles());
+    var output =
+        new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(catalog.profiles());
     assertThat(output).doesNotContain("PRIVATE_ENDPOINT", "PRIVATE_LEGACY");
   }
 
@@ -119,7 +136,8 @@ class ChatEndpointCatalogSnapshotTest {
   @org.junit.jupiter.params.provider.CsvSource({"memory,provider", "memory,account-ref"})
   void auxiliaryInferenceCannotSilentlyAcquirePlanAuthentication(String feature, String field) {
     var values = settings();
-    values.put("rei.llm.features." + feature + "." + field,
+    values.put(
+        "rei.llm.features." + feature + "." + field,
         field.equals("provider") ? "chatgpt-plan" : "personal");
     assertThatThrownBy(() -> new ChatEndpointCatalog(properties(values)))
         .isInstanceOf(IllegalArgumentException.class)
@@ -138,18 +156,22 @@ class ChatEndpointCatalogSnapshotTest {
   }
 
   private org.springframework.core.io.ByteArrayResource resource(String yaml) {
-    return new org.springframework.core.io.ByteArrayResource(yaml.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+    return new org.springframework.core.io.ByteArrayResource(
+        yaml.getBytes(java.nio.charset.StandardCharsets.UTF_8));
   }
 
   private static HashMap<String, String> settings() {
-    return new HashMap<>(Map.of(
-        "rei.llm.features.chat.active", "local",
-        "rei.llm.features.chat.endpoints.local.base-url", "http://localhost:11434/",
-        "rei.llm.features.chat.endpoints.local.model", "local-model",
-        "rei.llm.features.chat.endpoints.local.api-key", "PRIVATE_ENDPOINT"));
+    return new HashMap<>(
+        Map.of(
+            "rei.llm.features.chat.active", "local",
+            "rei.llm.features.chat.endpoints.local.base-url", "http://localhost:11434/",
+            "rei.llm.features.chat.endpoints.local.model", "local-model",
+            "rei.llm.features.chat.endpoints.local.api-key", "PRIVATE_ENDPOINT"));
   }
 
   private LlmProperties properties(Map<String, String> settings) {
-    return new Binder(new MapConfigurationPropertySource(settings)).bind("rei.llm", LlmProperties.class).get();
+    return new Binder(new MapConfigurationPropertySource(settings))
+        .bind("rei.llm", LlmProperties.class)
+        .get();
   }
 }

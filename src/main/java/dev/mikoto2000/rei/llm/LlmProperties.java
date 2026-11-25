@@ -177,7 +177,7 @@ public class LlmProperties {
     }
 
     public Map<String, String> getModelCapabilities() {
-      return modelCapabilities;
+      return Map.copyOf(modelCapabilities);
     }
 
     public void setModelCapabilities(Map<String, String> modelCapabilities) {
