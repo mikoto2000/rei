@@ -196,10 +196,14 @@ public class LlmModelProvider implements dev.mikoto2000.rei.secretary.SecretaryP
       java.util.List<org.springframework.ai.openai.http.okhttp.OpenAiHttpClientBuilderCustomizer>
           customizers,
       Map<String, ResolvedLlmEndpoint> accepted) {
-    if (accepted == null || accepted.isEmpty() || customizers == null || customizers.isEmpty()
-        || accepted.values().stream().anyMatch(endpoint -> endpoint == null
-            || endpoint.apiType() != LlmApiType.RESPONSES))
-      throw new IllegalArgumentException("Explicit acceptance endpoints and transport policy required");
+    if (accepted == null
+        || accepted.isEmpty()
+        || customizers == null
+        || customizers.isEmpty()
+        || accepted.values().stream()
+            .anyMatch(endpoint -> endpoint == null || endpoint.apiType() != LlmApiType.RESPONSES))
+      throw new IllegalArgumentException(
+          "Explicit acceptance endpoints and transport policy required");
     var provider = forResponsesFixture(defaults, properties, customizers);
     provider.responsesAcceptanceEndpoints = Map.copyOf(accepted);
     return provider;

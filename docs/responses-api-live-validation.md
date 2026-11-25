@@ -7,6 +7,10 @@ Spring AI 2.1.0 / OpenAI Java SDK 4.101.0。依存更新、本番設定・DB・�
 受入は未完了。fixture 成功と、指定した実接続先での成功を区別する。
 本番 factory の gate と、fixture factory のローカル接続先制限を維持する。
 
+最新の実Core、承認/拒否、Checkpoint、構造化/画像/出力上限、3試行の継続性結果は
+[Phase7受入記録](responses-api-phase7-acceptance.md)を参照する。
+下記の初期試験・準備開始時点の表は履歴であり、現在の受入状態とは区別する。
+
 ## 初期実接続試験（2026-11-25）
 
 対象の本体コードは main `38a13f1d38f0759049290e37df40cdd078a58e54`。
@@ -160,7 +164,8 @@ DeepSeek にも OA-01〜14 相当を `DS-COMMON-01`〜`14` として別結果で
 
 ### 推論・ツール・耐久性の追加群
 
-各社独立に `REPLAY`, `TOOLS`, `DURABLE`, `FAILURE`, `QUALITY`, `PERF` を計画する（現在すべて未実施）。
+以下は準備開始時点の `REPLAY`, `TOOLS`, `DURABLE`, `FAILURE`, `QUALITY`, `PERF` の計画。
+現在の実施結果と残件は上記の最新受入記録で追跡する。
 暗号化 payload は復号・変更せず、ハッシュ・サイズ・順序で照合する。
 平文推論は plaintext のまま保持し、全文を PR・通常ログへ出さない。
 

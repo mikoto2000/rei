@@ -19,11 +19,12 @@ import org.junit.jupiter.api.io.TempDir;
 class ResponsesAcceptanceBudgetTest {
   @TempDir Path root;
   private Clock clock = Clock.fixed(Instant.parse("2026-11-25T00:00:00Z"), ZoneOffset.UTC);
-  private ResponsesAcceptanceBudget.Limits limits = new ResponsesAcceptanceBudget.Limits(
-      3, 1000, 600, Duration.ofHours(3), 28000, 10, 30);
+  private ResponsesAcceptanceBudget.Limits limits =
+      new ResponsesAcceptanceBudget.Limits(3, 1000, 600, Duration.ofHours(3), 28000, 10, 30);
 
   private ResponsesAcceptanceBudget budget() {
-    return new ResponsesAcceptanceBudget(root.resolve("budget.jsonl"), "approved-model", limits, clock);
+    return new ResponsesAcceptanceBudget(
+        root.resolve("budget.jsonl"), "approved-model", limits, clock);
   }
 
   @Test
@@ -66,13 +67,18 @@ class ResponsesAcceptanceBudgetTest {
       budget().settle(slot, new ModelTokenUsage(1L, 1L, 2L, 0L, 0L));
     }
     assertThatThrownBy(() -> budget().reserve(1, 1)).isInstanceOf(IllegalStateException.class);
-    var other = new ResponsesAcceptanceBudget(root.resolve("other.jsonl"), "approved-model", limits, clock);
+    var other =
+        new ResponsesAcceptanceBudget(root.resolve("other.jsonl"), "approved-model", limits, clock);
     assertThatThrownBy(() -> other.reserve(1001, 1)).isInstanceOf(IllegalStateException.class);
     assertThatThrownBy(() -> other.reserve(1, 601)).isInstanceOf(IllegalStateException.class);
     assertThatThrownBy(() -> other.reserve(1000, 601)).isInstanceOf(IllegalStateException.class);
     assertThat(other.reserve(1000, 600).id()).isEqualTo(1);
-    var money = new ResponsesAcceptanceBudget(root.resolve("money.jsonl"), "approved-model",
-        new ResponsesAcceptanceBudget.Limits(3, 1000, 600, Duration.ofHours(3), 27999, 10, 30), clock);
+    var money =
+        new ResponsesAcceptanceBudget(
+            root.resolve("money.jsonl"),
+            "approved-model",
+            new ResponsesAcceptanceBudget.Limits(3, 1000, 600, Duration.ofHours(3), 27999, 10, 30),
+            clock);
     assertThatThrownBy(() -> money.reserve(1000, 600)).isInstanceOf(IllegalStateException.class);
   }
 
@@ -83,8 +89,11 @@ class ResponsesAcceptanceBudgetTest {
     assertThatThrownBy(() -> budget().reserve(1, 1)).isInstanceOf(IllegalStateException.class);
     clock = Clock.offset(clock, Duration.ofHours(-4));
     assertThatThrownBy(() -> budget().reserve(1, 1)).isInstanceOf(IllegalStateException.class);
-    assertThatThrownBy(() -> new ResponsesAcceptanceBudget(root.resolve("budget.jsonl"),
-        "another-model", limits, Clock.systemUTC()).reserve(1, 1)).isInstanceOf(IllegalStateException.class);
+    assertThatThrownBy(() ->
+            new ResponsesAcceptanceBudget(
+                    root.resolve("budget.jsonl"), "another-model", limits, Clock.systemUTC())
+                .reserve(1, 1))
+        .isInstanceOf(IllegalStateException.class);
   }
 
   @Test
@@ -104,10 +113,16 @@ class ResponsesAcceptanceBudgetTest {
     var budget = budget();
     try (var pool = Executors.newFixedThreadPool(4)) {
       var results = new java.util.ArrayList<java.util.concurrent.Future<Boolean>>();
-      for (int i = 0; i < 8; i++) results.add(pool.submit(() -> {
-        try { budget.reserve(400, 200); return true; }
-        catch (IllegalStateException denied) { return false; }
-      }));
+      for (int i = 0; i < 8; i++)
+        results.add(
+            pool.submit(() -> {
+              try {
+                budget.reserve(400, 200);
+                return true;
+              } catch (IllegalStateException denied) {
+                return false;
+              }
+            }));
       int accepted = 0;
       for (var result : results) if (result.get()) accepted++;
       assertThat(accepted).isEqualTo(2);
