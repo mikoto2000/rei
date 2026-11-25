@@ -1,0 +1,56 @@
+# Overlay for the accepted synthetic operational envelope; review the entire overlay before use.
+# It does not change spring.ai.openai (existing CC/embedding) or the global LLM read timeout.
+# Native requests are capped at 120s by this explicit profile. No automatic API fallback.
+rei:
+  llm:
+    tool-discovery:
+      enabled: true
+      max-active-tools: 36
+    output-limit:
+      llm-call-budget-enabled: true
+      max-llm-calls-per-run: 64
+      max-total-tokens-per-run: 1000000
+    features:
+      chat:
+        api: responses
+        accepted-responses-profile: openai-gpt-5.6-sol-low-20261125
+        base-url: https://api.openai.com
+        api-key: ${OPENAI_API_KEY:}
+        model: gpt-5.6-sol
+        endpoint-generation: 1
+        reasoning-replay: encrypted
+        max-output-tokens: 2048
+        max-tools: 36
+        supported-settings: [reasoning-effort]
+        fallback-to-default: false
+      output-limit-planner:
+        api: responses
+        accepted-responses-profile: openai-gpt-5.6-sol-low-20261125
+        base-url: https://api.openai.com
+        api-key: ${OPENAI_API_KEY:}
+        model: gpt-5.6-sol
+        endpoint-generation: 1
+        reasoning-replay: encrypted
+        max-output-tokens: 2048
+        max-tools: 36
+        supported-settings: [reasoning-effort]
+        fallback-to-default: false
+  # Same effective compression envelope used in Phase9. These are shared application settings:
+  # preserve the previous values with the external-config backup for an API rollback.
+  context-compression:
+    enabled: true
+    model-context-limit: 32000
+    model-context-limits:
+      "[gpt-5.6-sol]": 32000
+    completion-reserve: 2048
+    tool-reserve: 4096
+    safety-margin: 1000
+    threshold: 4500
+    hard-limit: 8000
+    recent-tokens: 1500
+    summary-tokens: 512
+    summary-generation-reserve: 1024
+    summary-input-tokens: 12000
+    summary-model-feature: chat
+    standalone-summary-max-llm-calls: 10
+    standalone-summary-max-total-tokens: 100000
