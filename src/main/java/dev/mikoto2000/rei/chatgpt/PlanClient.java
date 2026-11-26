@@ -390,50 +390,53 @@ public final class PlanClient
     int initialGeneration = generation.get();
     BooleanSupplier stop = () -> cancelled.getAsBoolean() || generation.get() != initialGeneration;
     if (stop.getAsBoolean()) throw ChatGptException.of(CANCELLED);
-    if (models(account, false).stream().noneMatch(m -> m.id().equals(model)))
+    var registration = oauth.access(account).registrationId();
+    if (!models(account, registration).contains(model))
       throw ChatGptException.of(MODEL_UNAVAILABLE);
     byte[] body = encodeRequest(model, instructions, input);
     if (body.length > sendLimit) throw ChatGptException.of(SEND_LIMIT);
-    var token = oauth.access(account);
-    if (stop.getAsBoolean()) throw ChatGptException.of(CANCELLED);
-    if (System.nanoTime() >= deadline) throw ChatGptException.of(TIMEOUT);
-    onDispatch.run();
-    try (var response =
-        transport.send(
-            URI.create(PlanOAuth.RESOURCE + "/responses"),
-            "POST",
-            Map.of(
-                "Authorization",
-                "Bearer " + token.accessToken(),
-                "Content-Type",
-                "application/json",
-                "Accept",
-                "text/event-stream",
-                "Accept-Encoding",
-                "identity"),
-            body,
-            Duration.ofNanos(deadline - System.nanoTime()),
-            stop)) {
-      var remaining = Duration.ofNanos(Math.max(1, deadline - System.nanoTime()));
-      if (response.status() != 200) {
-        throw httpError(response, "responses", remaining, stop);
+    try (var request = begin(account, registration, model)) {
+      var token = oauth.access(account, registration);
+      if (stop.getAsBoolean()) throw ChatGptException.of(CANCELLED);
+      if (System.nanoTime() >= deadline) throw ChatGptException.of(TIMEOUT);
+      onDispatch.run();
+      try (var response =
+          transport.send(
+              URI.create(PlanOAuth.RESOURCE + "/responses"),
+              "POST",
+              Map.of(
+                  "Authorization",
+                  "Bearer " + token.accessToken(),
+                  "Content-Type",
+                  "application/json",
+                  "Accept",
+                  "text/event-stream",
+                  "Accept-Encoding",
+                  "identity"),
+              body,
+              Duration.ofNanos(deadline - System.nanoTime()),
+              stop)) {
+        var remaining = Duration.ofNanos(Math.max(1, deadline - System.nanoTime()));
+        if (response.status() != 200) {
+          throw httpError(response, "responses", remaining, stop);
+        }
+        String type = mediaType(response);
+        if ((!type.isEmpty() && !type.equals("text/event-stream")) || !identityEncoding(response))
+          throw failure(PROTOCOL, response, "responses", -1, receiveLimit);
+        var assembler = new PlanSseAssembler();
+        return PlanIO.read(
+            response.body(),
+            remaining,
+            stop,
+            () -> {
+              try {
+                return assembler.read(response.body(), receiveLimit, type.isEmpty());
+              } catch (ChatGptException e) {
+                throw failure(
+                    e.code(), response, "responses", assembler.receivedBytes(), receiveLimit);
+              }
+            });
       }
-      String type = mediaType(response);
-      if ((!type.isEmpty() && !type.equals("text/event-stream")) || !identityEncoding(response))
-        throw failure(PROTOCOL, response, "responses", -1, receiveLimit);
-      var assembler = new PlanSseAssembler();
-      return PlanIO.read(
-          response.body(),
-          remaining,
-          stop,
-          () -> {
-            try {
-              return assembler.read(response.body(), receiveLimit, type.isEmpty());
-            } catch (ChatGptException e) {
-              throw failure(
-                  e.code(), response, "responses", assembler.receivedBytes(), receiveLimit);
-            }
-          });
     }
   }
 
