@@ -62,6 +62,9 @@ final class ResponsesAdapter implements LlmProtocolAdapter, ChatModel {
   private final com.openai.client.OpenAIClientAsync asyncClient;
   private final boolean production;
   private final RunLlmConnection acceptedConnection;
+  private final java.util.function.Function<
+          ResponsesToolNamespace.Exchange, OpenAiResponsesChatModel>
+      namespaceModels;
   private static final ObjectMapper JSON =
       new ObjectMapper(
               JsonFactory.builder()
@@ -129,7 +132,18 @@ final class ResponsesAdapter implements LlmProtocolAdapter, ChatModel {
             .openAiClient(sync)
             .openAiClientAsync(async)
             .build();
-    return new ResponsesAdapter(endpoint, model, sync, async, production, acceptedConnection);
+    java.util.function.Function<ResponsesToolNamespace.Exchange, OpenAiResponsesChatModel> scoped =
+        plan
+            ? exchange ->
+                OpenAiResponsesChatModel.builder()
+                    .options(options)
+                    .openAiClient(ResponsesSdkBoundary.safe(client, replay, true, exchange))
+                    .openAiClientAsync(
+                        ResponsesSdkBoundary.safe(client.async(), replay, true, exchange))
+                    .build()
+            : null;
+    return new ResponsesAdapter(
+        endpoint, model, sync, async, production, acceptedConnection, scoped);
   }
 
   static ResponsesAdapter create(
@@ -259,7 +273,20 @@ final class ResponsesAdapter implements LlmProtocolAdapter, ChatModel {
       com.openai.client.OpenAIClientAsync asyncClient,
       boolean production,
       RunLlmConnection acceptedConnection) {
+    this(endpoint, delegate, syncClient, asyncClient, production, acceptedConnection, null);
+  }
+
+  private ResponsesAdapter(
+      ResolvedLlmEndpoint endpoint,
+      OpenAiResponsesChatModel delegate,
+      com.openai.client.OpenAIClient syncClient,
+      com.openai.client.OpenAIClientAsync asyncClient,
+      boolean production,
+      RunLlmConnection acceptedConnection,
+      java.util.function.Function<ResponsesToolNamespace.Exchange, OpenAiResponsesChatModel>
+          namespaceModels) {
     this.acceptedConnection = acceptedConnection;
+    this.namespaceModels = namespaceModels;
     this.endpoint = Objects.requireNonNull(endpoint, "endpoint");
     this.delegate = Objects.requireNonNull(delegate, "delegate");
     this.syncClient = Objects.requireNonNull(syncClient, "syncClient");
@@ -586,8 +613,13 @@ final class ResponsesAdapter implements LlmProtocolAdapter, ChatModel {
             () -> {
               var completed = new AtomicBoolean();
               var aggregated = new java.util.concurrent.atomic.AtomicReference<ChatResponse>();
+              var namespace =
+                  namespaceModels == null
+                      ? null
+                      : new ResponsesToolNamespace.Exchange(request, endpoint);
+              var model = namespace == null ? delegate : namespaceModels.apply(namespace);
               var chunks =
-                  delegate.stream(request)
+                  model.stream(request)
                       .doOnNext(response -> {
                         requireNoRefusal(response);
                         if (response.getMetadata().containsKey(OpenAiResponsesMetadata.STATUS)) {
@@ -603,6 +635,7 @@ final class ResponsesAdapter implements LlmProtocolAdapter, ChatModel {
                           completed.set(true);
                         }
                       })
+                      .map(response -> namespace == null ? response : namespace.bind(response))
                       .map(response -> ResponsesReasoningReplay.bind(response, request, endpoint));
               return new org.springframework.ai.chat.model.MessageAggregator()
                   .aggregate(chunks, aggregated::set)
