@@ -169,7 +169,7 @@ class ChatEndpointCapabilitiesTest {
   }
 
   @Test
-  void flatResponsesNamespacesAndUnimplementedInputsAreNotAdvertisedAsAvailable() {
+  void flatResponsesNamespacesStayUnavailableAndFilesRequireConfirmation() {
     var settings = local();
     settings.put("rei.llm.features.chat.endpoints.local.api", "responses");
     settings.put(
@@ -177,7 +177,10 @@ class ChatEndpointCapabilitiesTest {
     var view = view(settings);
     assertThat(view.at("/capabilities/effective/RESPONSES").asText()).isEqualTo("SUPPORTED");
     assertThat(view.at("/capabilities/effective/TOOL_NAMESPACE").asText()).isEqualTo("UNSUPPORTED");
-    assertThat(view.at("/capabilities/effective/FILE_INPUT").asText()).isEqualTo("UNSUPPORTED");
+    assertThat(view.at("/capabilities/route/FILE_INPUT").asText()).isEqualTo("SUPPORTED");
+    assertThat(view.at("/capabilities/server/FILE_INPUT").asText()).isEqualTo("UNKNOWN");
+    assertThat(view.at("/capabilities/model/FILE_INPUT").asText()).isEqualTo("UNKNOWN");
+    assertThat(view.at("/capabilities/effective/FILE_INPUT").asText()).isEqualTo("UNKNOWN");
     assertThat(view.at("/capabilities/effective/HOSTED_WEB_SEARCH").asText())
         .isEqualTo("UNSUPPORTED");
   }
