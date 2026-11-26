@@ -12,6 +12,32 @@ import org.springframework.boot.context.properties.bind.Binder;
 import org.springframework.boot.context.properties.source.MapConfigurationPropertySource;
 
 class ChatEndpointCapabilitiesTest {
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(
+      strings = {
+        "responses",
+        "streaming",
+        "function-calling",
+        "tool-namespace",
+        "reasoning-replay"
+      })
+  void verifiedPlanAdapterCapabilitiesStillRequireServerAndModelConfirmation(String capability) {
+    var settings = plan();
+    String name = capability.toUpperCase(java.util.Locale.ROOT).replace('-', '_');
+    assertThat(view(settings).at("/capabilities/route/" + name).asText()).isEqualTo("SUPPORTED");
+    assertThat(view(settings).at("/capabilities/effective/" + name).asText()).isEqualTo("UNKNOWN");
+    String prefix = "rei.llm.features.chat.endpoints.subscription.";
+    settings.put(prefix + "server-capabilities." + capability, "supported");
+    settings.put(prefix + "model-capabilities." + capability, "supported");
+    assertThat(view(settings).at("/capabilities/effective/" + name).asText())
+        .isEqualTo("SUPPORTED");
+    settings.put(prefix + "server-capabilities." + capability, "unknown");
+    assertThat(view(settings).at("/capabilities/effective/" + name).asText()).isEqualTo("UNKNOWN");
+    settings.put(prefix + "server-capabilities." + capability, "unsupported");
+    assertThat(view(settings).at("/capabilities/effective/" + name).asText())
+        .isEqualTo("UNSUPPORTED");
+  }
+
   @Test
   void unknownModelCapabilitiesAreNotInventedFromTheHostOrModelName() {
     var view = view(local());
