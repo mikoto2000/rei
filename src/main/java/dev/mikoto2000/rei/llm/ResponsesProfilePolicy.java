@@ -82,6 +82,13 @@ final class ResponsesProfilePolicy {
       rejectUnsupported(options.getMaxToolCalls(), "max_tool_calls");
       rejectUnsupported(options.getTruncation(), "truncation");
       rejectUnsupported(metadata, "metadata");
+      var choice = options.getToolChoice();
+      if (choice != null
+          && !(choice instanceof String value
+              && java.util.Set.of("auto", "none", "required").contains(value)))
+        throw new IllegalArgumentException(
+            "ChatGPT Responses tool_choice supports auto, none or required;"
+                + " individual namespaced selection is unconfirmed");
     }
     if (options.getMaxOutputTokens() != null)
       requireCapability(connection, LlmEndpointCapabilities.Capability.MAX_OUTPUT_TOKENS);

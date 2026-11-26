@@ -76,7 +76,8 @@ final class ResponsesToolNamespace {
         for (var part : assistant.getParts()) {
           if (!(part instanceof org.springframework.ai.chat.messages.part.ToolCallPart call))
             continue;
-          if (!"rei".equals(call.attributes().get(ATTRIBUTE))
+          if (!validCallId(call.toolCall().id())
+              || !"rei".equals(call.attributes().get(ATTRIBUTE))
               || owner == null
               || !owner.equals(assistant.getMetadata().get(ResponsesReasoningReplay.ORIGIN_OWNER))
               || !identity.equals(
@@ -139,7 +140,7 @@ final class ResponsesToolNamespace {
       var call = item.asFunctionCall();
       if (!"rei".equals(call.namespace().orElse(null))
           || !declared.contains(call.name())
-          || call.callId().isBlank()
+          || !validCallId(call.callId())
           || history.containsKey(call.callId())) throw invalid();
       if (complete) {
         var previous = received.putIfAbsent(call.callId(), call);
@@ -193,6 +194,17 @@ final class ResponsesToolNamespace {
 
     private static ResponsesTransportException invalid() {
       return new ResponsesTransportException(ResponsesTransportException.Category.INVALID_RESPONSE);
+    }
+
+    private static boolean validCallId(String id) {
+      return id != null
+          && !id.isEmpty()
+          && id.length() <= 512
+          && id.codePoints()
+              .noneMatch(value ->
+                  Character.isISOControl(value)
+                      || Character.isWhitespace(value)
+                      || Character.isSpaceChar(value));
     }
   }
 }
