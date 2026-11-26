@@ -203,6 +203,7 @@ class PlanResponsesRequestTest {
             .build();
     final com.openai.client.OpenAIClient client;
     int status = 200;
+    java.util.function.IntFunction<String> replies;
     String mediaType = "text/event-stream";
     String reply =
         event(
@@ -235,7 +236,10 @@ class PlanResponsesRequestTest {
                     .protocol(okhttp3.Protocol.HTTP_1_1)
                     .code(status)
                     .message("fixture")
-                    .body(okhttp3.ResponseBody.create(reply, okhttp3.MediaType.get(mediaType)))
+                    .body(
+                        okhttp3.ResponseBody.create(
+                            replies == null ? reply : replies.apply(requests.size()),
+                            okhttp3.MediaType.get(mediaType)))
                     .build();
               }),
               () -> {});

@@ -1,0 +1,231 @@
+package dev.mikoto2000.rei.llm;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import dev.mikoto2000.rei.core.chat.AgentRunContext;
+import dev.mikoto2000.rei.core.policy.ActionCapability;
+import dev.mikoto2000.rei.core.policy.ToolPermissionGuard;
+import dev.mikoto2000.rei.core.policy.ToolPermissionPolicy;
+import dev.mikoto2000.rei.core.policy.ToolPermissionProperties;
+import dev.mikoto2000.rei.core.stagnation.ProgressEvaluator;
+import dev.mikoto2000.rei.core.stagnation.RunExecutionContext;
+import dev.mikoto2000.rei.core.stagnation.StagnationChatModel;
+import dev.mikoto2000.rei.event.AgentEventFactory;
+import dev.mikoto2000.rei.llm.discovery.ToolDiscovery;
+import dev.mikoto2000.rei.llm.discovery.ToolDiscoveryProperties;
+import dev.mikoto2000.rei.llm.discovery.ToolDiscoveryStore;
+import dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.time.Clock;
+import java.time.Duration;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.Stream;
+import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
+import org.springframework.ai.chat.prompt.Prompt;
+import org.springframework.ai.openai.responses.OpenAiResponsesChatOptions;
+import org.springframework.ai.tool.ToolCallback;
+import org.springframework.ai.tool.definition.ToolDefinition;
+import org.springframework.beans.factory.support.DefaultListableBeanFactory;
+
+/** Real discovery, permissions, protected input and SDK transport; business tools are synthetic. */
+class PlanDynamicToolLoopTest {
+  @TempDir Path directory;
+  private static final String SPECIALIST = "googleCalendarListEventsForDate";
+
+  static Stream<Arguments> cases() {
+    return java.util.Arrays.stream(AgentRunContext.Mode.values())
+        .flatMap(mode ->
+            mode == AgentRunContext.Mode.CONVERSATION
+                ? Stream.of(Arguments.of(mode, false))
+                : Stream.of(Arguments.of(mode, false), Arguments.of(mode, true)));
+  }
+
+  @ParameterizedTest
+  @MethodSource("cases")
+  void searchesLocallyAndPublishesOnlyForTheNextRequest(
+      AgentRunContext.Mode mode, boolean unpublished) throws Exception {
+    try (var fixture = new PlanResponsesRequestTest.Fixture()) {
+      var pin = PlanNamespaceRequestTest.pin(fixture);
+      var owner =
+          new AgentRunContext(
+              "run", "session", directory, "project", AgentRunContext.RequestSource.SHELL, mode);
+      var data = new org.sqlite.SQLiteDataSource();
+      data.setUrl("jdbc:sqlite:" + directory.resolve("protocol.db"));
+      var payloads = new ModelMessagePayloadStore(data);
+      var exchange = payloads.newExchange(owner);
+      var budget = new OutputLimitRunBudget(3, 6);
+      assertThat(budget.tryConsumeLlmCall()).isTrue();
+      var events = new AgentEventFactory(Clock.systemUTC());
+      var execution =
+          new RunExecutionContext(
+              "run", budget, new ProgressEvaluator(directory), events, ignored -> {});
+      execution.setRunContext(owner);
+      execution.setContinuation(
+          dev.mikoto2000.rei.testfixtures.FixtureInferencePermissions.automatic(data));
+      execution.setToolPermissionGuard(
+          new ToolPermissionGuard(
+              new ToolPermissionPolicy(
+                  new ToolPermissionProperties(
+                      true,
+                      Set.of(ActionCapability.READ, ActionCapability.NETWORK_READ),
+                      null,
+                      null)),
+              events,
+              ignored -> {}));
+      var executions = new AtomicInteger();
+      List<ToolCallback> catalog =
+          Files.readAllLines(Path.of("docs/tool-discovery-classification.csv")).stream()
+              .skip(1)
+              .filter(row -> !row.isBlank())
+              .map(row -> row.split(",")[0])
+              .map(name ->
+                  (ToolCallback)
+                      new ToolCallback() {
+                        public ToolDefinition getToolDefinition() {
+                          return ToolDefinition.builder()
+                              .name(name)
+                              .description(name)
+                              .inputSchema("{\"type\":\"object\",\"properties\":{}}")
+                              .build();
+                        }
+
+                        public String call(String input) {
+                          assertThat(name).isEqualTo(SPECIALIST);
+                          executions.incrementAndGet();
+                          return "SYNTHETIC_CALENDAR_RESULT";
+                        }
+                      })
+              .toList();
+      var context = new java.util.HashMap<>(fixture.options().getToolContext());
+      context.put(dev.mikoto2000.rei.modeloptions.ModelOptions.RUN_CONNECTION_CONTEXT_KEY, pin);
+      context.put(ModelMessagePayloadStore.EXCHANGE_CONTEXT_KEY, exchange);
+      context.put(
+          ModelMessagePayloadStore.ORIGIN_CONTEXT_KEY,
+          new ModelMessagePayloadStore.Origin(exchange.ownerKey(), pin.fingerprint()));
+      context.put(ResponsesReasoningReplay.OWNER_CONTEXT_KEY, exchange.ownerKey());
+      context.put(RunExecutionContext.KEY, execution);
+      var options =
+          ((OpenAiResponsesChatOptions) RunNativeOptions.options(pin))
+              .mutate()
+              .toolContext(context)
+              .toolCallbacks(mode == AgentRunContext.Mode.CONVERSATION ? List.of() : catalog)
+              .build();
+      execution.setModelOptions(options);
+      var properties = new ToolDiscoveryProperties();
+      properties.setEnabled(true);
+      var discovery =
+          new ToolDiscovery(
+              properties,
+              new DefaultListableBeanFactory().getBeanProvider(ToolDiscoveryStore.class));
+      var done = fixture.reply;
+      fixture.replies =
+          turn -> {
+            if (mode == AgentRunContext.Mode.CONVERSATION || turn > 2) return done;
+            return completedCall(
+                turn,
+                turn == 1 && !unpublished ? "searchTools" : SPECIALIST,
+                turn == 1 && !unpublished
+                    ? "{\"query\":\"" + SPECIALIST + "\",\"maxResults\":1}"
+                    : "{}");
+          };
+      var loop =
+          new StagnationChatModel(ResponsesAdapter.createForRun(pin, options, fixture.client))
+              .withToolDiscovery(discovery);
+      var prompt = new Prompt("synthetic calendar request", execution.modelOptions());
+      if (unpublished) {
+        assertThatThrownBy(() -> loop.stream(prompt).blockLast(Duration.ofSeconds(10)))
+            .isInstanceOf(ResponsesTransportException.class)
+            .hasMessageContaining("INVALID_RESPONSE");
+        assertThat(executions).hasValue(0);
+        assertThat(fixture.requests).hasSize(1);
+      } else if (mode == AgentRunContext.Mode.CONVERSATION) {
+        loop.stream(prompt).blockLast(Duration.ofSeconds(10));
+        assertThat(executions).hasValue(0);
+        assertThat(fixture.requests).hasSize(1);
+        assertThat(names(fixture.requests.getFirst())).isEmpty();
+      } else {
+        loop.stream(prompt).blockLast(Duration.ofSeconds(10));
+        assertThat(executions).hasValue(1);
+        assertThat(fixture.requests).hasSize(3);
+        assertThat(names(fixture.requests.get(0)))
+            .contains("searchTools")
+            .doesNotContain(SPECIALIST);
+        assertThat(names(fixture.requests.get(1))).contains("searchTools", SPECIALIST);
+        assertThat(names(fixture.requests.get(0))).doesNotContain(SPECIALIST);
+        assertThat(fixture.requests.get(1).path("input").toString())
+            .contains("searchTools", "function_call_output", "\"namespace\":\"rei\"");
+        assertThat(fixture.requests.get(2).path("input").toString())
+            .contains(SPECIALIST, "SYNTHETIC_CALENDAR_RESULT", "\"namespace\":\"rei\"");
+        assertThat(execution.progressSnapshot().protocolHistory()).isNotNull();
+      }
+      for (var request : fixture.requests) {
+        for (var tool : request.path("tools")) {
+          assertThat(tool.path("type").asText()).isEqualTo("namespace");
+          assertThat(tool.path("name").asText()).isEqualTo("rei");
+        }
+      }
+    }
+  }
+
+  private static List<String> names(JsonNode request) {
+    var result = new java.util.ArrayList<String>();
+    request
+        .path("tools")
+        .forEach(namespace ->
+            namespace
+                .path("tools")
+                .forEach(function -> result.add(function.path("name").asText())));
+    return result;
+  }
+
+  private static String completedCall(int turn, String name, String arguments) {
+    try {
+      return PlanResponsesRequestTest.Fixture.event(
+          "response.completed",
+          "\"response\":"
+              + new com.fasterxml.jackson.databind.ObjectMapper()
+                  .writeValueAsString(
+                      Map.of(
+                          "id",
+                          "resp_" + turn,
+                          "object",
+                          "response",
+                          "created_at",
+                          0,
+                          "status",
+                          "completed",
+                          "model",
+                          "fixture-model",
+                          "output",
+                          List.of(
+                              Map.of(
+                                  "type",
+                                  "function_call",
+                                  "id",
+                                  "fc_" + turn,
+                                  "call_id",
+                                  "call_" + turn,
+                                  "namespace",
+                                  "rei",
+                                  "name",
+                                  name,
+                                  "arguments",
+                                  arguments,
+                                  "status",
+                                  "completed")),
+                          "usage",
+                          Map.of("input_tokens", 3, "output_tokens", 2, "total_tokens", 5))));
+    } catch (java.io.IOException failure) {
+      throw new AssertionError(failure);
+    }
+  }
+}
