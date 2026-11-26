@@ -38,4 +38,21 @@ public interface ChatPlanAccounts {
   default Request begin(String account, String registration, String model) {
     throw new IllegalStateException("ChatGPT inference admission is unavailable");
   }
+
+  /** Records a confirmed app usage limit, not a generic HTTP status or a model catalog failure. */
+  default void pauseRequests(String account, String registration) {
+    throw new IllegalStateException("ChatGPT usage management is unavailable");
+  }
+
+  /**
+   * Whether this registration has a local request pause; does not claim remote quota availability.
+   */
+  default boolean requestsPaused(String account, String registration) {
+    return false;
+  }
+
+  /** Explicit user action after checking usage; clears no credentials and sends no inference. */
+  default void resumeRequests(String account, String registration) {
+    throw new IllegalStateException("ChatGPT usage management is unavailable");
+  }
 }
