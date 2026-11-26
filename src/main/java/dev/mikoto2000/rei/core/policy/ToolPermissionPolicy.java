@@ -556,6 +556,16 @@ public class ToolPermissionPolicy implements dev.mikoto2000.rei.secretary.Secret
     return evaluateCapabilities(capabilities(tool, input));
   }
 
+  /** Inference export has fixed send capabilities and never grants callback execution authority. */
+  public PermissionDecision evaluateInference(boolean voiceInput) {
+    var decision =
+        evaluateCapabilities(
+            Set.of(ActionCapability.NETWORK_WRITE, ActionCapability.EXTERNAL_SIDE_EFFECT));
+    return decision == PermissionDecision.AUTO_APPROVE && voiceInput && !fullAuto
+        ? PermissionDecision.REQUIRE_APPROVAL
+        : decision;
+  }
+
   /** 判断基準を満たすか確認するため、許可された操作一覧を評価する。 */
   private PermissionDecision evaluateCapabilities(Set<ActionCapability> required) {
     // 権限確認が有効な場合は、禁止設定を自動承認より先に適用する。

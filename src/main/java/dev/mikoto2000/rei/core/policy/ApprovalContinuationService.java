@@ -54,6 +54,12 @@ public class ApprovalContinuationService implements RunContinuation {
 
   private final InferenceExportGuard inferenceGuard;
 
+  /** Use the existing administrator policy while keeping inference and tool grants independent. */
+  @org.springframework.beans.factory.annotation.Autowired(required = false)
+  public void configureInferencePolicy(ToolPermissionPolicy policy) {
+    inferenceGuard.configurePolicy(policy);
+  }
+
   /** 登録台帳。 */
   private final ObjectProvider<RunRegistry> registry;
 

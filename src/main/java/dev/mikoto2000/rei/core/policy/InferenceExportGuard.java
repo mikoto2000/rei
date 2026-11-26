@@ -29,6 +29,8 @@ public final class InferenceExportGuard {
           .enable(com.fasterxml.jackson.databind.SerializationFeature.ORDER_MAP_ENTRIES_BY_KEYS);
   private final ToolApprovalRepository approvals;
   private final Clock clock;
+  private volatile ToolPermissionPolicy policy =
+      new ToolPermissionPolicy(new ToolPermissionProperties(true, null, null, null));
 
   public InferenceExportGuard(ToolApprovalRepository approvals, Clock clock) {
     this.approvals = java.util.Objects.requireNonNull(approvals);
@@ -36,8 +38,9 @@ public final class InferenceExportGuard {
   }
 
   /** Configure the administrator's policy independently of callback execution restrictions. */
+  @org.springframework.beans.factory.annotation.Autowired(required = false)
   public void configurePolicy(ToolPermissionPolicy policy) {
-    // Introduced for policy contract tests; not wired into dispatch yet.
+    this.policy = java.util.Objects.requireNonNull(policy);
   }
 
   public record Decision(Prompt prompt, String approvalId) {
@@ -88,8 +91,12 @@ public final class InferenceExportGuard {
         || !connection.fingerprint().equals(accepted.fingerprint())
         || !connection.fingerprint().matches("[0-9a-f]{64}"))
       throw new IllegalArgumentException("Inference export accepted connection mismatch");
+    var decision = policy.evaluateInference(owner.voiceInput());
+    if (decision == PermissionDecision.DENY)
+      throw new ToolPermissionException("inferenceExport", PermissionDecision.DENY);
     var prepared = InferenceExportRequest.prepare(prompt);
     String canonical = canonical(owner, connection, prepared.fingerprint());
+    if (decision == PermissionDecision.AUTO_APPROVE) return new Decision(prepared.prompt(), null);
     if (approvals.consume("inferenceExport", canonical, owner))
       return new Decision(prepared.prompt(), null);
     var request = approvals.request("inferenceExport", canonical, owner);
