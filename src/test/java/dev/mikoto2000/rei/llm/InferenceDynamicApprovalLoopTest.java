@@ -67,6 +67,25 @@ class InferenceDynamicApprovalLoopTest {
   @MethodSource("routesAndModes")
   void explicitApprovalsRestorePublishedToolsAndNeverRepeatTheSuccessfulOperation(
       AgentRunContext.Mode mode, boolean plan) throws Exception {
+    executeApprovedWorkflow(mode, plan, null);
+  }
+
+  static Stream<Arguments> interruptedRoutes() {
+    return Stream.of(false, true)
+        .flatMap(plan ->
+            Stream.of("eof", "failed", "cancelled", "incomplete")
+                .map(ending -> Arguments.of(plan, ending)));
+  }
+
+  @ParameterizedTest
+  @MethodSource("interruptedRoutes")
+  void interruptedApprovedResponseNeverRepeatsTheCompletedBusinessEffect(
+      boolean plan, String ending) throws Exception {
+    executeApprovedWorkflow(AgentRunContext.Mode.EXCLUSIVE, plan, ending);
+  }
+
+  private void executeApprovedWorkflow(AgentRunContext.Mode mode, boolean plan, String ending)
+      throws Exception {
     try (var fixture = new ResponsesLoopFixture(plan)) {
       var clock = Clock.systemUTC();
       var owner =
@@ -127,6 +146,13 @@ class InferenceDynamicApprovalLoopTest {
       var callbacks = mode == AgentRunContext.Mode.CONVERSATION ? List.<ToolCallback>of() : catalog;
       fixture.replies =
           turn -> {
+            if (turn == 3 && ending != null) {
+              if (ending.equals("eof")) return "";
+              return fixture
+                  .reply
+                  .replace("response.completed", "response." + ending)
+                  .replaceFirst("\"status\":\"completed\"", "\"status\":\"" + ending + "\"");
+            }
             if (mode == AgentRunContext.Mode.CONVERSATION || turn > 2) return fixture.reply;
             return PlanDynamicToolLoopTest.completedCall(
                 plan,
@@ -185,7 +211,10 @@ class InferenceDynamicApprovalLoopTest {
         if (round < requests - 1)
           assertThatThrownBy(() -> loop.stream(nextPrompt).blockLast(Duration.ofSeconds(10)))
               .isInstanceOf(RunWaitingException.class);
-        else loop.stream(nextPrompt).blockLast(Duration.ofSeconds(10));
+        else if (ending == null) loop.stream(nextPrompt).blockLast(Duration.ofSeconds(10));
+        else
+          assertThatThrownBy(() -> loop.stream(nextPrompt).blockLast(Duration.ofSeconds(10)))
+              .isNotInstanceOf(RunWaitingException.class);
         assertThat(consent.requests.get(owner.projectId(), approval.id()).status())
             .isEqualTo("CONSUMED");
       }
@@ -198,8 +227,10 @@ class InferenceDynamicApprovalLoopTest {
       }
       assertThat(consent.requests.list(owner.projectId())).isEmpty();
       assertThat(execution.budgetSnapshot().llmCalls()).isEqualTo(requests);
-      assertThat(execution.budgetSnapshot().totalTokens()).isEqualTo(requests * 5L);
-      assertThat(execution.budgetSnapshot().usageUnknown()).isFalse();
+      if (ending == null) {
+        assertThat(execution.budgetSnapshot().totalTokens()).isEqualTo(requests * 5L);
+        assertThat(execution.budgetSnapshot().usageUnknown()).isFalse();
+      }
       execution.completeRun();
     }
   }
