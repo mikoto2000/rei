@@ -265,6 +265,54 @@ class PinnedResponsesTransportTest {
     }
   }
 
+  @Test
+  void commonCacheHonorsTheWholeRequestDeadlineEvenWhileDataKeepsArriving() throws Exception {
+    try (var fixture = new Fixture(true);
+        var models =
+            new PinnedChatModels(
+                ignored -> {
+                  throw new AssertionError("No credentials");
+                },
+                ignored -> {},
+                null,
+                4)) {
+      fixture.dripMillis = 2000;
+      var source = namedPin(fixture, false, LlmEndpointCapabilities.Support.SUPPORTED);
+      var endpoint = source.endpoint();
+      var pin =
+          new RunLlmConnection(
+              source.profileId(),
+              true,
+              source.provider(),
+              source.authentication(),
+              null,
+              null,
+              new ResolvedLlmEndpoint(
+                  endpoint.endpointId(),
+                  endpoint.generation(),
+                  endpoint.apiType(),
+                  endpoint.baseUrl(),
+                  endpoint.credentialRef(),
+                  endpoint.model(),
+                  endpoint.capabilities(),
+                  64,
+                  null,
+                  Duration.ofSeconds(1)),
+              source.capabilities(),
+              source.generation(),
+              Map.of("request_timeout", "PT0.5S"));
+      var model = models.model(pin);
+      assertThatThrownBy(() ->
+              model.stream(new Prompt("fixture", RunNativeOptions.options(pin)))
+                  .collectList()
+                  .block(Duration.ofSeconds(5)))
+          .isInstanceOfSatisfying(
+              ResponsesTransportException.class,
+              failure -> assertThat(failure.diagnosticCode()).isEqualTo("timeout"));
+      assertThat(fixture.requests).hasSize(1);
+    }
+  }
+
   private static RunLlmConnection namedPin(
       Fixture fixture, boolean omitOutputLimit, LlmEndpointCapabilities.Support responses) {
     var source = fixture.pin();
@@ -311,6 +359,8 @@ class PinnedResponsesTransportTest {
     final List<String> requests = new CopyOnWriteArrayList<>();
     final List<String> authorizations = new CopyOnWriteArrayList<>();
 
+    volatile int dripMillis;
+
     Fixture(boolean streaming) throws Exception {
       server = com.sun.net.httpserver.HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
       server.createContext(
@@ -340,8 +390,21 @@ class PinnedResponsesTransportTest {
             exchange
                 .getResponseHeaders()
                 .set("Content-Type", streaming ? "text/event-stream" : "application/json");
-            exchange.sendResponseHeaders(200, body.length);
+            exchange.sendResponseHeaders(200, dripMillis > 0 ? 0 : body.length);
             try (var output = exchange.getResponseBody()) {
+              long until =
+                  System.nanoTime()
+                      + java.util.concurrent.TimeUnit.MILLISECONDS.toNanos(dripMillis);
+              while (System.nanoTime() < until) {
+                output.write(": keepalive\n\n".getBytes(StandardCharsets.UTF_8));
+                output.flush();
+                try {
+                  Thread.sleep(40);
+                } catch (InterruptedException interrupted) {
+                  Thread.currentThread().interrupt();
+                  throw new java.io.IOException("Owned fixture interrupted");
+                }
+              }
               output.write(body);
             } finally {
               exchange.close();
