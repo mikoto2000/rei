@@ -187,17 +187,21 @@ final class RunLlmConnectionFactory {
         metadata.accountRef() == null ? null : registration.apply(metadata.accountRef());
     if (metadata.provider() == LlmProvider.CHATGPT_PLAN && accountRegistration == null)
       throw new IllegalStateException("ChatGPT account registration is unavailable");
-    return new RunLlmConnection(
-        profile,
-        true,
-        metadata.provider(),
-        metadata.authentication(),
-        metadata.accountRef(),
-        accountRegistration,
-        resolved,
-        capabilities,
-        generation(resolved),
-        transport(connection));
+    var snapshot =
+        new RunLlmConnection(
+            profile,
+            true,
+            metadata.provider(),
+            metadata.authentication(),
+            metadata.accountRef(),
+            accountRegistration,
+            resolved,
+            capabilities,
+            RunGenerationSettings.named(
+                generation(resolved), connection.getGeneration(), resolved, capabilities),
+            transport(connection));
+    RunNativeOptions.options(snapshot);
+    return snapshot;
   }
 
   /**

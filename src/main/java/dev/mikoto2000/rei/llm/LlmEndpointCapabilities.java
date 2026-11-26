@@ -126,7 +126,7 @@ public record LlmEndpointCapabilities(
       transport.put(Capability.TOOL_NAMESPACE, Support.UNSUPPORTED);
       if (api == LlmApiType.CHAT_COMPLETIONS) {
         transport.put(Capability.REASONING_REPLAY, Support.UNSUPPORTED);
-        transport.put(Capability.REASONING_EFFORT, Support.UNKNOWN);
+        transport.put(Capability.REASONING_EFFORT, Support.SUPPORTED);
         transport.put(Capability.REASONING_SUMMARY, Support.UNKNOWN);
         transport.put(Capability.TEXT_VERBOSITY, Support.UNKNOWN);
       } else {
