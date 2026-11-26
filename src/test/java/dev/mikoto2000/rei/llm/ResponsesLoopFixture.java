@@ -33,6 +33,12 @@ final class ResponsesLoopFixture implements AutoCloseable {
               """);
 
   ResponsesLoopFixture(boolean plan) {
+    this(plan, Map.of());
+  }
+
+  ResponsesLoopFixture(
+      boolean plan,
+      Map<LlmEndpointCapabilities.Capability, LlmEndpointCapabilities.Support> inputCapabilities) {
     String base = plan ? "https://api.openai.com/v1" : "http://127.0.0.1:1/v1";
     var support = LlmEndpointCapabilities.Support.SUPPORTED;
     var unsupported = LlmEndpointCapabilities.Support.UNSUPPORTED;
@@ -52,23 +58,29 @@ final class ResponsesLoopFixture implements AutoCloseable {
                 "chat-endpoint:fixture",
                 "fixture-model",
                 new LlmCapabilities(
-                    plan ? ReasoningReplayMode.ENCRYPTED : ReasoningReplayMode.NONE, 36, Set.of()),
+                    plan ? ReasoningReplayMode.ENCRYPTED : ReasoningReplayMode.NONE,
+                    36,
+                    inputCapabilities.get(LlmEndpointCapabilities.Capability.VISION) == support
+                        ? Set.of(LlmCapabilities.Setting.IMAGE_INPUT)
+                        : Set.of()),
                 plan ? null : 64,
                 null,
                 Duration.ofSeconds(5)),
-            Map.of(
-                LlmEndpointCapabilities.Capability.RESPONSES,
-                support,
-                LlmEndpointCapabilities.Capability.STREAMING,
-                support,
-                LlmEndpointCapabilities.Capability.FUNCTION_CALLING,
-                support,
-                LlmEndpointCapabilities.Capability.TOOL_NAMESPACE,
-                plan ? support : unsupported,
-                LlmEndpointCapabilities.Capability.REASONING_REPLAY,
-                plan ? support : unsupported,
-                LlmEndpointCapabilities.Capability.MAX_OUTPUT_TOKENS,
-                plan ? unsupported : support),
+            withInputCapabilities(
+                Map.of(
+                    LlmEndpointCapabilities.Capability.RESPONSES,
+                    support,
+                    LlmEndpointCapabilities.Capability.STREAMING,
+                    support,
+                    LlmEndpointCapabilities.Capability.FUNCTION_CALLING,
+                    support,
+                    LlmEndpointCapabilities.Capability.TOOL_NAMESPACE,
+                    plan ? support : unsupported,
+                    LlmEndpointCapabilities.Capability.REASONING_REPLAY,
+                    plan ? support : unsupported,
+                    LlmEndpointCapabilities.Capability.MAX_OUTPUT_TOKENS,
+                    plan ? unsupported : support),
+                inputCapabilities),
             plan ? Map.of() : Map.of("max_output_tokens", 64));
     client =
         PinnedOpenAiClients.open(
@@ -112,6 +124,22 @@ final class ResponsesLoopFixture implements AutoCloseable {
         .mutate()
         .toolContext(Map.of(ResponsesReasoningReplay.OWNER_CONTEXT_KEY, "fixture-owner"))
         .build();
+  }
+
+  private static Map<LlmEndpointCapabilities.Capability, LlmEndpointCapabilities.Support>
+      withInputCapabilities(
+          Map<LlmEndpointCapabilities.Capability, LlmEndpointCapabilities.Support> defaults,
+          Map<LlmEndpointCapabilities.Capability, LlmEndpointCapabilities.Support> inputs) {
+    assertThat(inputs.keySet())
+        .allMatch(capability ->
+            capability == LlmEndpointCapabilities.Capability.VISION
+                || capability == LlmEndpointCapabilities.Capability.FILE_INPUT);
+    var values =
+        new java.util.EnumMap<LlmEndpointCapabilities.Capability, LlmEndpointCapabilities.Support>(
+            LlmEndpointCapabilities.Capability.class);
+    values.putAll(defaults);
+    values.putAll(inputs);
+    return Map.copyOf(values);
   }
 
   public void close() {
