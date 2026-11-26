@@ -20,6 +20,48 @@ import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.prompt.Prompt;
 
 class PinnedChatModelsTest {
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(strings = {"reasoning_effort", "response_format"})
+  void confirmedGenerationFieldsUseTheirTypedChatWireShape(String field) throws Exception {
+    try (var fixture = new Fixture();
+        var models =
+            new PinnedChatModels(
+                pin -> {
+                  throw new AssertionError("No-auth generation read a credential");
+                },
+                pin -> {},
+                null,
+                2)) {
+      var base = fixture.pin("generation", "fixture-model", LlmAuthentication.NONE);
+      var generation = new java.util.HashMap<>(base.generation());
+      generation.put(
+          field, field.equals("reasoning_effort") ? "low" : Map.of("type", "json_object"));
+      var connection =
+          new RunLlmConnection(
+              base.profileId(),
+              true,
+              base.provider(),
+              base.authentication(),
+              null,
+              null,
+              base.endpoint(),
+              Map.of(
+                  field.equals("reasoning_effort")
+                      ? LlmEndpointCapabilities.Capability.REASONING_EFFORT
+                      : LlmEndpointCapabilities.Capability.STRUCTURED_OUTPUT,
+                  LlmEndpointCapabilities.Support.SUPPORTED),
+              generation);
+      models
+          .model(connection)
+          .call(new Prompt("Return JSON fixture", RunNativeOptions.options(connection)));
+      assertThat(fixture.bodies).hasSize(1);
+      assertThat(fixture.headers).containsExactly("<none>");
+      var sent = fixture.bodies.getFirst().path(field);
+      assertThat(field.equals("reasoning_effort") ? sent.asText() : sent.path("type").asText())
+          .isEqualTo(field.equals("reasoning_effort") ? "low" : "json_object");
+    }
+  }
+
   @Test
   void cachedModelsKeepTheirOwnReceiverAndReadTheFreshKey() throws Exception {
     try (var first = new Fixture();
