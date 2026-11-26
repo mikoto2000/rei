@@ -559,6 +559,56 @@ class ApprovalContinuationTest {
           codec.encode(expected.get(i)), codec.encode(sent.get().getInstructions().get(i)));
   }
 
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(strings = {"pending", "approved", "queued"})
+  void humanGuidanceReplacesTheInferenceReceiptAndRequiresApprovalOfTheChangedInput(String state) {
+    String originalId = pauseInferenceForInspection();
+    var original = store.find(originalId).orElseThrow();
+    var document = store.document(original);
+    if (!state.equals("pending"))
+      service.decide(owner.projectId(), originalId, true, state.equals("queued"));
+    org.junit.jupiter.api.Assertions.assertDoesNotThrow(() ->
+        service.acceptGuidance(
+            owner, List.of(new UserMessage("HUMAN CHANGED INFERENCE GUIDANCE"))));
+    var waiting = approvals.list(owner.projectId());
+    assertEquals(1, waiting.size());
+    var replacement = waiting.getFirst();
+    assertNotEquals(originalId, replacement.id());
+    assertEquals(
+        state.equals("pending") ? "DENIED" : "CONSUMED",
+        approvals.get(owner.projectId(), originalId).status());
+    var retired = store.find(originalId).orElseThrow();
+    assertEquals("CANCELLED", retired.state());
+    assertEquals(original.document(), retired.document());
+    var current = store.find(replacement.id()).orElseThrow();
+    assertEquals("WAITING_APPROVAL", current.state());
+    var updated = store.document(current);
+    assertEquals(document.connection(), updated.connection());
+    assertEquals(document.budget(), updated.budget());
+    assertTrue(updated.history().isEmpty());
+    assertTrue(updated.pending() == null);
+    assertNotEquals(
+        document.inference().contentFingerprint(), updated.inference().contentFingerprint());
+    assertTrue(
+        service
+            .inference(owner.projectId(), replacement.id())
+            .orElseThrow()
+            .messages()
+            .toString()
+            .contains("HUMAN CHANGED INFERENCE GUIDANCE"));
+    assertThrows(
+        IllegalStateException.class,
+        () -> service.decide(owner.projectId(), originalId, true, true));
+    service.decide(owner.projectId(), replacement.id(), true, true);
+    assertTrue(store.claim(replacement.id()));
+    assertTrue(registry.transition(owner.runId(), RunStatus.RUNNING, null));
+    var saved = service.restore(owner);
+    assertTrue(saved.inferencePending());
+    assertEquals(1, saved.budget().llmCalls());
+    assertEquals("HUMAN CHANGED INFERENCE GUIDANCE", saved.messages().getLast().getText());
+    verifyNoInteractions(chat);
+  }
+
   String pauseInferenceForInspection() {
     var pin =
         new dev.mikoto2000.rei.llm.RunLlmConnection(
