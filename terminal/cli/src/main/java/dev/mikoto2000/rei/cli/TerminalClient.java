@@ -804,7 +804,9 @@ public final class TerminalClient implements AutoCloseable {
 
   void command(String line) throws IOException, InterruptedException {
     var rawWords = commandWords(line);
-    if (rawWords.size() >= 2 && rawWords.getFirst().equals("/llm") && rawWords.get(1).equals("chat")
+    if (rawWords.size() >= 2
+        && rawWords.getFirst().equals("/llm")
+        && rawWords.get(1).equals("chat")
         && (rawWords.size() == 2 || Set.of("--help", "-h").contains(rawWords.getLast()))) {
       out("/llm chat list|show|use [endpoint-name]");
       return;

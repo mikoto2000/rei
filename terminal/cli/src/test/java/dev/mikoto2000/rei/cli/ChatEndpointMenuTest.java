@@ -33,7 +33,8 @@ class ChatEndpointMenuTest {
 
   @Test
   void cancellationNeverReturnsTheHighlightedEndpoint() throws Exception {
-    try (var terminal = new DumbTerminal(new ByteArrayInputStream(new byte[0]), new ByteArrayOutputStream())) {
+    try (var terminal =
+        new DumbTerminal(new ByteArrayInputStream(new byte[0]), new ByteArrayOutputStream())) {
       terminal.setSize(Size.of(120, 10));
       var reader = LineReaderBuilder.builder().terminal(terminal).build();
       for (var cancel : List.of("\033", "\003", "\004")) {
@@ -44,7 +45,9 @@ class ChatEndpointMenuTest {
   }
 
   private static List<MeetingSelectionMenu.Candidate> candidates() {
-    return List.of(new MeetingSelectionMenu.Candidate("local", "local [active]"),
-        new MeetingSelectionMenu.Candidate("subscription", "subscription unavailable: authentication"));
+    return List.of(
+        new MeetingSelectionMenu.Candidate("local", "local [active]"),
+        new MeetingSelectionMenu.Candidate(
+            "subscription", "subscription unavailable: authentication"));
   }
 }
