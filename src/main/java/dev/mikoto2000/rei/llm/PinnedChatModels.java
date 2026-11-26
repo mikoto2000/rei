@@ -9,7 +9,7 @@ final class PinnedChatModels implements AutoCloseable {
   private final Function<RunLlmConnection, String> credential;
   private final Consumer<RunLlmConnection> verify;
   private final dev.mikoto2000.rei.llm.capture.CaptureStore captures;
-  private final Function<ChatModel, ChatModel> decorate;
+  private final java.util.function.BiFunction<RunLlmConnection, ChatModel, ChatModel> decorate;
   private final org.springframework.util.ConcurrentLruCache<RunLlmConnection, ChatModel> cache;
   private final java.util.concurrent.atomic.AtomicBoolean closed =
       new java.util.concurrent.atomic.AtomicBoolean();
@@ -35,12 +35,8 @@ final class PinnedChatModels implements AutoCloseable {
       dev.mikoto2000.rei.llm.capture.CaptureStore captures,
       int capacity,
       Function<ChatModel, ChatModel> decorate) {
-    if (capacity < 1) throw new IllegalArgumentException("Model cache capacity must be positive");
-    this.credential = java.util.Objects.requireNonNull(credential);
-    this.verify = java.util.Objects.requireNonNull(verify);
-    this.captures = captures;
-    this.decorate = java.util.Objects.requireNonNull(decorate);
-    this.cache = new org.springframework.util.ConcurrentLruCache<>(capacity, this::create);
+    this(credential, verify, captures, capacity, (connection, model) -> decorate.apply(model));
+    java.util.Objects.requireNonNull(decorate);
   }
 
   ChatModel model(RunLlmConnection connection) {
@@ -54,8 +50,12 @@ final class PinnedChatModels implements AutoCloseable {
       dev.mikoto2000.rei.llm.capture.CaptureStore captures,
       int capacity,
       java.util.function.BiFunction<RunLlmConnection, ChatModel, ChatModel> decorate) {
-    this(credential, verify, captures, capacity, Function.identity());
-    java.util.Objects.requireNonNull(decorate);
+    if (capacity < 1) throw new IllegalArgumentException("Model cache capacity must be positive");
+    this.credential = java.util.Objects.requireNonNull(credential);
+    this.verify = java.util.Objects.requireNonNull(verify);
+    this.captures = captures;
+    this.decorate = java.util.Objects.requireNonNull(decorate);
+    this.cache = new org.springframework.util.ConcurrentLruCache<>(capacity, this::create);
   }
 
   java.util.List<String> models(RunLlmConnection connection) {
@@ -100,6 +100,7 @@ final class PinnedChatModels implements AutoCloseable {
     try {
       if (connection.endpoint().apiType() == LlmApiType.RESPONSES && connection.named())
         return decorate.apply(
+            connection,
             ResponsesAdapter.createForRun(
                 connection,
                 (org.springframework.ai.openai.responses.OpenAiResponsesChatOptions)
@@ -107,6 +108,7 @@ final class PinnedChatModels implements AutoCloseable {
                 client));
       if (connection.endpoint().apiType() == LlmApiType.RESPONSES)
         return decorate.apply(
+            connection,
             ResponsesAdapter.createWithClient(
                 connection.endpoint(),
                 (org.springframework.ai.openai.responses.OpenAiResponsesChatOptions)
@@ -122,6 +124,7 @@ final class PinnedChatModels implements AutoCloseable {
               .openAiClientAsync(client.async())
               .build();
       return decorate.apply(
+          connection,
           captures == null
               ? model
               : new CapturingChatModel(

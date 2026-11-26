@@ -94,7 +94,18 @@ public final class ChatConnectionService
             factory::verifyBinding,
             captures.getIfAvailable(),
             32,
-            models::decorateRunChatModel);
+            (connection, model) ->
+                models.decorateRunChatModel(
+                    connection.authentication() == LlmAuthentication.CHATGPT_OAUTH
+                        ? new PlanRequestChatModel(
+                            model,
+                            () ->
+                                requirePlanAccounts()
+                                    .begin(
+                                        connection.accountRef(),
+                                        connection.accountRegistration(),
+                                        connection.endpoint().model()))
+                        : model));
     this.routed = new RunLlmConnectionModel(modelCache::model, factory::verifyBinding);
   }
 
