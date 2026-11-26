@@ -114,6 +114,7 @@ public final class PlanClient
   private final PlanOAuth oauth;
 
   private final PlanRequestSlots requestSlots;
+  private final Map<String, String> usagePauses = new ConcurrentHashMap<>();
 
   /** 通信経路。 */
   private final PlanTransport transport;
@@ -169,15 +170,54 @@ public final class PlanClient
         generations.computeIfAbsent(
             account, value -> new java.util.concurrent.atomic.AtomicInteger());
     int initial = generation.get();
-    if (!registration.equals(oauth.registration(account))) throw ChatGptException.of(AUTH_REQUIRED);
     if (model == null || model.isBlank() || model.codePoints().anyMatch(Character::isISOControl))
       throw ChatGptException.of(MODEL_UNAVAILABLE);
-    var request = requestSlots.begin(account, registration);
+    var admitted =
+        new java.util.concurrent.atomic.AtomicReference<
+            dev.mikoto2000.rei.modeloptions.ChatPlanAccounts.Request>();
+    // Pause publication and admission share one local linearization point, with no HTTP.
+    usagePauses.compute(
+        account,
+        (ignored, paused) -> {
+          if (!registration.equals(oauth.registration(account)))
+            throw ChatGptException.of(AUTH_REQUIRED);
+          if (registration.equals(paused))
+            throw ChatGptException.of(ChatGptException.Code.USAGE_LIMIT);
+          admitted.set(requestSlots.begin(account, registration));
+          return paused;
+        });
+    var request = java.util.Objects.requireNonNull(admitted.get());
     if (generation.get() != initial) {
       request.close();
       throw ChatGptException.of(CANCELLED);
     }
     return request;
+  }
+
+  @Override
+  public void pauseRequests(String account, String registration) {
+    changeRequestPause(account, registration, true);
+  }
+
+  @Override
+  public boolean requestsPaused(String account, String registration) {
+    return account != null && registration != null && registration.equals(usagePauses.get(account));
+  }
+
+  @Override
+  public void resumeRequests(String account, String registration) {
+    changeRequestPause(account, registration, false);
+  }
+
+  private void changeRequestPause(String account, String registration, boolean paused) {
+    requireRegistration(registration);
+    usagePauses.compute(
+        account,
+        (ignored, previous) -> {
+          if (!registration.equals(oauth.registration(account)))
+            throw ChatGptException.of(AUTH_REQUIRED);
+          return paused ? registration : null;
+        });
   }
 
   /** Reuses the protected refresh and visible model catalog for an accepted account. */
