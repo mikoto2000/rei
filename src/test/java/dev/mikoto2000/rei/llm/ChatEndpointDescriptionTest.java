@@ -97,6 +97,7 @@ class ChatEndpointDescriptionTest {
 
   private Map<String, String> settings() {
     var values = new HashMap<String, String>();
+    values.put("rei.llm.max-output-tokens", "4096");
     values.put("rei.llm.features.chat.active", "first");
     values.put(prefix("first") + "base-url", "http://first.invalid/v1");
     values.put(prefix("first") + "model", "first-model");
