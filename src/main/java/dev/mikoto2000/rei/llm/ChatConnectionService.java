@@ -18,6 +18,7 @@ public final class ChatConnectionService implements AutoCloseable {
           ToolCallingChatOptions, AgentRunContext, ToolCallingChatOptions>
       bindRunOptions;
   private final LegacyChatConnectionSource legacy;
+  private final java.util.function.Supplier<String> legacyModel;
   private final RunLlmConnectionFactory factory;
   private final ChatRunConnections connections;
   private final PinnedChatModels modelCache;
@@ -57,6 +58,8 @@ public final class ChatConnectionService implements AutoCloseable {
             },
             () -> System.getenv("OPENAI_API_KEY"));
     var configuredModel = catalog.hasNamedProfiles() ? null : catalog.profiles().getFirst().model();
+    this.legacyModel = configuredModel == null || configuredModel.isBlank()
+        ? holder::get : () -> configuredModel;
     this.factory =
         RunLlmConnectionFactory.withLegacySettings(
             catalog,
@@ -82,7 +85,14 @@ public final class ChatConnectionService implements AutoCloseable {
   public record Selection(String endpoint, String model) {}
 
   public Selection selection() {
-    return null;
+    var selected = connections.selection();
+    var model = selected.models().get(selected.endpoint());
+    if (model == null) {
+      model = catalog.profiles().stream().filter(profile -> profile.id().equals(selected.endpoint()))
+          .findFirst().orElseThrow().model();
+      if ((model == null || model.isBlank()) && !catalog.hasNamedProfiles()) model = legacyModel.get();
+    }
+    return new Selection(selected.endpoint(), model);
   }
 
   public RunLlmConnection accept(AgentRunContext owner) {

@@ -10,8 +10,8 @@ final class ChatRunConnections {
   private final java.util.concurrent.ConcurrentMap<String, Accepted> accepted =
       new java.util.concurrent.ConcurrentHashMap<>();
 
-  private record Selection(String endpoint, java.util.Map<String, String> models) {
-    private Selection {
+  record Selection(String endpoint, java.util.Map<String, String> models) {
+    Selection {
       models = java.util.Map.copyOf(models);
     }
   }
@@ -38,6 +38,10 @@ final class ChatRunConnections {
     models.put(before.endpoint(), model);
     if (!selection.compareAndSet(before, new Selection(before.endpoint(), models)))
       throw new IllegalStateException("Chat selection changed while choosing a model");
+  }
+
+  Selection selection() {
+    return selection.get();
   }
 
   String selectedEndpoint() {
