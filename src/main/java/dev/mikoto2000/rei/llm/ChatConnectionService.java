@@ -19,7 +19,7 @@ public final class ChatConnectionService
       "Selection scope: process-wide; next Run only; resets on restart. Inference not verified.";
 
   private final ChatEndpointCatalog catalog;
-  private final int defaultOutputTokens;
+  private final Integer defaultOutputTokens;
   private final java.util.function.BiFunction<
           ToolCallingChatOptions, AgentRunContext, ToolCallingChatOptions>
       bindRunOptions;
