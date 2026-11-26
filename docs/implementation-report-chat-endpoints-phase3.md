@@ -39,14 +39,17 @@ Run の受理境界と同様に、中立な契約を利用して、モデルコ�
 
 最終 bytecode で追加辺を再確認し、必要な補完契約の辺だけを既存の個別レビュー手順に沿って記録する。起動配線・HTTP 具体実装への不要な辺は実装で解消し、許可集合やルールの一括拡大で通さない。
 
-## Validation status
+## Validation
 
-作業中。Red / Green の実行証拠と最終の全回帰・静的解析・CI の結果を、完了時に更新する。
+最終実装コード `c3024185fdbba065ed1ea21b20ae9c8ace115b30` で通常の `-Pfull test` を実施した。以下の件数を確認したうえで、PR の最新必須チェックを確認する。
 
 - 接続先・補完・SDK 境界の関連 73 件: 成功。中立な公開情報ポートへの変更後も関連 60 件が成功。
 - 接続先ごとのモデル一覧・従来設定表示を含む関連 85 件: 成功。
 - terminal 最終 verify: 36 スイート / 205 件、failure / error / skip 0。配布 jar の構築も成功。
 - 個別依存レビュー後の ArchitectureGuardTest / PackageArchitectureTest: 6 件成功。
+- ローカル全回帰: 8693 件、failure / error 0、既定条件による skip 12（成功 8681 件）。2026-11-26 11:54 JST 完了。
+- Checkstyle 0 / Spotless 3255 ファイル clean / SpotBugs 0・解析エラー 0。
+- PR #643 の実装コミットの CI: 8 項目成功。Windows A 3841 件 + B 4852 件 = 8693 件、failure / error 0、skip 12。検証記録だけの後続コミットでも最新チェックを確認する。
 - 全テストは既定の安全条件、所有する localhost / `.invalid` fixture を使用。実モデル・実アカウント・実サーバーの互換性試験とは区別する。
 ### Phase 3 の個別依存レビュー
 
