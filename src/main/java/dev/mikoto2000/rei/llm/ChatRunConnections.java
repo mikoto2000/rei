@@ -87,8 +87,11 @@ final class ChatRunConnections {
   }
 
   private static void requireSupportedProfile(RunLlmConnection connection) {
-    if (connection.named() && connection.endpoint().apiType() == LlmApiType.RESPONSES)
+    if (connection.named() && connection.endpoint().apiType() == LlmApiType.RESPONSES) {
       ResponsesProfilePolicy.requireConnection(connection);
+      ResponsesProfilePolicy.requireCapability(
+          connection, LlmEndpointCapabilities.Capability.STREAMING);
+    }
   }
 
   void restore(AgentRunContext owner, RunLlmConnection saved) {
