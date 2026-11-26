@@ -14,4 +14,19 @@ public interface ChatPlanAccounts {
 
   /** Account-specific visible model IDs in server order, bound to this registration. */
   java.util.List<String> models(String account, String registration);
+
+  /** One inference admission; release it before tools or a child request run. */
+  interface Request extends AutoCloseable {
+    /** Completes when this admission is invalidated; contains no credential or native options. */
+    java.util.concurrent.CompletionStage<Void> invalidated();
+
+    /** Releases the request exactly once, including on error and cancellation. */
+    @Override
+    void close();
+  }
+
+  /** Safe closed default until an account implementation supplies request admission. */
+  default Request begin(String account, String registration, String model) {
+    throw new IllegalStateException("ChatGPT inference admission is unavailable");
+  }
 }
