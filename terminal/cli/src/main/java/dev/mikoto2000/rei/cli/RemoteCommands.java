@@ -261,6 +261,26 @@ public final class RemoteCommands {
         throw invalid();
       }
     }
+    if (name.equals("/llm") && action.equals("chat")) {
+      if (words.size() < 3) throw invalid();
+      String operation = words.get(2), base = "/api/v1/llm/chat";
+      if (operation.equals("list")) {
+        exact(words, 3);
+        return get(base);
+      }
+      if (operation.equals("show")) {
+        exact(words, 3);
+        return get(base + "/current");
+      }
+      if (operation.equals("use")) {
+        if (words.size() == 3) return get(base);
+        exact(words, 4);
+        String endpoint = words.get(3);
+        if (!endpoint.matches("[A-Za-z0-9][A-Za-z0-9_.-]{0,63}")) throw invalid();
+        return new Request("PUT", base + "/current", Map.of("endpoint", endpoint));
+      }
+      throw invalid();
+    }
     if (name.equals("/llm")) {
       if (words.size() < 3 || !action.equals("capture")) throw invalid();
       String operation = words.get(2), base = "/api/v1/llm/capture";
