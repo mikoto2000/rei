@@ -19,7 +19,8 @@ final class ResponsesSdkBoundary {
   private ResponsesSdkBoundary() {}
 
   static com.openai.client.OpenAIClient safe(
-      com.openai.client.OpenAIClient client, boolean plaintext) {
+      com.openai.client.OpenAIClient client, ReasoningReplayMode replay) {
+    boolean plaintext = replay == ReasoningReplayMode.PLAINTEXT;
     var service = client.responses();
     var safeService =
         (com.openai.services.blocking.ResponseService)
@@ -28,7 +29,7 @@ final class ResponsesSdkBoundary {
                 new Class<?>[] {com.openai.services.blocking.ResponseService.class},
                 (proxy, method, arguments) -> {
                   try {
-                    var result = method.invoke(service, requestArguments(arguments, plaintext));
+                    var result = method.invoke(service, requestArguments(arguments, replay));
                     if (result instanceof com.openai.models.responses.Response response) {
                       var usage = validateResponse(response, plaintext);
                       if (response
@@ -58,8 +59,8 @@ final class ResponsesSdkBoundary {
   }
 
   /** Remove only the SDK's automatic encrypted include through its typed public request API. */
-  private static Object[] requestArguments(Object[] arguments, boolean plaintext) {
-    if (!plaintext || arguments == null) return arguments;
+  private static Object[] requestArguments(Object[] arguments, ReasoningReplayMode replay) {
+    if (replay == ReasoningReplayMode.ENCRYPTED || arguments == null) return arguments;
     var rewritten = arguments.clone();
     // Kotlin's JsonField<Nothing> singleton erases to a raw Java type. Missing holds no value.
     @SuppressWarnings("unchecked")
@@ -128,7 +129,8 @@ final class ResponsesSdkBoundary {
         });
   }
 
-  static OpenAIClientAsync safe(OpenAIClientAsync client, boolean plaintext) {
+  static OpenAIClientAsync safe(OpenAIClientAsync client, ReasoningReplayMode replay) {
+    boolean plaintext = replay == ReasoningReplayMode.PLAINTEXT;
     var service = client.responses();
     var safeService =
         (ResponseServiceAsync)
@@ -141,10 +143,10 @@ final class ResponsesSdkBoundary {
                       @SuppressWarnings("unchecked")
                       var stream =
                           (AsyncStreamResponse<ResponseStreamEvent>)
-                              method.invoke(service, requestArguments(arguments, plaintext));
+                              method.invoke(service, requestArguments(arguments, replay));
                       return new SafeStream(stream, plaintext);
                     }
-                    return method.invoke(service, requestArguments(arguments, plaintext));
+                    return method.invoke(service, requestArguments(arguments, replay));
                   } catch (InvocationTargetException error) {
                     throw ResponsesTransportException.normalize(error.getCause());
                   }

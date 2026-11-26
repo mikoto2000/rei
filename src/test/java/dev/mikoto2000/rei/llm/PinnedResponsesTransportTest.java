@@ -82,6 +82,271 @@ class PinnedResponsesTransportTest {
     }
   }
 
+  @ParameterizedTest
+  @org.junit.jupiter.params.provider.CsvSource({
+    "false,false",
+    "false,true",
+    "true,false",
+    "true,true"
+  })
+  void declaredNamedResponsesUsesTheCommonModelCache(boolean streaming, boolean omitOutputLimit)
+      throws Exception {
+    try (var fixture = new Fixture(streaming);
+        var models =
+            new PinnedChatModels(
+                ignored -> {
+                  throw new AssertionError("No-auth read credentials");
+                },
+                ignored -> {},
+                null,
+                4)) {
+      var pin = namedPin(fixture, omitOutputLimit, LlmEndpointCapabilities.Support.SUPPORTED);
+      var options = RunNativeOptions.options(pin);
+      var model = models.model(pin);
+      if (streaming)
+        model.stream(new Prompt("fixture", options)).collectList().block(Duration.ofSeconds(5));
+      else
+        assertThat(model.call(new Prompt("fixture", options)).getResult().getOutput().getText())
+            .isEqualTo("done");
+      assertThat(fixture.requests).hasSize(1);
+      assertThat(fixture.authorizations).containsExactly("<none>");
+      var wire =
+          new com.fasterxml.jackson.databind.ObjectMapper().readTree(fixture.requests.getFirst());
+      assertThat(wire.has("max_output_tokens")).isEqualTo(!omitOutputLimit);
+      if (!omitOutputLimit) assertThat(wire.path("max_output_tokens").asInt()).isEqualTo(64);
+      for (var field :
+          List.of("reasoning", "service_tier", "include", "previous_response_id", "max_tokens"))
+        assertThat(wire.has(field)).as(field).isFalse();
+      assertThat(wire.path("store").asBoolean(true)).isFalse();
+      assertThat(wire.path("stream").asBoolean()).isEqualTo(streaming);
+    }
+  }
+
+  @ParameterizedTest
+  @org.junit.jupiter.params.provider.EnumSource(
+      value = LlmEndpointCapabilities.Support.class,
+      names = {"UNKNOWN", "UNSUPPORTED"})
+  void undeclaredResponsesNeverReachesHttp(LlmEndpointCapabilities.Support support)
+      throws Exception {
+    try (var fixture = new Fixture(false);
+        var models =
+            new PinnedChatModels(
+                ignored -> {
+                  throw new AssertionError("No-auth read credentials");
+                },
+                ignored -> {},
+                null,
+                4)) {
+      var pin = namedPin(fixture, false, support);
+      assertThatThrownBy(() -> models.model(pin))
+          .isInstanceOf(IllegalStateException.class)
+          .hasMessageContaining("RESPONSES");
+      assertThat(fixture.requests).isEmpty();
+    }
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  void namedResponsesApiKeysReachOnlyTheSelectedOwnedServer(boolean streaming) throws Exception {
+    try (var fixture = new Fixture(streaming);
+        var models =
+            new PinnedChatModels(ignored -> "owned-fixture-api-key", ignored -> {}, null, 4)) {
+      var source = namedPin(fixture, false, LlmEndpointCapabilities.Support.SUPPORTED);
+      var pin =
+          new RunLlmConnection(
+              source.profileId(),
+              true,
+              source.provider(),
+              LlmAuthentication.API_KEY,
+              null,
+              null,
+              source.endpoint(),
+              source.capabilities(),
+              source.generation());
+      var options = RunNativeOptions.options(pin);
+      var model = models.model(pin);
+      if (streaming)
+        model.stream(new Prompt("fixture", options)).collectList().block(Duration.ofSeconds(5));
+      else model.call(new Prompt("fixture", options));
+      assertThat(fixture.requests).hasSize(1);
+      assertThat(fixture.authorizations).containsExactly("Bearer owned-fixture-api-key");
+      assertThat(fixture.requests.getFirst()).doesNotContain("owned-fixture-api-key");
+    }
+  }
+
+  @Test
+  void unconfirmedStreamingDoesNotBlockExplicitlySupportedNonStreamingResponses() throws Exception {
+    try (var fixture = new Fixture(false);
+        var models =
+            new PinnedChatModels(
+                ignored -> {
+                  throw new AssertionError("No credentials");
+                },
+                ignored -> {},
+                null,
+                4)) {
+      var source = namedPin(fixture, false, LlmEndpointCapabilities.Support.SUPPORTED);
+      var capabilities = new java.util.HashMap<>(source.capabilities());
+      capabilities.put(
+          LlmEndpointCapabilities.Capability.STREAMING, LlmEndpointCapabilities.Support.UNKNOWN);
+      var pin =
+          new RunLlmConnection(
+              source.profileId(),
+              true,
+              source.provider(),
+              source.authentication(),
+              null,
+              null,
+              source.endpoint(),
+              capabilities,
+              source.generation());
+      var options = RunNativeOptions.options(pin);
+      var model = models.model(pin);
+      assertThat(model.call(new Prompt("fixture", options)).getResult().getOutput().getText())
+          .isEqualTo("done");
+      assertThatThrownBy(() -> model.stream(new Prompt("fixture", options)))
+          .isInstanceOf(IllegalStateException.class)
+          .hasMessageContaining("STREAMING");
+      assertThat(fixture.requests).hasSize(1);
+    }
+  }
+
+  @Test
+  void acceptedNamedDeadlineIsIndependentFromReadInactivity() throws Exception {
+    try (var fixture = new Fixture(false)) {
+      var source = namedPin(fixture, false, LlmEndpointCapabilities.Support.SUPPORTED);
+      var original = source.endpoint();
+      var pin =
+          new RunLlmConnection(
+              source.profileId(),
+              true,
+              source.provider(),
+              source.authentication(),
+              null,
+              null,
+              new ResolvedLlmEndpoint(
+                  original.endpointId(),
+                  original.generation(),
+                  original.apiType(),
+                  original.baseUrl(),
+                  original.credentialRef(),
+                  original.model(),
+                  original.capabilities(),
+                  64,
+                  null,
+                  Duration.ofSeconds(3)),
+              source.capabilities(),
+              source.generation(),
+              Map.of("connect_timeout", "PT2S", "request_timeout", "PT4S"));
+      var observed = new java.util.concurrent.ConcurrentHashMap<String, Long>();
+      var client =
+          fixture.client(
+              pin,
+              List.of(
+                  new ChatStreamTimeoutInterceptor(Duration.ofSeconds(3), true),
+                  chain -> {
+                    observed.put("connect", (long) chain.connectTimeoutMillis());
+                    observed.put("read", (long) chain.readTimeoutMillis());
+                    observed.put(
+                        "request",
+                        java.util.concurrent.TimeUnit.NANOSECONDS.toMillis(
+                            chain.call().timeout().timeoutNanos()));
+                    return chain.proceed(chain.request());
+                  }));
+      var options = (OpenAiResponsesChatOptions) RunNativeOptions.options(pin);
+      var model = ResponsesAdapter.createForRun(pin, options, client);
+      assertThat(model.call(new Prompt("fixture", options)).getResult().getOutput().getText())
+          .isEqualTo("done");
+      assertThat(observed)
+          .containsEntry("connect", 2000L)
+          .containsEntry("read", 3000L)
+          .containsEntry("request", 4000L);
+      assertThat(fixture.requests).hasSize(1);
+    }
+  }
+
+  @Test
+  void commonCacheHonorsTheWholeRequestDeadlineEvenWhileDataKeepsArriving() throws Exception {
+    try (var fixture = new Fixture(true);
+        var models =
+            new PinnedChatModels(
+                ignored -> {
+                  throw new AssertionError("No credentials");
+                },
+                ignored -> {},
+                null,
+                4)) {
+      fixture.dripMillis = 2000;
+      var source = namedPin(fixture, false, LlmEndpointCapabilities.Support.SUPPORTED);
+      var endpoint = source.endpoint();
+      var pin =
+          new RunLlmConnection(
+              source.profileId(),
+              true,
+              source.provider(),
+              source.authentication(),
+              null,
+              null,
+              new ResolvedLlmEndpoint(
+                  endpoint.endpointId(),
+                  endpoint.generation(),
+                  endpoint.apiType(),
+                  endpoint.baseUrl(),
+                  endpoint.credentialRef(),
+                  endpoint.model(),
+                  endpoint.capabilities(),
+                  64,
+                  null,
+                  Duration.ofSeconds(1)),
+              source.capabilities(),
+              source.generation(),
+              Map.of("request_timeout", "PT0.5S"));
+      var model = models.model(pin);
+      assertThatThrownBy(() ->
+              model.stream(new Prompt("fixture", RunNativeOptions.options(pin)))
+                  .collectList()
+                  .block(Duration.ofSeconds(5)))
+          .isInstanceOfSatisfying(
+              ResponsesTransportException.class,
+              failure -> assertThat(failure.diagnosticCode()).isEqualTo("timeout"));
+      assertThat(fixture.requests).hasSize(1);
+    }
+  }
+
+  private static RunLlmConnection namedPin(
+      Fixture fixture, boolean omitOutputLimit, LlmEndpointCapabilities.Support responses) {
+    var source = fixture.pin();
+    var endpoint = source.endpoint();
+    return new RunLlmConnection(
+        source.profileId(),
+        true,
+        source.provider(),
+        source.authentication(),
+        null,
+        null,
+        new ResolvedLlmEndpoint(
+            endpoint.endpointId(),
+            endpoint.generation(),
+            endpoint.apiType(),
+            endpoint.baseUrl(),
+            "chat-endpoint:fixture",
+            endpoint.model(),
+            endpoint.capabilities(),
+            omitOutputLimit ? null : 64,
+            null,
+            endpoint.readTimeout()),
+        Map.of(
+            LlmEndpointCapabilities.Capability.RESPONSES,
+            responses,
+            LlmEndpointCapabilities.Capability.STREAMING,
+            LlmEndpointCapabilities.Support.SUPPORTED,
+            LlmEndpointCapabilities.Capability.MAX_OUTPUT_TOKENS,
+            omitOutputLimit
+                ? LlmEndpointCapabilities.Support.UNSUPPORTED
+                : LlmEndpointCapabilities.Support.SUPPORTED),
+        omitOutputLimit ? Map.of() : Map.of("max_output_tokens", 64));
+  }
+
   private static final class Fixture implements AutoCloseable {
     final com.sun.net.httpserver.HttpServer server;
     final okhttp3.OkHttpClient transport =
@@ -93,6 +358,8 @@ class PinnedResponsesTransportTest {
     final List<com.openai.client.OpenAIClient> clients = new java.util.ArrayList<>();
     final List<String> requests = new CopyOnWriteArrayList<>();
     final List<String> authorizations = new CopyOnWriteArrayList<>();
+
+    volatile int dripMillis;
 
     Fixture(boolean streaming) throws Exception {
       server = com.sun.net.httpserver.HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
@@ -123,8 +390,21 @@ class PinnedResponsesTransportTest {
             exchange
                 .getResponseHeaders()
                 .set("Content-Type", streaming ? "text/event-stream" : "application/json");
-            exchange.sendResponseHeaders(200, body.length);
+            exchange.sendResponseHeaders(200, dripMillis > 0 ? 0 : body.length);
             try (var output = exchange.getResponseBody()) {
+              long until =
+                  System.nanoTime()
+                      + java.util.concurrent.TimeUnit.MILLISECONDS.toNanos(dripMillis);
+              while (System.nanoTime() < until) {
+                output.write(": keepalive\n\n".getBytes(StandardCharsets.UTF_8));
+                output.flush();
+                try {
+                  Thread.sleep(40);
+                } catch (InterruptedException interrupted) {
+                  Thread.currentThread().interrupt();
+                  throw new java.io.IOException("Owned fixture interrupted");
+                }
+              }
               output.write(body);
             } finally {
               exchange.close();
@@ -167,6 +447,11 @@ class PinnedResponsesTransportTest {
     }
 
     com.openai.client.OpenAIClient client(RunLlmConnection pin) {
+      return client(pin, List.of());
+    }
+
+    com.openai.client.OpenAIClient client(
+        RunLlmConnection pin, List<okhttp3.Interceptor> interceptors) {
       var client =
           PinnedOpenAiClients.open(
               pin,
@@ -174,7 +459,7 @@ class PinnedResponsesTransportTest {
                 throw new AssertionError("No-auth read credentials");
               },
               transport,
-              List.of(),
+              interceptors,
               () -> {});
       clients.add(client);
       return client;

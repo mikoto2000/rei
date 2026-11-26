@@ -60,9 +60,10 @@ final class ChatRunConnections {
                 return prior;
               }
               var chosen = selection.get();
-              return new Accepted(
-                  owner,
-                  factory.capture(chosen.endpoint(), chosen.models().get(chosen.endpoint())));
+              var connection =
+                  factory.capture(chosen.endpoint(), chosen.models().get(chosen.endpoint()));
+              requireSupportedProfile(connection);
+              return new Accepted(owner, connection);
             })
         .connection();
   }
@@ -85,6 +86,14 @@ final class ChatRunConnections {
         });
   }
 
+  private static void requireSupportedProfile(RunLlmConnection connection) {
+    if (connection.named() && connection.endpoint().apiType() == LlmApiType.RESPONSES) {
+      ResponsesProfilePolicy.requireConnection(connection);
+      ResponsesProfilePolicy.requireCapability(
+          connection, LlmEndpointCapabilities.Capability.STREAMING);
+    }
+  }
+
   void restore(AgentRunContext owner, RunLlmConnection saved) {
     java.util.Objects.requireNonNull(saved, "saved connection");
     accepted.compute(
@@ -97,6 +106,7 @@ final class ChatRunConnections {
               throw new IllegalStateException("Run connection cannot be replaced");
           }
           factory.verifyBinding(saved);
+          requireSupportedProfile(saved);
           return prior == null ? new Accepted(owner, saved) : prior;
         });
   }

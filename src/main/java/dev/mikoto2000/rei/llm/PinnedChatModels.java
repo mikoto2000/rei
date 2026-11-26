@@ -85,9 +85,16 @@ final class PinnedChatModels implements AutoCloseable {
   private ChatModel create(RunLlmConnection connection) {
     verify(connection);
     if (connection.endpoint().apiType() == LlmApiType.RESPONSES && connection.named())
-      throw new IllegalStateException("Named Responses requires its verified profile policy");
+      ResponsesProfilePolicy.requireConnection(connection);
     var client = client(connection, java.util.List.of());
     try {
+      if (connection.endpoint().apiType() == LlmApiType.RESPONSES && connection.named())
+        return decorate.apply(
+            ResponsesAdapter.createForRun(
+                connection,
+                (org.springframework.ai.openai.responses.OpenAiResponsesChatOptions)
+                    RunNativeOptions.options(connection),
+                client));
       if (connection.endpoint().apiType() == LlmApiType.RESPONSES)
         return decorate.apply(
             ResponsesAdapter.createWithClient(
@@ -120,7 +127,8 @@ final class PinnedChatModels implements AutoCloseable {
   private com.openai.client.OpenAIClient client(
       RunLlmConnection connection, java.util.List<okhttp3.Interceptor> extra) {
     var interceptors = new java.util.ArrayList<okhttp3.Interceptor>();
-    interceptors.add(new ChatStreamTimeoutInterceptor(connection.endpoint().readTimeout()));
+    interceptors.add(
+        new ChatStreamTimeoutInterceptor(connection.endpoint().readTimeout(), connection.named()));
     interceptors.add(new ShowUiSdkRequestInterceptor());
     interceptors.addAll(extra);
     return PinnedOpenAiClients.open(

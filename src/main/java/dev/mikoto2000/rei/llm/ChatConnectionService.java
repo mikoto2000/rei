@@ -210,8 +210,20 @@ public final class ChatConnectionService
             reasons.add("Authentication is not configured");
           if (profile.provider() == LlmProvider.CHATGPT_PLAN)
             reasons.add("ChatGPT account registration requires verification");
-          if (catalog.hasNamedProfiles() && profile.api() == LlmApiType.RESPONSES)
-            reasons.add("Named Responses inference policy is not enabled");
+          if (profile.api() == LlmApiType.RESPONSES) {
+            for (var capability :
+                java.util.List.of(
+                    LlmEndpointCapabilities.Capability.RESPONSES,
+                    LlmEndpointCapabilities.Capability.STREAMING))
+              if (capabilities.effective().get(capability)
+                  != LlmEndpointCapabilities.Support.SUPPORTED)
+                reasons.add(capability + " is unsupported or unconfirmed");
+            if (replay != null
+                && replay != ReasoningReplayMode.NONE
+                && capabilities.effective().get(LlmEndpointCapabilities.Capability.REASONING_REPLAY)
+                    != LlmEndpointCapabilities.Support.SUPPORTED)
+              reasons.add("REASONING_REPLAY is unsupported or unconfirmed");
+          }
           return new Endpoint(
               profile,
               profile.id().equals(selected.endpoint()),

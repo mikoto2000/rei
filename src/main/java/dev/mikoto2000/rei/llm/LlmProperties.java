@@ -142,6 +142,11 @@ public class LlmProperties {
     Server copy() {
       var copy = new Server();
       copy.maxOutputTokens = maxOutputTokens;
+      copy.requestLimitBytes = requestLimitBytes;
+      copy.responseLimitBytes = responseLimitBytes;
+      copy.connectTimeout = connectTimeout;
+      copy.readTimeout = readTimeout;
+      copy.requestTimeout = requestTimeout;
       copy.baseUrl = baseUrl;
       copy.apiKey = apiKey;
       copy.model = model;
@@ -161,6 +166,55 @@ public class LlmProperties {
       copy.modelCapabilities = modelCapabilities;
       copy.serverCapabilities = serverCapabilities;
       return copy;
+    }
+
+    private Long requestLimitBytes;
+    private Long responseLimitBytes;
+    private java.time.Duration connectTimeout;
+    private java.time.Duration readTimeout;
+    private java.time.Duration requestTimeout;
+
+    public Long getRequestLimitBytes() {
+      return requestLimitBytes;
+    }
+
+    public void setRequestLimitBytes(Long value) {
+      requestLimitBytes = value == null ? null : RunTransportSettings.byteLimit(value.toString());
+    }
+
+    public Long getResponseLimitBytes() {
+      return responseLimitBytes;
+    }
+
+    public void setResponseLimitBytes(Long value) {
+      responseLimitBytes = value == null ? null : RunTransportSettings.byteLimit(value.toString());
+    }
+
+    public java.time.Duration getConnectTimeout() {
+      return connectTimeout;
+    }
+
+    public void setConnectTimeout(java.time.Duration value) {
+      if (value != null) ChatStreamTimeoutInterceptor.validatedReadTimeoutMillis(value);
+      connectTimeout = value;
+    }
+
+    public java.time.Duration getReadTimeout() {
+      return readTimeout;
+    }
+
+    public void setReadTimeout(java.time.Duration value) {
+      if (value != null) ChatStreamTimeoutInterceptor.validatedReadTimeoutMillis(value);
+      readTimeout = value;
+    }
+
+    public java.time.Duration getRequestTimeout() {
+      return requestTimeout;
+    }
+
+    public void setRequestTimeout(java.time.Duration value) {
+      if (value != null) ChatStreamTimeoutInterceptor.validatedReadTimeoutMillis(value);
+      requestTimeout = value;
     }
 
     private String active;

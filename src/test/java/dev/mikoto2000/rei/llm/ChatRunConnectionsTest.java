@@ -124,6 +124,130 @@ class ChatRunConnectionsTest {
     assertThat(restarted.selectedEndpoint()).isEqualTo("first");
   }
 
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.EnumSource(
+      value = LlmEndpointCapabilities.Support.class,
+      names = {"UNKNOWN", "UNSUPPORTED"})
+  void unavailableResponsesCannotPublishAnAcceptedRun(LlmEndpointCapabilities.Support support) {
+    var connections = responsesConnections(support);
+    var owner = owner("unavailable", "session");
+    assertThatThrownBy(() -> connections.accept(owner))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("RESPONSES");
+    assertThatThrownBy(() -> connections.require(owner))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("unavailable");
+  }
+
+  @Test
+  void explicitlyDeclaredResponsesCanBeAcceptedWithoutOpeningAClient() {
+    var connections = responsesConnections(LlmEndpointCapabilities.Support.SUPPORTED);
+    var owner = owner("available", "session");
+    var accepted = connections.accept(owner);
+    assertThat(accepted.endpoint().apiType()).isEqualTo(LlmApiType.RESPONSES);
+    assertThat(connections.require(owner)).isSameAs(accepted);
+  }
+
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.EnumSource(
+      value = LlmEndpointCapabilities.Support.class,
+      names = {"UNKNOWN", "UNSUPPORTED"})
+  void restoredResponsesAlsoRequiresAnAcceptedProtocolCapability(
+      LlmEndpointCapabilities.Support support) {
+    var original =
+        responsesConnections(LlmEndpointCapabilities.Support.SUPPORTED)
+            .accept(owner("original", "session"));
+    var capabilities = new HashMap<>(original.capabilities());
+    capabilities.put(LlmEndpointCapabilities.Capability.RESPONSES, support);
+    var saved =
+        new RunLlmConnection(
+            original.profileId(),
+            original.named(),
+            original.provider(),
+            original.authentication(),
+            original.accountRef(),
+            original.accountRegistration(),
+            original.endpoint(),
+            capabilities,
+            original.generation(),
+            original.transport());
+    var restarted = responsesConnections(LlmEndpointCapabilities.Support.SUPPORTED);
+    var resumed = owner("resumed", "session");
+    assertThatThrownBy(() -> restarted.restore(resumed, saved))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("RESPONSES");
+    assertThatThrownBy(() -> restarted.require(resumed))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("unavailable");
+  }
+
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.EnumSource(
+      value = LlmEndpointCapabilities.Support.class,
+      names = {"UNKNOWN", "UNSUPPORTED"})
+  void normalChatRequiresStreamingBeforeAdmissionOrRestore(
+      LlmEndpointCapabilities.Support support) {
+    var connections = responsesConnections(LlmEndpointCapabilities.Support.SUPPORTED, support);
+    var owner = owner("unavailable-stream", "session");
+    assertThatThrownBy(() -> connections.accept(owner))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("STREAMING");
+    assertThatThrownBy(() -> connections.require(owner)).isInstanceOf(IllegalStateException.class);
+    var source =
+        responsesConnections(LlmEndpointCapabilities.Support.SUPPORTED)
+            .accept(owner("original", "session"));
+    var capabilities = new HashMap<>(source.capabilities());
+    capabilities.put(LlmEndpointCapabilities.Capability.STREAMING, support);
+    var saved =
+        new RunLlmConnection(
+            source.profileId(),
+            source.named(),
+            source.provider(),
+            source.authentication(),
+            source.accountRef(),
+            source.accountRegistration(),
+            source.endpoint(),
+            capabilities,
+            source.generation(),
+            source.transport());
+    var restarted = responsesConnections(LlmEndpointCapabilities.Support.SUPPORTED);
+    assertThatThrownBy(() -> restarted.restore(owner, saved))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("STREAMING");
+    assertThatThrownBy(() -> restarted.require(owner)).isInstanceOf(IllegalStateException.class);
+  }
+
+  private ChatRunConnections responsesConnections(LlmEndpointCapabilities.Support support) {
+    return responsesConnections(support, LlmEndpointCapabilities.Support.SUPPORTED);
+  }
+
+  private ChatRunConnections responsesConnections(
+      LlmEndpointCapabilities.Support support, LlmEndpointCapabilities.Support streaming) {
+    var server = new LlmProperties.Server();
+    server.setBaseUrl("http://owned-fixture.invalid/v1");
+    server.setApi(LlmApiType.RESPONSES);
+    server.setAuthentication("none");
+    server.setModel("fixture-model");
+    server.setReasoningReplay(ReasoningReplayMode.NONE);
+    server.setServerCapabilities(
+        java.util.Map.of("responses", support.name(), "streaming", streaming.name()));
+    var chat = new LlmProperties.Server();
+    chat.setActive("responses");
+    chat.setEndpoints(java.util.Map.of("responses", server));
+    var properties = new LlmProperties();
+    properties.setFeature(LlmFeature.CHAT, chat);
+    var catalog = new ChatEndpointCatalog(properties);
+    return new ChatRunConnections(
+        catalog,
+        new RunLlmConnectionFactory(
+            catalog,
+            properties,
+            ignored -> {
+              throw new AssertionError("No legacy fallback");
+            },
+            ignored -> null));
+  }
+
   private AgentRunContext owner(String run, String session) {
     return new AgentRunContext(run, session, root, "project");
   }

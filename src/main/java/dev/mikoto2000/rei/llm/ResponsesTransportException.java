@@ -15,6 +15,8 @@ final class ResponsesTransportException extends IllegalStateException
     REFUSAL,
     TIMEOUT,
     OUTPUT_LIMIT,
+    REQUEST_LIMIT,
+    RESPONSE_LIMIT,
     INCOMPLETE,
     INVALID_RESPONSE
   }
@@ -32,6 +34,8 @@ final class ResponsesTransportException extends IllegalStateException
       case INCOMPLETE -> "response_incomplete";
       case REFUSAL -> "model_refusal";
       case INVALID_RESPONSE -> "invalid_response";
+      case REQUEST_LIMIT -> "request_size_limit";
+      case RESPONSE_LIMIT -> "response_size_limit";
     };
   }
 
@@ -48,6 +52,9 @@ final class ResponsesTransportException extends IllegalStateException
       case INCOMPLETE -> "LLM の応答が完了しませんでした。不完全な応答を使わず、保存済みの状態を確認してください。";
       case REFUSAL -> "LLM が要求への回答を拒否しました。要求内容を確認してください。";
       case INVALID_RESPONSE -> "LLM の応答形式を検証できませんでした。API と SDK の互換性を確認してください。";
+      case REQUEST_LIMIT -> "LLM への送信サイズが上限を超えました。入力と request-limit-bytes を確認してください。自動再送は行いません。";
+      case RESPONSE_LIMIT ->
+          "LLM の受信サイズが上限を超えました。不完全な応答を使わず、response-limit-bytes と保存済みの状態を確認してください。";
     };
   }
 
@@ -157,7 +164,9 @@ final class ResponsesTransportException extends IllegalStateException
     error = reactor.core.Exceptions.unwrap(error);
     while (error instanceof java.util.concurrent.CompletionException && error.getCause() != null)
       error = error.getCause();
-    if (error instanceof ResponsesTransportException failure) return failure;
+    Throwable nested = error;
+    for (int depth = 0; nested != null && depth < 32; depth++, nested = nested.getCause())
+      if (nested instanceof ResponsesTransportException failure) return failure;
     if (error instanceof com.openai.errors.OpenAIInvalidDataException
         || error instanceof IllegalArgumentException)
       return new ResponsesTransportException(Category.INVALID_RESPONSE);
@@ -178,7 +187,9 @@ final class ResponsesTransportException extends IllegalStateException
     for (Throwable cause = error; cause != null; cause = cause.getCause())
       if (cause instanceof java.util.concurrent.TimeoutException
           || cause instanceof java.net.SocketTimeoutException
-          || cause instanceof java.net.http.HttpTimeoutException)
+          || cause instanceof java.net.http.HttpTimeoutException
+          || cause instanceof java.io.InterruptedIOException
+              && "timeout".equals(cause.getMessage()))
         return new ResponsesTransportException(Category.TIMEOUT);
     if (error instanceof com.openai.errors.OpenAIIoException)
       return new ResponsesTransportException(Category.TRANSIENT);

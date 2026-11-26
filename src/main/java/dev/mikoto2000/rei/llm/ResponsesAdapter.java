@@ -61,6 +61,7 @@ final class ResponsesAdapter implements LlmProtocolAdapter, ChatModel {
   private final com.openai.client.OpenAIClient syncClient;
   private final com.openai.client.OpenAIClientAsync asyncClient;
   private final boolean production;
+  private final RunLlmConnection acceptedConnection;
   private static final ObjectMapper JSON =
       new ObjectMapper(
               JsonFactory.builder()
@@ -79,6 +80,23 @@ final class ResponsesAdapter implements LlmProtocolAdapter, ChatModel {
       OpenAiResponsesChatOptions options,
       com.openai.client.OpenAIClient client,
       boolean production) {
+    return createWithClient(endpoint, options, client, production, null);
+  }
+
+  static ResponsesAdapter createForRun(
+      RunLlmConnection connection,
+      OpenAiResponsesChatOptions options,
+      com.openai.client.OpenAIClient client) {
+    ResponsesProfilePolicy.requireConnection(connection);
+    return createWithClient(connection.endpoint(), options, client, false, connection);
+  }
+
+  private static ResponsesAdapter createWithClient(
+      ResolvedLlmEndpoint endpoint,
+      OpenAiResponsesChatOptions options,
+      com.openai.client.OpenAIClient client,
+      boolean production,
+      RunLlmConnection acceptedConnection) {
     if (production) ResponsesProductionPolicy.requireEndpoint(endpoint);
     var customHeaders = options.getCustomHeaders();
     if (endpoint.apiType() != LlmApiType.RESPONSES
@@ -100,16 +118,16 @@ final class ResponsesAdapter implements LlmProtocolAdapter, ChatModel {
       throw new IllegalArgumentException(
           "Responses SDK retries must stay zero at client construction");
     Objects.requireNonNull(client, "client");
-    boolean plaintext = endpoint.capabilities().reasoningReplay() == ReasoningReplayMode.PLAINTEXT;
-    var sync = ResponsesSdkBoundary.safe(client, plaintext);
-    var async = ResponsesSdkBoundary.safe(client.async(), plaintext);
+    var replay = endpoint.capabilities().reasoningReplay();
+    var sync = ResponsesSdkBoundary.safe(client, replay);
+    var async = ResponsesSdkBoundary.safe(client.async(), replay);
     var model =
         OpenAiResponsesChatModel.builder()
             .options(options)
             .openAiClient(sync)
             .openAiClientAsync(async)
             .build();
-    return new ResponsesAdapter(endpoint, model, sync, async, production);
+    return new ResponsesAdapter(endpoint, model, sync, async, production, acceptedConnection);
   }
 
   static ResponsesAdapter create(
@@ -209,10 +227,8 @@ final class ResponsesAdapter implements LlmProtocolAdapter, ChatModel {
                 ObservationRegistry.NOOP,
                 null,
                 transportCustomizers),
-            endpoint.capabilities().reasoningReplay() == ReasoningReplayMode.PLAINTEXT);
-    var asyncClient =
-        ResponsesSdkBoundary.safe(
-            client, endpoint.capabilities().reasoningReplay() == ReasoningReplayMode.PLAINTEXT);
+            endpoint.capabilities().reasoningReplay());
+    var asyncClient = ResponsesSdkBoundary.safe(client, endpoint.capabilities().reasoningReplay());
     var model =
         OpenAiResponsesChatModel.builder()
             .options(options)
@@ -231,6 +247,17 @@ final class ResponsesAdapter implements LlmProtocolAdapter, ChatModel {
       com.openai.client.OpenAIClient syncClient,
       com.openai.client.OpenAIClientAsync asyncClient,
       boolean production) {
+    this(endpoint, delegate, syncClient, asyncClient, production, null);
+  }
+
+  private ResponsesAdapter(
+      ResolvedLlmEndpoint endpoint,
+      OpenAiResponsesChatModel delegate,
+      com.openai.client.OpenAIClient syncClient,
+      com.openai.client.OpenAIClientAsync asyncClient,
+      boolean production,
+      RunLlmConnection acceptedConnection) {
+    this.acceptedConnection = acceptedConnection;
     this.endpoint = Objects.requireNonNull(endpoint, "endpoint");
     this.delegate = Objects.requireNonNull(delegate, "delegate");
     this.syncClient = Objects.requireNonNull(syncClient, "syncClient");
@@ -243,7 +270,7 @@ final class ResponsesAdapter implements LlmProtocolAdapter, ChatModel {
   /** An explicit model shares the same resolved connection and SDK clients, never another API. */
   ResponsesAdapter forModel(String model) {
     if (model == null || model.equals(endpoint.model())) return this;
-    if (production)
+    if (production || acceptedConnection != null)
       throw new IllegalArgumentException("Responses child model must match the configured model");
     if (model.isBlank()) throw new IllegalArgumentException("Responses model is required");
     var resolved =
@@ -300,6 +327,8 @@ final class ResponsesAdapter implements LlmProtocolAdapter, ChatModel {
       throw new IllegalArgumentException("Responses native options required");
     var options = supplied == null ? getOptions() : (OpenAiResponsesChatOptions) supplied;
     if (production) options = ResponsesProductionPolicy.requestOptions(options);
+    if (acceptedConnection != null)
+      ResponsesProfilePolicy.requireRequest(acceptedConnection, options);
     var include = options.getInclude();
     var metadata = options.getMetadata();
     if (endpoint.capabilities().reasoningReplay() == ReasoningReplayMode.PLAINTEXT
@@ -312,6 +341,8 @@ final class ResponsesAdapter implements LlmProtocolAdapter, ChatModel {
     requireCapability(options.getVerbosity(), LlmCapabilities.Setting.TEXT_VERBOSITY, "verbosity");
     var defaults = delegate.getOptions();
     var requestTimeout = options.getTimeout();
+    var allowedDeadline =
+        acceptedConnection == null ? endpoint.readTimeout() : acceptedConnection.requestTimeout();
     if (!Objects.equals(defaults.getBaseUrl(), options.getBaseUrl())
         || !Objects.equals(defaults.getApiKey(), options.getApiKey())
         || !Objects.equals(defaults.getCredential(), options.getCredential())
@@ -323,7 +354,7 @@ final class ResponsesAdapter implements LlmProtocolAdapter, ChatModel {
         || !Objects.equals(defaults.getProxy(), options.getProxy())
         || (requestTimeout != null
             && (requestTimeout.compareTo(java.time.Duration.ofMillis(1)) < 0
-                || requestTimeout.compareTo(endpoint.readTimeout()) > 0))
+                || requestTimeout.compareTo(allowedDeadline) > 0))
         || !Objects.equals(defaults.getOrganizationId(), options.getOrganizationId())
         || !Objects.equals(defaults.getCustomHeaders(), options.getCustomHeaders()))
       throw new IllegalArgumentException("Responses connection differs from the bound endpoint");
@@ -333,9 +364,9 @@ final class ResponsesAdapter implements LlmProtocolAdapter, ChatModel {
       throw new IllegalArgumentException("Responses SDK retries must stay zero");
     var outputLimit = options.getMaxOutputTokens();
     var resolvedLimit = endpoint.maxOutputTokens();
-    if (outputLimit == null
-        || outputLimit < 1
-        || (resolvedLimit != null && outputLimit > resolvedLimit))
+    if (outputLimit == null && (acceptedConnection == null || resolvedLimit != null)
+        || outputLimit != null
+            && (outputLimit < 1 || resolvedLimit != null && outputLimit > resolvedLimit))
       throw new IllegalArgumentException("Responses output limit must respect the resolved bound");
     requireCapability(options.getTemperature(), LlmCapabilities.Setting.TEMPERATURE, "temperature");
     requireCapability(options.getTopP(), LlmCapabilities.Setting.TOP_P, "topP");
@@ -435,6 +466,21 @@ final class ResponsesAdapter implements LlmProtocolAdapter, ChatModel {
 
   @Override
   public ChatResponse call(Prompt prompt) {
+    if (acceptedConnection != null && acceptedConnection.provider() == LlmProvider.CHATGPT_PLAN) {
+      var validated = stream(prompt);
+      var result = new java.util.concurrent.atomic.AtomicReference<ChatResponse>();
+      try {
+        new org.springframework.ai.chat.model.MessageAggregator()
+            .aggregate(validated, result::set)
+            .blockLast();
+        if (result.get() == null)
+          throw new ResponsesTransportException(
+              ResponsesTransportException.Category.INVALID_RESPONSE);
+        return result.get();
+      } catch (RuntimeException error) {
+        throw ResponsesTransportException.normalize(error);
+      }
+    }
     var request = prepare(prompt);
     try {
       var response = delegate.call(request);
@@ -530,6 +576,9 @@ final class ResponsesAdapter implements LlmProtocolAdapter, ChatModel {
 
   @Override
   public Flux<ChatResponse> stream(Prompt prompt) {
+    if (acceptedConnection != null)
+      ResponsesProfilePolicy.requireCapability(
+          acceptedConnection, LlmEndpointCapabilities.Capability.STREAMING);
     var request = prepare(prompt);
     return Flux.defer(
             () -> {
@@ -540,6 +589,14 @@ final class ResponsesAdapter implements LlmProtocolAdapter, ChatModel {
                       .doOnNext(response -> {
                         requireNoRefusal(response);
                         if (response.getMetadata().containsKey(OpenAiResponsesMetadata.STATUS)) {
+                          if (acceptedConnection != null
+                              && acceptedConnection.provider() == LlmProvider.CHATGPT_PLAN
+                              && !"completed"
+                                  .equals(
+                                      response.getMetadata().get(OpenAiResponsesMetadata.STATUS)))
+                            throw new ResponsesTransportException(
+                                ResponsesTransportException.Category.INCOMPLETE,
+                                ResponsesTransportException.usage(response));
                           requireCompleted(response);
                           completed.set(true);
                         }
