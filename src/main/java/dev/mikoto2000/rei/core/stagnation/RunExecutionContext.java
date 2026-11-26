@@ -1349,6 +1349,8 @@ public class RunExecutionContext {
   /** 再開メッセージ一覧。 */
   private List<org.springframework.ai.chat.messages.Message> resumeMessages = List.of();
 
+  private boolean pendingInferenceInput;
+
   /** 実行の停滞への対処で使用する継続入力を設定する。 */
   public void setContinuation(dev.mikoto2000.rei.core.chat.RunContinuation continuation) {
     this.continuation = continuation;
@@ -1386,6 +1388,7 @@ public class RunExecutionContext {
 
   /** 保存された状況を引き継いで、中断した作業を再開する。 */
   public synchronized void resume(dev.mikoto2000.rei.core.chat.RunContinuation.Saved saved) {
+    pendingInferenceInput = saved != null && saved.inferencePending();
     if (saved != null) {
       restoreConnection(saved.connection());
       budget.restore(saved.budget());
@@ -1447,6 +1450,17 @@ public class RunExecutionContext {
   /** A full input snapshot owns its original system prefix after contract validation. */
   public synchronized boolean restoresModelInput() {
     return protocolHistory != null && protocolHistory.input() != null && !resumeMessages.isEmpty();
+  }
+
+  /** Only a verified pre-inference receipt preserves its already assembled first request. */
+  public synchronized boolean hasPendingInferenceInput() {
+    return pendingInferenceInput;
+  }
+
+  public synchronized boolean takePendingInferenceInput() {
+    boolean pending = pendingInferenceInput;
+    pendingInferenceInput = false;
+    return pending;
   }
 
   public synchronized List<org.springframework.ai.chat.messages.Message> takeResumeMessages(

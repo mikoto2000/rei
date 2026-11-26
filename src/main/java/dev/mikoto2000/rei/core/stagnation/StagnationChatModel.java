@@ -219,10 +219,12 @@ public final class StagnationChatModel implements ChatModel {
       context.checkActive();
       context.checkModelTokenBudget();
       if (!prepaid) context.consumeNextLlmCall();
-      Prompt actionPrompt = resumeRecoveryPrompt(prompt, context);
-      String feedback = context.progressFeedback() + context.resumeBatchFeedback();
+      boolean pendingInference = context.takePendingInferenceInput();
+      Prompt actionPrompt = pendingInference ? prompt : resumeRecoveryPrompt(prompt, context);
+      String feedback =
+          pendingInference ? "" : context.progressFeedback() + context.resumeBatchFeedback();
       String reviewGuidance = "";
-      if (hasReviewProtocol(prompt)) {
+      if (!pendingInference && hasReviewProtocol(prompt)) {
         if (prompt.getOptions() instanceof ToolCallingChatOptions reviewOptions
             && java.util.Objects.requireNonNullElse(
                     reviewOptions.getToolCallbacks(), List.<ToolCallback>of())
@@ -348,7 +350,7 @@ public final class StagnationChatModel implements ChatModel {
       var invoked = new java.util.concurrent.atomic.AtomicBoolean();
       var reported = new java.util.concurrent.atomic.AtomicBoolean();
       Flux<ChatResponse> requests =
-          assemblePrompt == null || context.runContext() == null
+          assemblePrompt == null || context.runContext() == null || pendingInference
               ? Flux.defer(() -> {
                 context.checkModelTokenBudget();
                 var outbound = context.prepareInference(projectTools(invocationPrompt, context));
@@ -679,6 +681,7 @@ public final class StagnationChatModel implements ChatModel {
           dev.mikoto2000.rei.modeloptions.ModelOptions.PREPARATION_CONTEXT_KEY, fingerprint);
     }
     boolean fullInput = context.restoresModelInput();
+    boolean pendingInference = fullInput && context.hasPendingInferenceInput();
     var resumed = context.takeResumeMessages(fingerprint);
     var instructions = new ArrayList<Message>();
     if (resumed.isEmpty()) instructions.addAll(prompt.getInstructions());
@@ -700,7 +703,7 @@ public final class StagnationChatModel implements ChatModel {
     }
     Prompt prepared =
         new Prompt(
-            withoutResumeWorkReminder(instructions),
+            pendingInference ? instructions : withoutResumeWorkReminder(instructions),
             options
                 .mutate()
                 .toolContext(toolContext)

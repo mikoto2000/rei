@@ -125,6 +125,22 @@ public final class InferenceExportGuard {
     return new Decision(prepared.prompt(), request.id());
   }
 
+  /** A human edit creates a new pending grant; it never transfers the old approval. */
+  ToolApprovalRepository.Request requestRevisedApproval(
+      AgentRunContext owner,
+      AcceptedRunOptions connection,
+      ApprovalContinuationStore.InferenceInput input) {
+    if (owner == null
+        || connection == null
+        || !connection.named()
+        || input == null
+        || !connection.fingerprint().matches("[0-9a-f]{64}"))
+      throw new IllegalArgumentException("Invalid revised inference binding");
+    if (inferencePolicy.apply(owner.voiceInput()) == PermissionDecision.DENY)
+      throw new ToolPermissionException("inferenceExport", PermissionDecision.DENY);
+    return requestApproval.apply(canonical(owner, connection, input.contentFingerprint()), owner);
+  }
+
   private static String canonical(
       AgentRunContext owner, AcceptedRunOptions connection, String contentFingerprint) {
     var destination = new TreeMap<>(connection.inferenceDescription());

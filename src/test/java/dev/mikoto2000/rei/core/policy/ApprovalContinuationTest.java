@@ -339,6 +339,382 @@ class ApprovalContinuationTest {
     assertEquals("PENDING", approvals.get(owner.projectId(), approval.id()).status());
   }
 
+  static java.util.stream.Stream<org.junit.jupiter.params.provider.Arguments>
+      approvedInputVariants() {
+    return Arrays.stream(dev.mikoto2000.rei.llm.LlmApiType.values())
+        .flatMap(api ->
+            java.util.stream.Stream.of(false, true)
+                .flatMap(assembled ->
+                    java.util.stream.Stream.of(false, true)
+                        .map(changed ->
+                            org.junit.jupiter.params.provider.Arguments.of(
+                                api, assembled, changed))));
+  }
+
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.MethodSource("approvedInputVariants")
+  void resumedApprovedInputKeepsItsReviewedGuidance(
+      dev.mikoto2000.rei.llm.LlmApiType api, boolean assembled, boolean changedContext) {
+    var pin =
+        new dev.mikoto2000.rei.llm.RunLlmConnection(
+            "local",
+            true,
+            dev.mikoto2000.rei.llm.LlmProvider.OPENAI_COMPATIBLE,
+            dev.mikoto2000.rei.llm.LlmAuthentication.NONE,
+            null,
+            null,
+            new dev.mikoto2000.rei.llm.ResolvedLlmEndpoint(
+                "local",
+                1,
+                api,
+                "http://fixture.invalid/v1",
+                "chat-endpoint:local",
+                "fixture-model",
+                new dev.mikoto2000.rei.llm.LlmCapabilities(
+                    dev.mikoto2000.rei.llm.ReasoningReplayMode.NONE, 8, Set.of()),
+                null,
+                null,
+                Duration.ofSeconds(5)),
+            Map.of(),
+            Map.of());
+    var payloads = new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore(source);
+    var initial = execution();
+    initial.consumeNextLlmCall();
+    var exchange = payloads.newExchange(owner);
+    var context = new java.util.HashMap<String, Object>();
+    context.put(RunExecutionContext.KEY, initial);
+    context.put(dev.mikoto2000.rei.modeloptions.ModelOptions.RUN_CONNECTION_CONTEXT_KEY, pin);
+    context.put(
+        dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.EXCHANGE_CONTEXT_KEY, exchange);
+    context.put(
+        dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ORIGIN_CONTEXT_KEY,
+        new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Origin(
+            exchange.ownerKey(), pin.fingerprint()));
+    List<ToolCallback> callbacks =
+        List.of("beginReview", "readReviewFile", "submitReviewResult").stream()
+            .map(name ->
+                (ToolCallback)
+                    new ToolCallback() {
+                      public ToolDefinition getToolDefinition() {
+                        return ToolDefinition.builder()
+                            .name(name)
+                            .description(name)
+                            .inputSchema("{\"type\":\"object\",\"properties\":{}}")
+                            .build();
+                      }
+
+                      public String call(String input) {
+                        throw new AssertionError(
+                            "Inference approval must not execute a review tool");
+                      }
+                    })
+            .toList();
+    ToolCallingChatOptions options =
+        api == dev.mikoto2000.rei.llm.LlmApiType.RESPONSES
+            ? org.springframework.ai.openai.responses.OpenAiResponsesChatOptions.builder()
+                .model("fixture-model")
+                .toolContext(context)
+                .toolCallbacks(callbacks)
+                .build()
+            : org.springframework.ai.openai.OpenAiChatOptions.builder()
+                .model("fixture-model")
+                .toolContext(context)
+                .toolCallbacks(callbacks)
+                .build();
+    initial.setModelOptions(options);
+    var properties = new dev.mikoto2000.rei.core.contextbudget.ContextCompressionProperties();
+    properties.setEnabled(true);
+    var estimator = dev.mikoto2000.rei.core.contextbudget.TokenEstimator.conservative();
+    var assembler =
+        new dev.mikoto2000.rei.core.contextbudget.ContextAssembler(
+            properties,
+            estimator,
+            new dev.mikoto2000.rei.core.contextbudget.ConversationSummaryRepository(directory),
+            new dev.mikoto2000.rei.core.contextbudget.ToolResultCompressor(
+                new dev.mikoto2000.rei.core.contextbudget.RawToolResultStore(directory),
+                estimator,
+                100,
+                70),
+            (previous, messages, limit, request) -> {
+              throw new AssertionError("Fixture does not require a summary model");
+            },
+            new AgentEventFactory(clock),
+            ignored -> {});
+    var calls = new AtomicInteger();
+    var sent = new java.util.concurrent.atomic.AtomicReference<Prompt>();
+    var model =
+        new ChatModel() {
+          public ChatResponse call(Prompt prompt) {
+            throw new AssertionError("Streaming loop only");
+          }
+
+          public Flux<ChatResponse> stream(Prompt prompt) {
+            calls.incrementAndGet();
+            sent.set(prompt);
+            var origin =
+                (dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Origin)
+                    ((ToolCallingChatOptions) prompt.getOptions())
+                        .getToolContext()
+                        .get(
+                            dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore
+                                .ORIGIN_CONTEXT_KEY);
+            return Flux.just(
+                new ChatResponse(
+                    List.of(
+                        new Generation(
+                            AssistantMessage.builder()
+                                .content("done")
+                                .properties(
+                                    Map.of(
+                                        "rei.llm.replay-origin-owner",
+                                        origin.owner(),
+                                        "rei.llm.replay-origin-endpoint",
+                                        origin.endpoint()))
+                                .build()))));
+          }
+        };
+    var loop = new StagnationChatModel(model, assembled ? assembler : null);
+    assertThrows(
+        RunWaitingException.class,
+        () ->
+            loop.stream(new Prompt("PRIVATE REVIEW FIXTURE", initial.modelOptions())).blockLast());
+    assertEquals(0, calls.get());
+    var approval = approvals.list(owner.projectId()).getFirst();
+    var entry = store.find(approval.id()).orElseThrow();
+    var expected = store.saved(entry).messages();
+    assertTrue(
+        expected.stream()
+            .anyMatch(
+                message -> Boolean.TRUE.equals(message.getMetadata().get("rei.reviewGuidance"))));
+    service.decide(owner.projectId(), approval.id(), true, true);
+    assertTrue(store.claim(approval.id()));
+    assertTrue(registry.transition(owner.runId(), RunStatus.RUNNING, null));
+    var resumed = execution();
+    resumed.resume(service.restore(owner));
+    // ChatExecutionService performs this when it restores the persisted checkpoint progress.
+    resumed.beginContextRestoration();
+    var resumedContext = new java.util.HashMap<>(options.getToolContext());
+    resumedContext.put(RunExecutionContext.KEY, resumed);
+    resumedContext.put(
+        dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.EXCHANGE_CONTEXT_KEY,
+        payloads.newExchange(owner));
+    resumed.setModelOptions(options.mutate().toolContext(null).toolContext(resumedContext).build());
+    var finalExecution = resumed;
+    var currentInput =
+        changedContext
+            ? List.<org.springframework.ai.chat.messages.Message>of(
+                org.springframework.ai.chat.messages.SystemMessage.builder()
+                    .text("CHANGED WORK CONTEXT")
+                    .metadata(Map.of("rei.workContext", true))
+                    .build(),
+                new UserMessage("PRIVATE REVIEW FIXTURE"))
+            : List.<org.springframework.ai.chat.messages.Message>of(
+                new UserMessage("PRIVATE REVIEW FIXTURE"));
+    if (changedContext) {
+      var changedPrompt = new Prompt(currentInput, resumed.modelOptions());
+      assertThrows(RunWaitingException.class, () -> loop.stream(changedPrompt).blockLast());
+      assertEquals(0, calls.get());
+      var replacement = approvals.list(owner.projectId()).getFirst();
+      assertNotEquals(approval.id(), replacement.id());
+      assertEquals("CONSUMED", approvals.get(owner.projectId(), approval.id()).status());
+      var replacementEntry = store.find(replacement.id()).orElseThrow();
+      assertNotEquals(
+          store.document(entry).inference().contentFingerprint(),
+          store.document(replacementEntry).inference().contentFingerprint());
+      expected = store.saved(replacementEntry).messages();
+      assertTrue(
+          expected.stream().anyMatch(message -> "CHANGED WORK CONTEXT".equals(message.getText())));
+      service.decide(owner.projectId(), replacement.id(), true, true);
+      assertTrue(store.claim(replacement.id()));
+      assertTrue(registry.transition(owner.runId(), RunStatus.RUNNING, null));
+      finalExecution = execution();
+      finalExecution.resume(service.restore(owner));
+      finalExecution.beginContextRestoration();
+      var updatedContext = new java.util.HashMap<>(options.getToolContext());
+      updatedContext.put(RunExecutionContext.KEY, finalExecution);
+      updatedContext.put(
+          dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.EXCHANGE_CONTEXT_KEY,
+          payloads.newExchange(owner));
+      finalExecution.setModelOptions(
+          options.mutate().toolContext(null).toolContext(updatedContext).build());
+      approval = replacement;
+    }
+    var finalPrompt = new Prompt(currentInput, finalExecution.modelOptions());
+    org.junit.jupiter.api.Assertions.assertDoesNotThrow(() -> loop.stream(finalPrompt).blockLast());
+    assertEquals(1, calls.get());
+    assertEquals(
+        changedContext ? 2 : 1,
+        org.springframework.jdbc.core.simple.JdbcClient.create(source)
+            .sql("SELECT COUNT(*) FROM tool_approvals WHERE project=?")
+            .param(owner.projectId())
+            .query(Integer.class)
+            .single());
+    assertTrue(approvals.list(owner.projectId()).isEmpty());
+    assertEquals("CONSUMED", approvals.get(owner.projectId(), approval.id()).status());
+    assertEquals(1, finalExecution.budgetSnapshot().llmCalls());
+    var codec = new dev.mikoto2000.rei.modelmessage.ModelMessageCodec();
+    assertEquals(expected.size(), sent.get().getInstructions().size());
+    for (int i = 0; i < expected.size(); i++)
+      org.junit.jupiter.api.Assertions.assertArrayEquals(
+          codec.encode(expected.get(i)), codec.encode(sent.get().getInstructions().get(i)));
+  }
+
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(strings = {"pending", "approved", "queued"})
+  void humanGuidanceReplacesTheInferenceReceiptAndRequiresApprovalOfTheChangedInput(String state) {
+    String originalId = pauseInferenceForInspection();
+    var original = store.find(originalId).orElseThrow();
+    var document = store.document(original);
+    if (!state.equals("pending"))
+      service.decide(owner.projectId(), originalId, true, state.equals("queued"));
+    org.junit.jupiter.api.Assertions.assertDoesNotThrow(() ->
+        service.acceptGuidance(
+            owner, List.of(new UserMessage("HUMAN CHANGED INFERENCE GUIDANCE"))));
+    var waiting = approvals.list(owner.projectId());
+    assertEquals(1, waiting.size());
+    var replacement = waiting.getFirst();
+    assertNotEquals(originalId, replacement.id());
+    assertEquals(
+        state.equals("pending") ? "DENIED" : "CONSUMED",
+        approvals.get(owner.projectId(), originalId).status());
+    var retired = store.find(originalId).orElseThrow();
+    assertEquals("CANCELLED", retired.state());
+    assertEquals(original.document(), retired.document());
+    var current = store.find(replacement.id()).orElseThrow();
+    assertEquals("WAITING_APPROVAL", current.state());
+    var updated = store.document(current);
+    assertEquals(document.connection(), updated.connection());
+    assertEquals(document.budget(), updated.budget());
+    assertTrue(updated.history().isEmpty());
+    assertTrue(updated.pending() == null);
+    assertNotEquals(
+        document.inference().contentFingerprint(), updated.inference().contentFingerprint());
+    assertTrue(
+        service
+            .inference(owner.projectId(), replacement.id())
+            .orElseThrow()
+            .messages()
+            .toString()
+            .contains("HUMAN CHANGED INFERENCE GUIDANCE"));
+    assertThrows(
+        IllegalStateException.class,
+        () -> service.decide(owner.projectId(), originalId, true, true));
+    service.decide(owner.projectId(), replacement.id(), true, true);
+    assertTrue(store.claim(replacement.id()));
+    assertTrue(registry.transition(owner.runId(), RunStatus.RUNNING, null));
+    var saved = service.restore(owner);
+    assertTrue(saved.inferencePending());
+    assertEquals(1, saved.budget().llmCalls());
+    assertEquals("HUMAN CHANGED INFERENCE GUIDANCE", saved.messages().getLast().getText());
+    verifyNoInteractions(chat);
+  }
+
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(strings = {"document", "claim"})
+  void concurrentChangesFenceInferenceGuidanceAndRetireItsUnclaimedGrant(String race) {
+    String originalId = pauseInferenceForInspection();
+    if (race.equals("claim")) service.decide(owner.projectId(), originalId, true, true);
+    var original = store.find(originalId).orElseThrow();
+    store = org.mockito.Mockito.spy(store);
+    service = createService(clock);
+    doAnswer(
+            invocation -> {
+              var prepared = invocation.callRealMethod();
+              if (race.equals("claim")) assertTrue(store.claim(originalId));
+              else
+                org.springframework.jdbc.core.simple.JdbcClient.create(source)
+                    .sql(
+                        "UPDATE approval_continuations SET document=json_set(document,'$.request',?) WHERE approval=?")
+                    .params("concurrently edited request", originalId)
+                    .update();
+              return prepared;
+            })
+        .when(store)
+        .inferenceGuidance(
+            any(ApprovalContinuationStore.Entry.class), org.mockito.ArgumentMatchers.anyList());
+    assertThrows(
+        IllegalStateException.class,
+        () -> service.acceptGuidance(owner, List.of(new UserMessage("RACING HUMAN GUIDANCE"))));
+    var remaining = approvals.list(owner.projectId());
+    assertEquals(1, remaining.size());
+    assertEquals(originalId, remaining.getFirst().id());
+    assertEquals(race.equals("claim") ? "APPROVED" : "PENDING", remaining.getFirst().status());
+    var current = store.find(originalId).orElseThrow();
+    assertEquals(race.equals("claim") ? "RESUMING" : "WAITING_APPROVAL", current.state());
+    if (race.equals("claim")) assertEquals(original.document(), current.document());
+    else assertNotEquals(original.document(), current.document());
+    assertEquals(
+        1,
+        org.springframework.jdbc.core.simple.JdbcClient.create(source)
+            .sql("SELECT COUNT(*) FROM approval_continuations WHERE run=?")
+            .param(owner.runId())
+            .query(Integer.class)
+            .single());
+    assertTrue(
+        store.saved(current).messages().stream()
+            .noneMatch(message -> "RACING HUMAN GUIDANCE".equals(message.getText())));
+    verifyNoInteractions(chat);
+  }
+
+  @Test
+  void failedPreparationRetiresTheUnclaimedGuidanceGrantAndKeepsTheOriginalReceipt() {
+    String id = pauseInferenceForInspection();
+    var original = store.find(id).orElseThrow();
+    store = org.mockito.Mockito.spy(store);
+    service = createService(clock);
+    org.mockito.Mockito.doThrow(new IllegalStateException("synthetic preparation failure"))
+        .when(store)
+        .prepareInference(
+            anyString(),
+            any(),
+            anyString(),
+            any(),
+            org.mockito.ArgumentMatchers.anyBoolean(),
+            any(),
+            any(),
+            any());
+    assertThrows(
+        IllegalStateException.class,
+        () -> service.acceptGuidance(owner, List.of(new UserMessage("NEW HUMAN GUIDANCE"))));
+    assertEquals(original, store.find(id).orElseThrow());
+    var remaining = approvals.list(owner.projectId());
+    assertEquals(1, remaining.size());
+    assertEquals(id, remaining.getFirst().id());
+    verifyNoInteractions(chat);
+  }
+
+  @Test
+  void inferenceGuidanceRejectsNonHumanMessagesBeforeReplacingAnyReceipt() {
+    String id = pauseInferenceForInspection();
+    var before = store.find(id).orElseThrow();
+    assertThrows(
+        IllegalArgumentException.class,
+        () ->
+            service.acceptGuidance(
+                owner,
+                List.of(
+                    new org.springframework.ai.chat.messages.SystemMessage("not human guidance"))));
+    assertEquals(before, store.find(id).orElseThrow());
+    assertEquals(id, approvals.list(owner.projectId()).getFirst().id());
+    assertEquals(1, approvals.list(owner.projectId()).size());
+    verifyNoInteractions(chat);
+  }
+
+  @Test
+  void aDifferentOwnerCannotAddGuidanceToAnotherInferenceReceipt() {
+    String id = pauseInferenceForInspection();
+    var before = store.find(id).orElseThrow();
+    var foreign =
+        new AgentRunContext(
+            owner.runId(), owner.conversationId(), directory, UUID.randomUUID().toString());
+    assertThrows(
+        IllegalArgumentException.class,
+        () -> service.acceptGuidance(foreign, List.of(new UserMessage("foreign guidance"))));
+    assertEquals(before, store.find(id).orElseThrow());
+    assertEquals("PENDING", approvals.get(owner.projectId(), id).status());
+    verifyNoInteractions(chat);
+  }
+
   String pauseInferenceForInspection() {
     var pin =
         new dev.mikoto2000.rei.llm.RunLlmConnection(
