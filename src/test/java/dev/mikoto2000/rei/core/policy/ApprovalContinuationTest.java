@@ -609,6 +609,85 @@ class ApprovalContinuationTest {
     verifyNoInteractions(chat);
   }
 
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(strings = {"document", "claim"})
+  void concurrentChangesFenceInferenceGuidanceAndRetireItsUnclaimedGrant(String race) {
+    String originalId = pauseInferenceForInspection();
+    if (race.equals("claim")) service.decide(owner.projectId(), originalId, true, true);
+    var original = store.find(originalId).orElseThrow();
+    store = org.mockito.Mockito.spy(store);
+    service = createService(clock);
+    doAnswer(
+            invocation -> {
+              var prepared = invocation.callRealMethod();
+              if (race.equals("claim")) assertTrue(store.claim(originalId));
+              else
+                org.springframework.jdbc.core.simple.JdbcClient.create(source)
+                    .sql(
+                        "UPDATE approval_continuations SET document=json_set(document,'$.request',?) WHERE approval=?")
+                    .params("concurrently edited request", originalId)
+                    .update();
+              return prepared;
+            })
+        .when(store)
+        .inferenceGuidance(
+            any(ApprovalContinuationStore.Entry.class), org.mockito.ArgumentMatchers.anyList());
+    assertThrows(
+        IllegalStateException.class,
+        () -> service.acceptGuidance(owner, List.of(new UserMessage("RACING HUMAN GUIDANCE"))));
+    var remaining = approvals.list(owner.projectId());
+    assertEquals(1, remaining.size());
+    assertEquals(originalId, remaining.getFirst().id());
+    assertEquals(race.equals("claim") ? "APPROVED" : "PENDING", remaining.getFirst().status());
+    var current = store.find(originalId).orElseThrow();
+    assertEquals(race.equals("claim") ? "RESUMING" : "WAITING_APPROVAL", current.state());
+    if (race.equals("claim")) assertEquals(original.document(), current.document());
+    else assertNotEquals(original.document(), current.document());
+    assertEquals(
+        1,
+        org.springframework.jdbc.core.simple.JdbcClient.create(source)
+            .sql("SELECT COUNT(*) FROM approval_continuations WHERE run=?")
+            .param(owner.runId())
+            .query(Integer.class)
+            .single());
+    assertTrue(
+        store.saved(current).messages().stream()
+            .noneMatch(message -> "RACING HUMAN GUIDANCE".equals(message.getText())));
+    verifyNoInteractions(chat);
+  }
+
+  @Test
+  void inferenceGuidanceRejectsNonHumanMessagesBeforeReplacingAnyReceipt() {
+    String id = pauseInferenceForInspection();
+    var before = store.find(id).orElseThrow();
+    assertThrows(
+        IllegalArgumentException.class,
+        () ->
+            service.acceptGuidance(
+                owner,
+                List.of(
+                    new org.springframework.ai.chat.messages.SystemMessage("not human guidance"))));
+    assertEquals(before, store.find(id).orElseThrow());
+    assertEquals(id, approvals.list(owner.projectId()).getFirst().id());
+    assertEquals(1, approvals.list(owner.projectId()).size());
+    verifyNoInteractions(chat);
+  }
+
+  @Test
+  void aDifferentOwnerCannotAddGuidanceToAnotherInferenceReceipt() {
+    String id = pauseInferenceForInspection();
+    var before = store.find(id).orElseThrow();
+    var foreign =
+        new AgentRunContext(
+            owner.runId(), owner.conversationId(), directory, UUID.randomUUID().toString());
+    assertThrows(
+        IllegalArgumentException.class,
+        () -> service.acceptGuidance(foreign, List.of(new UserMessage("foreign guidance"))));
+    assertEquals(before, store.find(id).orElseThrow());
+    assertEquals("PENDING", approvals.get(owner.projectId(), id).status());
+    verifyNoInteractions(chat);
+  }
+
   String pauseInferenceForInspection() {
     var pin =
         new dev.mikoto2000.rei.llm.RunLlmConnection(
