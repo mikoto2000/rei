@@ -318,6 +318,120 @@ class ApprovalContinuationTest {
     assertEquals("PENDING", approvals.get(owner.projectId(), approval.id()).status());
   }
 
+  String pauseInferenceForInspection() {
+    var pin =
+        new dev.mikoto2000.rei.llm.RunLlmConnection(
+            "local",
+            true,
+            dev.mikoto2000.rei.llm.LlmProvider.OPENAI_COMPATIBLE,
+            dev.mikoto2000.rei.llm.LlmAuthentication.NONE,
+            null,
+            null,
+            new dev.mikoto2000.rei.llm.ResolvedLlmEndpoint(
+                "local",
+                1,
+                dev.mikoto2000.rei.llm.LlmApiType.RESPONSES,
+                "http://fixture.invalid/v1",
+                "chat-endpoint:local",
+                "fixture-model",
+                new dev.mikoto2000.rei.llm.LlmCapabilities(
+                    dev.mikoto2000.rei.llm.ReasoningReplayMode.NONE, 8, Set.of()),
+                null,
+                null,
+                Duration.ofSeconds(5)),
+            Map.of(),
+            Map.of());
+    var execution = execution();
+    execution.consumeNextLlmCall();
+    var payloads = new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore(source);
+    var exchange = payloads.newExchange(owner);
+    var context =
+        Map.<String, Object>of(
+            RunExecutionContext.KEY,
+            execution,
+            dev.mikoto2000.rei.modeloptions.ModelOptions.RUN_CONNECTION_CONTEXT_KEY,
+            pin,
+            dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.EXCHANGE_CONTEXT_KEY,
+            exchange,
+            dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ORIGIN_CONTEXT_KEY,
+            new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Origin(
+                exchange.ownerKey(), pin.fingerprint()));
+    var options =
+        org.springframework.ai.openai.responses.OpenAiResponsesChatOptions.builder()
+            .model("fixture-model")
+            .toolContext(context)
+            .toolCallbacks(
+                List.of(
+                    callback(
+                        "searchTools",
+                        input -> {
+                          throw new AssertionError("No tools while inspecting inference");
+                        })))
+            .build();
+    execution.setModelOptions(options);
+    var prompt =
+        new Prompt(
+            List.of(
+                new org.springframework.ai.chat.messages.SystemMessage(
+                    "PRIVATE SYSTEM VIEW FIXTURE"),
+                new UserMessage("PRIVATE USER VIEW FIXTURE")),
+            execution.modelOptions());
+    assertTrue(service.prepareInference(execution, prompt).isEmpty());
+    return approvals.list(owner.projectId()).getFirst().id();
+  }
+
+  @Test
+  void humanApiCanInspectTheProtectedInferenceInputWithoutConsumingApproval() throws Exception {
+    String id = pauseInferenceForInspection();
+    var controller = new dev.mikoto2000.rei.web.ApprovalController(approvals);
+    controller.setContinuations(service);
+    var mvc =
+        org.springframework.test.web.servlet.setup.MockMvcBuilders.standaloneSetup(controller)
+            .build();
+    mvc.perform(
+            org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get(
+                "/api/v1/projects/" + owner.projectId() + "/approvals/" + id + "/inference"))
+        .andExpect(
+            org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().isOk())
+        .andExpect(
+            org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath(
+                    "$.messages[0].parts[0].text")
+                .value("PRIVATE SYSTEM VIEW FIXTURE"))
+        .andExpect(
+            org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath(
+                    "$.messages[1].parts[0].text")
+                .value("PRIVATE USER VIEW FIXTURE"))
+        .andExpect(
+            org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath(
+                    "$.destination.endpoint")
+                .value("local"))
+        .andExpect(
+            org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath(
+                    "$.tools[0].name")
+                .value("searchTools"));
+    assertEquals("PENDING", approvals.get(owner.projectId(), id).status());
+    assertEquals("WAITING_APPROVAL", service.state(id).orElseThrow());
+  }
+
+  @Test
+  void humanShellShowsActualInferenceMessagesAndToolDefinitionsBeforeApproval() {
+    String id = pauseInferenceForInspection();
+    var currentProject = mock(dev.mikoto2000.rei.core.project.ProjectService.class);
+    when(currentProject.currentContext())
+        .thenReturn(new ProjectContext(owner.projectId(), "fixture", directory));
+    var command = new ApprovalCommand(approvals, currentProject);
+    command.setContinuations(service);
+    var output = new java.io.StringWriter();
+    var cli = new picocli.CommandLine(command);
+    cli.setOut(new java.io.PrintWriter(output));
+    assertEquals(0, cli.execute("show", id));
+    assertTrue(output.toString().contains("PRIVATE SYSTEM VIEW FIXTURE"));
+    assertTrue(output.toString().contains("PRIVATE USER VIEW FIXTURE"));
+    assertTrue(output.toString().contains("searchTools"));
+    assertEquals("PENDING", approvals.get(owner.projectId(), id).status());
+    assertEquals("WAITING_APPROVAL", service.state(id).orElseThrow());
+  }
+
   /** 承認続行後も所有者の追加入力が同じ実行キューへ届き、完了後は受け付けない。 */
   @Test
   void continuedRunAcceptsOwnedWebGuidanceWithoutResettingSavedBudget() {
