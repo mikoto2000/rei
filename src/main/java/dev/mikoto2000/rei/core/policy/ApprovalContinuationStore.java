@@ -211,6 +211,23 @@ public class ApprovalContinuationStore {
       ModelMessagePayloadStore.History protocolHistory,
       dev.mikoto2000.rei.llm.RunLlmConnection connection,
       InferenceInput inference) {
+    insert(
+        id,
+        owner,
+        prepareInference(
+            id, owner, request, budget, managed, protocolHistory, connection, inference));
+  }
+
+  /** Payload reads/protection precede the short receipt transaction, as for approval decisions. */
+  String prepareInference(
+      String id,
+      AgentRunContext owner,
+      String request,
+      OutputLimitRunBudget.Snapshot budget,
+      boolean managed,
+      ModelMessagePayloadStore.History protocolHistory,
+      dev.mikoto2000.rei.llm.RunLlmConnection connection,
+      InferenceInput inference) {
     if (inference == null
         || budget == null
         || connection == null
@@ -253,7 +270,85 @@ public class ApprovalContinuationStore {
     if (encoded.getBytes(java.nio.charset.StandardCharsets.UTF_8).length > 1048576)
       throw new IllegalArgumentException("Inference approval continuation capacity exceeded");
     payloads.obtain().protectContinuation(scope, protocolHistory, id);
+    return encoded;
+  }
+
+  void insertPreparedInference(String id, AgentRunContext owner, String encoded) {
     insert(id, owner, encoded);
+  }
+
+  boolean cancelForInferenceGuidance(Entry expected) {
+    return db.sql(
+                "UPDATE approval_continuations SET state='CANCELLED' WHERE approval=? AND run=?"
+                    + " AND document=? AND state=? AND state IN ('WAITING_APPROVAL','QUEUED')")
+            .params(expected.approvalId(), expected.runId(), expected.document(), expected.state())
+            .update()
+        == 1;
+  }
+
+  void discardPreparedInference(AgentRunContext owner, String id) {
+    payloads.obtain().releaseApproval(ModelMessagePayloadStore.Scope.forOwner(owner), id);
+  }
+
+  Document inferenceGuidance(Entry entry, List<Message> guidance) {
+    var original = document(entry);
+    if (original.inference() == null
+        || guidance.isEmpty()
+        || guidance.stream().anyMatch(message -> !(message instanceof UserMessage)))
+      throw new IllegalArgumentException("Human inference guidance required");
+    var history = original.protocolHistory();
+    if (history.entries().size() + guidance.size() > 256
+        || history.input().entries().size() + guidance.size() > 256)
+      throw new IllegalArgumentException("Approval guidance capacity exceeded");
+    var codec = new dev.mikoto2000.rei.modelmessage.ModelMessageCodec();
+    var frozen = guidance.stream().map(codec::encode).map(codec::decode).toList();
+    var messages = new ArrayList<>(saved(entry).messages());
+    messages.addAll(frozen);
+    var input =
+        new InferenceInput(
+            InferenceExportRequest.fingerprint(
+                history.input().preparationFingerprint(), original.inference().tools(), messages),
+            original.inference().tools());
+    var scope = ModelMessagePayloadStore.Scope.forOwner(original.owner());
+    var payloadStore = payloads.obtain();
+    for (var pointer : history.protectedEntries()) {
+      payloadStore.loadEntry(
+          scope, pointer, ModelMessagePayloadStore.ReferenceKind.APPROVAL, entry.approvalId());
+      payloadStore.publish(
+          scope,
+          pointer.reference(),
+          ModelMessagePayloadStore.ReferenceKind.RUN,
+          original.owner().runId());
+    }
+    var trace = new ArrayList<>(history.entries());
+    var entries = new ArrayList<>(history.input().entries());
+    for (var message : frozen) {
+      String key = "guidance/" + java.util.UUID.randomUUID() + "/USER";
+      var reference = payloadStore.save(scope, original.owner().runId(), key, message);
+      payloadStore.publish(
+          scope, reference, ModelMessagePayloadStore.ReferenceKind.RUN, original.owner().runId());
+      var pointer = new ModelMessagePayloadStore.History.Entry(key, reference);
+      trace.add(pointer);
+      entries.add(pointer);
+    }
+    var updated =
+        new ModelMessagePayloadStore.History(
+            history.schemaVersion(),
+            history.run(),
+            history.origin(),
+            trace,
+            new ModelMessagePayloadStore.History.Input(
+                entries, history.input().traceSize(), history.input().preparationFingerprint()));
+    return new Document(
+        original.owner(),
+        original.request(),
+        List.of(),
+        null,
+        original.budget(),
+        original.managedParent(),
+        updated,
+        original.connection(),
+        input);
   }
 
   /**
@@ -787,6 +882,9 @@ public class ApprovalContinuationStore {
     for (var entry : active())
       if (entry.runId().equals(owner.runId()) && !entry.state().equals("RESUMING")) {
         var d = document(entry);
+        if (d.inference() != null)
+          throw new IllegalArgumentException(
+              "Inference guidance requires a new content-bound receipt");
         var messages = new ArrayList<>(d.history());
         var history = d.protocolHistory();
         if (history != null && history.input() != null) {

@@ -497,11 +497,85 @@ public class ApprovalContinuationService implements RunContinuation {
   /** 要求を後続の処理へ引き渡すため、案内を受け付ける。 */
   @Override
   public void acceptGuidance(AgentRunContext owner, List<Message> guidance) {
-    if (store.get().active().stream().anyMatch(e -> e.runId().equals(owner.runId())))
-      store.get().guidance(owner, guidance);
+    if (guidance.isEmpty()) return;
+    var active =
+        store.get().active().stream().filter(e -> e.runId().equals(owner.runId())).toList();
+    var inference =
+        active.stream().filter(e -> store.get().document(e).inference() != null).toList();
+    if (!inference.isEmpty()) {
+      if (inference.size() != 1)
+        throw new IllegalStateException("Ambiguous inference guidance target");
+      replaceInferenceGuidance(owner, inference.getFirst(), guidance);
+    } else if (!active.isEmpty()) store.get().guidance(owner, guidance);
     else {
       var external = slack.getIfAvailable();
       if (external != null) external.acceptGuidance(owner, guidance);
+    }
+  }
+
+  private void replaceInferenceGuidance(
+      AgentRunContext owner, ApprovalContinuationStore.Entry original, List<Message> guidance) {
+    var document = store.get().document(original);
+    var request = findApproval.apply(owner.projectId(), original.approvalId());
+    if (!document.owner().equals(owner)
+        || !Set.of("WAITING_APPROVAL", "QUEUED").contains(original.state())
+        || registry.getObject().get(owner.runId()).status() != RunStatus.WAITING_APPROVAL
+        || !clock.instant().isBefore(request.expiresAt())
+        || !Set.of("PENDING", "APPROVED").contains(request.status()))
+      throw new IllegalStateException("Inference is no longer awaiting editable approval");
+    verifyInferenceBinding(original, request, true);
+    var revised = store.get().inferenceGuidance(original, guidance);
+    var replacement =
+        inferenceGuard.requestRevisedApproval(owner, revised.connection(), revised.inference());
+    if (replacement.id().equals(original.approvalId()))
+      throw new IllegalStateException("Inference guidance did not change the input");
+    var encoded =
+        store
+            .get()
+            .prepareInference(
+                replacement.id(),
+                owner,
+                revised.request(),
+                revised.budget(),
+                revised.managedParent(),
+                revised.protocolHistory(),
+                revised.connection(),
+                revised.inference());
+    try {
+      transaction.executeWithoutResult(tx -> {
+        var current = registry.getObject().get(owner.runId());
+        if (!current.context().equals(owner)
+            || current.status() != RunStatus.WAITING_APPROVAL
+            || !store.get().cancelForInferenceGuidance(original))
+          throw new IllegalStateException("Inference guidance target changed during preparation");
+        var old = findApproval.apply(owner.projectId(), original.approvalId());
+        var next = findApproval.apply(owner.projectId(), replacement.id());
+        if (!Set.of("PENDING", "APPROVED").contains(old.status())
+            || !Set.of("PENDING", "APPROVED").contains(next.status())
+            || !clock.instant().isBefore(next.expiresAt()))
+          throw new IllegalStateException("Inference guidance approval changed during preparation");
+        inferenceGuard.verifySavedApproval(
+            replacement.id(), owner, revised.connection(), revised.inference());
+        store.get().insertPreparedInference(replacement.id(), owner, encoded);
+        if (old.status().equals("PENDING"))
+          decideApproval.apply(
+              new ApprovalDecision(owner.projectId(), original.approvalId(), false));
+        else retireContinuationGrant.accept(owner.projectId(), original.approvalId());
+      });
+    } catch (RuntimeException failed) {
+      if (store.get().find(replacement.id()).isEmpty()) {
+        try {
+          var unclaimed = findApproval.apply(owner.projectId(), replacement.id());
+          if (unclaimed.status().equals("PENDING"))
+            decideApproval.apply(new ApprovalDecision(owner.projectId(), replacement.id(), false));
+          else retireContinuationGrant.accept(owner.projectId(), replacement.id());
+          store.get().discardPreparedInference(owner, replacement.id());
+        } catch (RuntimeException retained) {
+          org.slf4j.LoggerFactory.getLogger(ApprovalContinuationService.class)
+              .warn("Unclaimed inference guidance receipt retained after cleanup failure");
+        }
+      }
+      throw failed;
     }
   }
 
