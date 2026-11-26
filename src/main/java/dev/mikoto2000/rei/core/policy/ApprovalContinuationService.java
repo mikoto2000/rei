@@ -52,6 +52,8 @@ public class ApprovalContinuationService implements RunContinuation {
   /** 保存先。 */
   private final ApprovalContinuationStore store;
 
+  private final InferenceExportGuard inferenceGuard;
+
   /** 登録台帳。 */
   private final ObjectProvider<RunRegistry> registry;
 
@@ -124,6 +126,7 @@ public class ApprovalContinuationService implements RunContinuation {
         decision -> approvals.decide(decision.project(), decision.id(), decision.approved());
     this.retireContinuationGrant = (project, id) -> approvals.retireContinuationGrant(project, id);
     this.store = store;
+    this.inferenceGuard = new InferenceExportGuard(approvals, clock);
     this.registry = registry;
     this.runs = runs;
     this.router = router;
@@ -159,6 +162,45 @@ public class ApprovalContinuationService implements RunContinuation {
         .anyMatch(e ->
             e.runId().equals(owner.runId())
                 && Set.of("WAITING_APPROVAL", "QUEUED", "DENY_QUEUED").contains(e.state()));
+  }
+
+  /** Persist the exact pre-inference input and release the worker without a fake tool call. */
+  @Override
+  public Optional<org.springframework.ai.chat.prompt.Prompt> prepareInference(
+      RunExecutionContext execution, org.springframework.ai.chat.prompt.Prompt prompt) {
+    var owner = execution.runContext();
+    execution.checkActive();
+    checkExecution(owner);
+    if (execution.hasParentReservation() && !managed.containsKey(owner.runId()))
+      throw new IllegalStateException("Managed parent required to preserve shared budget");
+    var connection = execution.progressSnapshot().connection();
+    var decision = inferenceGuard.authorize(owner, connection, prompt);
+    if (decision.permitted()) return Optional.of(decision.prompt());
+    var prepared = InferenceExportRequest.prepare(decision.prompt());
+    var input = prepared.input();
+    String id = decision.approvalId();
+    inferenceGuard.verifySavedApproval(id, owner, connection, input);
+    execution.captureModelInput(prepared.prompt());
+    execution.endIteration();
+    var previous = store.resuming(owner.runId());
+    store.saveInference(
+        id,
+        owner,
+        execution.userRequest(),
+        execution.budgetSnapshot(),
+        managed.containsKey(owner.runId()) || execution.hasParentReservation(),
+        execution.protocolHistorySnapshot(),
+        connection,
+        input);
+    previous.ifPresent(old -> {
+      retireContinuationGrant.accept(owner.projectId(), old.approvalId());
+      store.state(old.approvalId(), "COMPLETED");
+    });
+    if (!registry.getObject().transition(owner.runId(), RunStatus.WAITING_APPROVAL, null)) {
+      store.state(id, "CANCELLED");
+      throw new java.util.concurrent.CancellationException();
+    }
+    return Optional.empty();
   }
 
   /** ツール利用の権限制御に関する中断承認を処理する。 */

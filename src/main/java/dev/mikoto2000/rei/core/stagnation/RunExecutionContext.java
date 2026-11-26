@@ -1354,6 +1354,33 @@ public class RunExecutionContext {
     this.continuation = continuation;
   }
 
+  /** Freeze and authorize named outbound input before recording an attempted model call. */
+  public org.springframework.ai.chat.prompt.Prompt prepareInference(
+      org.springframework.ai.chat.prompt.Prompt prompt) {
+    if (!(prompt.getOptions()
+        instanceof org.springframework.ai.model.tool.ToolCallingChatOptions options))
+      throw new IllegalArgumentException("Inference request options required");
+    var context = options.getToolContext();
+    var supplied =
+        context == null
+            ? null
+            : context.get(dev.mikoto2000.rei.modeloptions.ModelOptions.RUN_CONNECTION_CONTEXT_KEY);
+    if (supplied != null && !(supplied instanceof dev.mikoto2000.rei.llm.RunLlmConnection))
+      throw new IllegalStateException("Inference accepted connection unavailable");
+    var connection = (dev.mikoto2000.rei.llm.RunLlmConnection) supplied;
+    if (connection == null || !connection.named()) {
+      if (acceptedConnection != null && acceptedConnection.named())
+        throw new IllegalStateException("Inference accepted connection mismatch");
+      return prompt;
+    }
+    if (!connection.equals(acceptedConnection) || continuation == null)
+      throw new IllegalStateException("Inference export approval continuation unavailable");
+    checkActive();
+    return continuation
+        .prepareInference(this, prompt)
+        .orElseThrow(dev.mikoto2000.rei.core.chat.RunWaitingException::new);
+  }
+
   /** 待機中承認ツール一覧。 */
   private dev.mikoto2000.rei.core.chat.RunContinuation.PendingTools pendingApprovalTools;
 

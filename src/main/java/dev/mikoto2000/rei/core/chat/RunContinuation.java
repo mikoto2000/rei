@@ -173,6 +173,12 @@ public interface RunContinuation {
   /** 会話の実行において、中断に該当するか判定する。 */
   boolean suspend(RunExecutionContext execution, List<Message> history);
 
+  /** Empty means durably suspended; named inference requires an explicit continuation. */
+  default java.util.Optional<org.springframework.ai.chat.prompt.Prompt> prepareInference(
+      RunExecutionContext execution, org.springframework.ai.chat.prompt.Prompt prompt) {
+    throw new IllegalStateException("Inference export approval continuation unavailable");
+  }
+
   /** 会話の実行に関する関連付け親を処理する。 */
   default void attachParent(
       AgentRunContext owner,
