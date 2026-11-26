@@ -68,6 +68,15 @@ final class NamedChatMessages implements ChatModel {
     var checked = ResponsesReasoningReplay.prepare(prompt, endpoint);
     if (!(checked.getOptions() instanceof org.springframework.ai.openai.OpenAiChatOptions options))
       throw invalid();
+    var accepted = options.getToolContext();
+    LlmInputPolicy.requireMedia(
+        checked,
+        accepted != null
+                && accepted.get(
+                        dev.mikoto2000.rei.modeloptions.ModelOptions.RUN_CONNECTION_CONTEXT_KEY)
+                    instanceof RunLlmConnection connection
+            ? connection
+            : null);
     if (Boolean.TRUE.equals(options.getReplayReasoningContent())) {
       var context = options.getToolContext();
       if (context == null
