@@ -119,8 +119,10 @@ final class ResponsesAdapter implements LlmProtocolAdapter, ChatModel {
           "Responses SDK retries must stay zero at client construction");
     Objects.requireNonNull(client, "client");
     var replay = endpoint.capabilities().reasoningReplay();
-    var sync = ResponsesSdkBoundary.safe(client, replay);
-    var async = ResponsesSdkBoundary.safe(client.async(), replay);
+    boolean plan =
+        acceptedConnection != null && acceptedConnection.provider() == LlmProvider.CHATGPT_PLAN;
+    var sync = ResponsesSdkBoundary.safe(client, replay, plan);
+    var async = ResponsesSdkBoundary.safe(client.async(), replay, plan);
     var model =
         OpenAiResponsesChatModel.builder()
             .options(options)

@@ -185,6 +185,35 @@ final class ResponsesTransportException extends IllegalStateException
   }
 
   static ResponsesTransportException normalize(Throwable error) {
+    return normalize(error, false);
+  }
+
+  static ResponsesTransportException normalizePlan(Throwable error) {
+    return nonRetryable(normalize(error, true));
+  }
+
+  /** Only exact documented codes establish a Plan usage failure; HTTP status alone does not. */
+  static ResponsesTransportException planUsageFailure(String code, ModelTokenUsage usage) {
+    return switch (code) {
+      case "subscription_sharing_usage_limit_exceeded" ->
+          new ResponsesTransportException(
+              Category.RATE_LIMIT,
+              usage,
+              false,
+              "chatgpt_usage_limit",
+              "このアプリでの ChatGPT 呼び出しが利用枠の制限に達しました。ChatGPT 設定の使用量を確認してください。");
+      case "subscription_sharing_usage_unavailable" ->
+          new ResponsesTransportException(
+              Category.TRANSIENT,
+              usage,
+              false,
+              "chatgpt_usage_unavailable",
+              "ChatGPT の利用可否を確認できませんでした。認証情報を保持し、保存済みの状態を確認してから再開してください。");
+      default -> null;
+    };
+  }
+
+  private static ResponsesTransportException normalize(Throwable error, boolean plan) {
     error = reactor.core.Exceptions.unwrap(error);
     while (error instanceof java.util.concurrent.CompletionException && error.getCause() != null)
       error = error.getCause();
@@ -194,6 +223,10 @@ final class ResponsesTransportException extends IllegalStateException
       if (nested instanceof dev.mikoto2000.rei.toolcontract.ExternalReadFailure failure)
         return new ResponsesTransportException(
             Category.PROVIDER, null, false, failure.diagnosticCode(), failure.diagnosticMessage());
+      if (plan && nested instanceof com.openai.errors.OpenAIServiceException service) {
+        var usageFailure = planUsageFailure(service.code().orElse(""), null);
+        if (usageFailure != null) return usageFailure;
+      }
     }
     if (error instanceof com.openai.errors.OpenAIInvalidDataException
         || error instanceof IllegalArgumentException)
