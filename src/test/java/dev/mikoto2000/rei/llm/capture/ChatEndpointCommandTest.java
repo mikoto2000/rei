@@ -26,10 +26,12 @@ class ChatEndpointCommandTest {
   void listAndShowExplainSelectionScopeAndPreserveCaptureHelp() {
     var fixture = new Fixture();
     assertThat(fixture.cli.execute("chat", "list")).isZero();
-    assertThat(fixture.output.toString()).contains("local", "[active]", "local-model", "local-llm", "none", "not-required");
+    assertThat(fixture.output.toString())
+        .contains("local", "[active]", "local-model", "local-llm", "none", "not-required");
     fixture.output.getBuffer().setLength(0);
     assertThat(fixture.cli.execute("chat", "show")).isZero();
-    assertThat(fixture.output.toString()).contains("capabilities", "generation", "unapplied", "process", "next Run", "restart");
+    assertThat(fixture.output.toString())
+        .contains("capabilities", "generation", "unapplied", "process", "next Run", "restart");
     assertThat(fixture.cli.getSubcommands()).containsKeys("capture", "chat");
     verify(fixture.service, org.mockito.Mockito.times(2)).endpoints();
     verifyNoMoreInteractions(fixture.service);
@@ -40,7 +42,8 @@ class ChatEndpointCommandTest {
     var fixture = new Fixture();
     assertThat(fixture.cli.execute("chat", "use", "local")).isZero();
     verify(fixture.service).select("local");
-    assertThat(fixture.output.toString()).contains("local", "local-model", "local-llm", "next Run", "not verified");
+    assertThat(fixture.output.toString())
+        .contains("local", "local-model", "local-llm", "next Run", "not verified");
     verify(fixture.service).endpoints();
     verifyNoMoreInteractions(fixture.service);
   }
@@ -58,7 +61,8 @@ class ChatEndpointCommandTest {
   @Test
   void interactiveConfirmationSelectsOnlyReturnedRegisteredId() {
     var fixture = new Fixture();
-    fixture.command.setEndpointMenu(entries -> java.util.Optional.of(entries.getFirst().profile().id()));
+    fixture.command.setEndpointMenu(
+        entries -> java.util.Optional.of(entries.getFirst().profile().id()));
     assertThat(fixture.cli.execute("chat", "use")).isZero();
     verify(fixture.service).select("local");
   }
@@ -79,11 +83,29 @@ class ChatEndpointCommandTest {
     final StringWriter output = new StringWriter();
 
     Fixture() {
-      var profile = new ChatEndpointCatalog.Profile("local", "local-model", LlmProvider.OPENAI_COMPATIBLE,
-          LlmApiType.CHAT_COMPLETIONS, LlmAuthentication.NONE, null, 1, LlmUsagePath.LOCAL_LLM,
-          new LlmEndpointCapabilities(Map.of(), Map.of(), Map.of(), 10));
-      when(service.endpoints()).thenReturn(List.of(new ChatConnectionService.Endpoint(profile, true,
-          ReasoningReplayMode.NONE, "not-required", null, Map.of(), Map.of(), List.of())));
+      var profile =
+          new ChatEndpointCatalog.Profile(
+              "local",
+              "local-model",
+              LlmProvider.OPENAI_COMPATIBLE,
+              LlmApiType.CHAT_COMPLETIONS,
+              LlmAuthentication.NONE,
+              null,
+              1,
+              LlmUsagePath.LOCAL_LLM,
+              new LlmEndpointCapabilities(Map.of(), Map.of(), Map.of(), 10));
+      when(service.endpoints())
+          .thenReturn(
+              List.of(
+                  new ChatConnectionService.Endpoint(
+                      profile,
+                      true,
+                      ReasoningReplayMode.NONE,
+                      "not-required",
+                      null,
+                      Map.of(),
+                      Map.of(),
+                      List.of())));
       command.setChatConnections(service);
       cli.setOut(new PrintWriter(output, true));
       cli.setErr(new PrintWriter(output, true));

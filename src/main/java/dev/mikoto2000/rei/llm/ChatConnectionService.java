@@ -118,67 +118,95 @@ public final class ChatConnectionService implements AutoCloseable {
       unappliedSettings = java.util.Map.copyOf(unappliedSettings);
       diagnostics = java.util.List.copyOf(diagnostics);
     }
-    @Override public java.util.Map<String, Object> generationSettings() {
-      return java.util.Collections.unmodifiableMap(new java.util.LinkedHashMap<>(generationSettings));
+
+    @Override
+    public java.util.Map<String, Object> generationSettings() {
+      return java.util.Collections.unmodifiableMap(
+          new java.util.LinkedHashMap<>(generationSettings));
     }
   }
 
   public java.util.List<Endpoint> endpoints() {
     var selected = connections.selection();
-    return catalog.profiles().stream().map(configured -> {
-      var model = selected.models().getOrDefault(configured.id(), configured.model());
-      if ((model == null || model.isBlank()) && !catalog.hasNamedProfiles())
-        model = legacyModel.get();
-      var capabilities = java.util.Objects.equals(model, configured.model())
-          ? configured.capabilities() : configured.capabilities().forUnconfirmedModel();
-      var profile = new ChatEndpointCatalog.Profile(configured.id(), model, configured.provider(),
-          configured.api(), configured.authentication(), configured.accountRef(),
-          configured.generation(), configured.usagePath(), capabilities);
-      var source = catalog.connection(profile.id());
-      var applied = new java.util.LinkedHashMap<String, Object>();
-      var unapplied = new java.util.LinkedHashMap<String, String>();
-      var reasons = new java.util.ArrayList<String>();
-      var diagnostics = new java.util.ArrayList<>(catalog.diagnostics());
-      var outputKey = profile.api() == LlmApiType.RESPONSES ? "max_output_tokens" : "max_tokens";
-      if (capabilities.effective().get(LlmEndpointCapabilities.Capability.MAX_OUTPUT_TOKENS)
-          == LlmEndpointCapabilities.Support.SUPPORTED) {
-        applied.put(outputKey, source.getMaxOutputTokens() == null
-            ? defaultOutputTokens : source.getMaxOutputTokens());
-      } else {
-        unapplied.put(outputKey, "unsupported or unconfirmed");
-        if (source.getMaxOutputTokens() != null)
-          reasons.add("max-output-tokens is unsupported or unconfirmed");
-        else diagnostics.add("Inherited max-output-tokens omitted: unsupported or unconfirmed");
-      }
-      if (source.getTemperature() != null) {
-        if (capabilities.effective().get(LlmEndpointCapabilities.Capability.TEMPERATURE)
-            == LlmEndpointCapabilities.Support.SUPPORTED)
-          applied.put("temperature", source.getTemperature());
-        else {
-          unapplied.put("temperature", "unsupported or unconfirmed");
-          reasons.add("temperature is unsupported or unconfirmed");
-        }
-      }
-      var replay = profile.api() == LlmApiType.CHAT_COMPLETIONS
-          ? ReasoningReplayMode.NONE : source.getReasoningReplay();
-      if (replay == null) reasons.add("reasoning-replay must be configured for Responses");
-      var authenticationState = switch (profile.authentication()) {
-        case NONE -> "not-required";
-        case API_KEY -> "configured";
-        case CHATGPT_OAUTH -> "unverified";
-        case UNCONFIGURED -> "unconfigured";
-        case LEGACY -> "legacy";
-      };
-      if (profile.authentication() == LlmAuthentication.UNCONFIGURED)
-        reasons.add("Authentication is not configured");
-      if (profile.provider() == LlmProvider.CHATGPT_PLAN)
-        reasons.add("ChatGPT account registration requires verification");
-      if (catalog.hasNamedProfiles() && profile.api() == LlmApiType.RESPONSES)
-        reasons.add("Named Responses inference policy is not enabled");
-      return new Endpoint(profile, profile.id().equals(selected.endpoint()), replay,
-          authenticationState, reasons.isEmpty() ? null : String.join("; ", reasons),
-          applied, unapplied, diagnostics);
-    }).toList();
+    return catalog.profiles().stream()
+        .map(configured -> {
+          var model = selected.models().getOrDefault(configured.id(), configured.model());
+          if ((model == null || model.isBlank()) && !catalog.hasNamedProfiles())
+            model = legacyModel.get();
+          var capabilities =
+              java.util.Objects.equals(model, configured.model())
+                  ? configured.capabilities()
+                  : configured.capabilities().forUnconfirmedModel();
+          var profile =
+              new ChatEndpointCatalog.Profile(
+                  configured.id(),
+                  model,
+                  configured.provider(),
+                  configured.api(),
+                  configured.authentication(),
+                  configured.accountRef(),
+                  configured.generation(),
+                  configured.usagePath(),
+                  capabilities);
+          var source = catalog.connection(profile.id());
+          var applied = new java.util.LinkedHashMap<String, Object>();
+          var unapplied = new java.util.LinkedHashMap<String, String>();
+          var reasons = new java.util.ArrayList<String>();
+          var diagnostics = new java.util.ArrayList<>(catalog.diagnostics());
+          var outputKey =
+              profile.api() == LlmApiType.RESPONSES ? "max_output_tokens" : "max_tokens";
+          if (capabilities.effective().get(LlmEndpointCapabilities.Capability.MAX_OUTPUT_TOKENS)
+              == LlmEndpointCapabilities.Support.SUPPORTED) {
+            applied.put(
+                outputKey,
+                source.getMaxOutputTokens() == null
+                    ? defaultOutputTokens
+                    : source.getMaxOutputTokens());
+          } else {
+            unapplied.put(outputKey, "unsupported or unconfirmed");
+            if (source.getMaxOutputTokens() != null)
+              reasons.add("max-output-tokens is unsupported or unconfirmed");
+            else diagnostics.add("Inherited max-output-tokens omitted: unsupported or unconfirmed");
+          }
+          if (source.getTemperature() != null) {
+            if (capabilities.effective().get(LlmEndpointCapabilities.Capability.TEMPERATURE)
+                == LlmEndpointCapabilities.Support.SUPPORTED)
+              applied.put("temperature", source.getTemperature());
+            else {
+              unapplied.put("temperature", "unsupported or unconfirmed");
+              reasons.add("temperature is unsupported or unconfirmed");
+            }
+          }
+          var replay =
+              profile.api() == LlmApiType.CHAT_COMPLETIONS
+                  ? ReasoningReplayMode.NONE
+                  : source.getReasoningReplay();
+          if (replay == null) reasons.add("reasoning-replay must be configured for Responses");
+          var authenticationState =
+              switch (profile.authentication()) {
+                case NONE -> "not-required";
+                case API_KEY -> "configured";
+                case CHATGPT_OAUTH -> "unverified";
+                case UNCONFIGURED -> "unconfigured";
+                case LEGACY -> "legacy";
+              };
+          if (profile.authentication() == LlmAuthentication.UNCONFIGURED)
+            reasons.add("Authentication is not configured");
+          if (profile.provider() == LlmProvider.CHATGPT_PLAN)
+            reasons.add("ChatGPT account registration requires verification");
+          if (catalog.hasNamedProfiles() && profile.api() == LlmApiType.RESPONSES)
+            reasons.add("Named Responses inference policy is not enabled");
+          return new Endpoint(
+              profile,
+              profile.id().equals(selected.endpoint()),
+              replay,
+              authenticationState,
+              reasons.isEmpty() ? null : String.join("; ", reasons),
+              applied,
+              unapplied,
+              diagnostics);
+        })
+        .toList();
   }
 
   public RunLlmConnection accept(AgentRunContext owner) {

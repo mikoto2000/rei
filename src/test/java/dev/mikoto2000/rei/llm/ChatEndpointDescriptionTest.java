@@ -30,12 +30,15 @@ class ChatEndpointDescriptionTest {
       assertThat(first.active()).isTrue();
       assertThat(first.profile().usagePath()).isEqualTo(LlmUsagePath.LOCAL_LLM);
       assertThat(first.authenticationState()).isEqualTo("configured");
-      assertThat(first.generationSettings()).containsEntry("temperature", 0.7).containsEntry("max_tokens", 256);
+      assertThat(first.generationSettings())
+          .containsEntry("temperature", 0.7)
+          .containsEntry("max_tokens", 256);
       assertThat(first.reasoningReplay()).isEqualTo(ReasoningReplayMode.NONE);
       assertThat(entries.getLast().profile().usagePath()).isEqualTo(LlmUsagePath.UNKNOWN);
       assertThat(entries.getLast().authenticationState()).isEqualTo("not-required");
       var json = new ObjectMapper().writeValueAsString(entries);
-      assertThat(json).doesNotContain("PRIVATE_PROFILE_KEY", "first.invalid", "apiKey", "credentialRef");
+      assertThat(json)
+          .doesNotContain("PRIVATE_PROFILE_KEY", "first.invalid", "apiKey", "credentialRef");
       assertThatThrownBy(() -> first.generationSettings().put("temperature", 1.0))
           .isInstanceOf(UnsupportedOperationException.class);
     }
@@ -48,12 +51,15 @@ class ChatEndpointDescriptionTest {
     values.remove(prefix("first") + "max-output-tokens");
     try (var service = service(values)) {
       assertThat(service.endpoints()).hasSize(2);
-      assertThat(service.endpoints().getFirst().generationSettings()).containsEntry("max_tokens", 4096);
+      assertThat(service.endpoints().getFirst().generationSettings())
+          .containsEntry("max_tokens", 4096);
       service.selectModel("unconfirmed-model");
       var selected = service.endpoints().getFirst();
       assertThat(selected.profile().model()).isEqualTo("unconfirmed-model");
       assertThat(selected.profile().capabilities().effective())
-          .containsEntry(LlmEndpointCapabilities.Capability.MAX_OUTPUT_TOKENS, LlmEndpointCapabilities.Support.UNKNOWN);
+          .containsEntry(
+              LlmEndpointCapabilities.Capability.MAX_OUTPUT_TOKENS,
+              LlmEndpointCapabilities.Support.UNKNOWN);
       assertThat(selected.generationSettings()).doesNotContainKey("max_tokens");
       assertThat(selected.unappliedSettings()).containsKey("max_tokens");
     }
@@ -93,7 +99,9 @@ class ChatEndpointDescriptionTest {
     }
   }
 
-  private static String prefix(String name) { return "rei.llm.features.chat.endpoints." + name + "."; }
+  private static String prefix(String name) {
+    return "rei.llm.features.chat.endpoints." + name + ".";
+  }
 
   private Map<String, String> settings() {
     var values = new HashMap<String, String>();
@@ -119,15 +127,20 @@ class ChatEndpointDescriptionTest {
   }
 
   private ChatConnectionService service(Map<String, String> values) {
-    var properties = new Binder(new MapConfigurationPropertySource(values))
-        .bind("rei.llm", LlmProperties.class).get();
+    var properties =
+        new Binder(new MapConfigurationPropertySource(values))
+            .bind("rei.llm", LlmProperties.class)
+            .get();
     var root = mock(ChatModel.class);
     when(root.getOptions()).thenThrow(new AssertionError("Metadata accessed ambient model"));
     var holder = mock(ModelHolderService.class);
     when(holder.get()).thenThrow(new AssertionError("Metadata accessed ambient model holder"));
     var beans = new StaticListableBeanFactory();
-    return new ChatConnectionService(new ChatEndpointCatalog(properties), properties,
-        new LlmModelProvider(root, properties), holder,
+    return new ChatConnectionService(
+        new ChatEndpointCatalog(properties),
+        properties,
+        new LlmModelProvider(root, properties),
+        holder,
         beans.getBeanProvider(OpenAiConnectionDetails.class),
         beans.getBeanProvider(OpenAiCommonProperties.class),
         beans.getBeanProvider(OpenAiChatProperties.class),
