@@ -119,6 +119,20 @@ public final class ChatGptCommand {
         () -> require(client).models(account, true).forEach(m -> out(m.id() + " | " + m.name())));
   }
 
+  /** 利用状況を確認した利用者の明示操作で、このアプリの新規要求の停止を解除する。 */
+  @Command(name = "resume", description = "利用状況の確認後、このアプリの要求受付を再開します（推論は送信しません）")
+  public int resume(
+      @Option(names = "--account", required = true) String account,
+      @Option(names = "--confirm-usage", required = true) boolean confirmed) {
+    return execute(() -> {
+      if (!confirmed) throw ChatGptException.of(ChatGptException.Code.VALIDATION_FAILED);
+      var accounts = require(client);
+      accounts.resumeRequests(account, accounts.registration(account));
+      out("App request pause cleared; usage not verified by Rei. No inference sent.");
+      out("Usage: https://chatgpt.com/settings/usage");
+    });
+  }
+
   /** ChatGPTとの連携で用いるログアウトを返す。 */
   @Command(name = "logout", description = "指定アカウントからログアウトし、保存済み認証情報を削除します")
   public int logout(@Option(names = "--account", defaultValue = "default") String account) {

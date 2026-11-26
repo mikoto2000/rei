@@ -72,8 +72,8 @@ public class PlanConfiguration {
 
   /** 依頼を進める方針を決めるため、クライアントの計画を組み立てる。 */
   @Bean
-  PlanClient planClient(PlanOAuth o, PlanTransport t, Clock c) {
-    return new PlanClient(o, t, c);
+  PlanClient planClient(PlanOAuth o, PlanTransport t, Clock c, PlanProperties properties) {
+    return new PlanClient(o, t, c, properties.maxConcurrent());
   }
 
   /** 依頼を進める方針を決めるため、ログインの計画を組み立てる。 */

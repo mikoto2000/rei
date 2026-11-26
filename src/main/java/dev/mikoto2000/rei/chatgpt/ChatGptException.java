@@ -5,7 +5,8 @@ package dev.mikoto2000.rei.chatgpt;
  *
  * <p>Diagnostics carry only app-defined codes, never remote bodies, URLs or exception causes.
  */
-public final class ChatGptException extends RuntimeException {
+public final class ChatGptException extends RuntimeException
+    implements dev.mikoto2000.rei.toolcontract.ExternalReadFailure {
   @java.io.Serial private static final long serialVersionUID = -190890705976300918L;
 
   /** ChatGPTとの連携におけるコードの選択肢。 */
@@ -52,6 +53,8 @@ public final class ChatGptException extends RuntimeException {
 
   /** コード。 */
   private final Code code;
+
+  private final boolean confirmedAppUsageLimit;
 
   /** 権限理由。 */
   private PermissionReason permissionReason;
@@ -191,12 +194,22 @@ public final class ChatGptException extends RuntimeException {
   public ChatGptException(Code code) {
     super("ChatGPT plan: " + code.name(), null, false, false);
     this.code = code;
+    this.confirmedAppUsageLimit = false;
   }
 
   /** 指定された値や利用先を使って、ChatGptExceptionを初期化する。 */
   private ChatGptException(Code code, String diagnostic) {
+    this(code, diagnostic, false);
+  }
+
+  private ChatGptException(Code code, String diagnostic, boolean confirmedAppUsageLimit) {
     super("ChatGPT plan: " + code.name() + " (" + diagnostic + ")", null, false, false);
     this.code = code;
+    this.confirmedAppUsageLimit = confirmedAppUsageLimit;
+  }
+
+  boolean confirmedAppUsageLimit() {
+    return confirmedAppUsageLimit;
   }
 
   /** ChatGPTとの連携で用いる応答を返す。 */
@@ -243,12 +256,27 @@ public final class ChatGptException extends RuntimeException {
             + ", receiveLimitBytes="
             + limit
             + (received > limit ? ", bodyTruncated=true" : "")
-            + (safeApiCode.isEmpty() ? "" : ", apiErrorCode=" + safeApiCode));
+            + (safeApiCode.isEmpty() ? "" : ", apiErrorCode=" + safeApiCode),
+        operation.equals("responses")
+            && code == Code.USAGE_LIMIT
+            && safeApiCode.equals("subscription_sharing_usage_limit_exceeded"));
   }
 
   /** ChatGPTとの連携で用いるコードを返す。 */
   public Code code() {
     return code;
+  }
+
+  /** 共通の診断経路でもアカウント失敗の種類を保持する。 */
+  @Override
+  public String diagnosticCode() {
+    return "chatgpt_" + code.name().toLowerCase(java.util.Locale.ROOT);
+  }
+
+  /** リモートの本文や認証情報を含まない既存の案内を返す。 */
+  @Override
+  public String diagnosticMessage() {
+    return getMessage();
   }
 
   /** ChatGPTとの連携で受け渡す情報を、指定された内容から作成する。 */

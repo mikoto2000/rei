@@ -96,6 +96,12 @@ public final class PlanSseAssembler {
   /** 受信。 */
   private int received;
 
+  private boolean confirmedAppUsageLimit;
+
+  boolean confirmedAppUsageLimit() {
+    return confirmedAppUsageLimit;
+  }
+
   /** 部分一覧。 */
   private final SortedMap<PartKey, Part> parts = new TreeMap<>();
 
@@ -231,6 +237,7 @@ public final class PlanSseAssembler {
     var data = new StringBuilder();
     String event = "";
     received = 0;
+    confirmedAppUsageLimit = false;
     parts.clear();
     deltaEvents =
         doneEvents = itemDoneEvents = terminalItems = messages = reasoning = contentParts = 0;
@@ -331,6 +338,7 @@ public final class PlanSseAssembler {
             type.equals("error")
                 ? node.path("code").asText()
                 : response.path("error").path("code").asText();
+        confirmedAppUsageLimit = code.equals("subscription_sharing_usage_limit_exceeded");
         return result(State.FAILED, "", usage(response), null, classify(code, 0), "none");
       }
       if (type.equals("response.incomplete"))

@@ -24,6 +24,7 @@ final class ResponsesTransportException extends IllegalStateException
   /** Fixed codes survive existing user diagnostics without exposing SDK bodies or causes. */
   @Override
   public String diagnosticCode() {
+    if (safeCode != null) return safeCode;
     return switch (category) {
       case AUTHENTICATION -> "authentication_failed";
       case RATE_LIMIT -> "rate_limited";
@@ -42,6 +43,7 @@ final class ResponsesTransportException extends IllegalStateException
   /** Only host-defined guidance crosses the shared diagnostic boundary. */
   @Override
   public String diagnosticMessage() {
+    if (safeMessage != null) return safeMessage;
     return switch (category) {
       case AUTHENTICATION -> "LLM の認証に失敗しました。接続先と認証設定を確認してください。";
       case RATE_LIMIT -> "LLM の呼び出し制限に達しました。利用枠と実行予算を確認してください。";
@@ -61,6 +63,9 @@ final class ResponsesTransportException extends IllegalStateException
   private final Category category;
   private final ModelTokenUsage usage;
   private final boolean retryAllowed;
+  private final String safeCode;
+  private final String safeMessage;
+  private final boolean confirmedAppUsageLimit;
 
   @Override
   public boolean retryAllowed() {
@@ -69,6 +74,10 @@ final class ResponsesTransportException extends IllegalStateException
 
   ModelTokenUsage usage() {
     return usage;
+  }
+
+  boolean confirmedAppUsageLimit() {
+    return confirmedAppUsageLimit;
   }
 
   ResponsesTransportException(Category category) {
@@ -81,9 +90,31 @@ final class ResponsesTransportException extends IllegalStateException
 
   private ResponsesTransportException(
       Category category, ModelTokenUsage usage, boolean retryAllowed) {
+    this(category, usage, retryAllowed, null, null);
+  }
+
+  private ResponsesTransportException(
+      Category category,
+      ModelTokenUsage usage,
+      boolean retryAllowed,
+      String safeCode,
+      String safeMessage) {
+    this(category, usage, retryAllowed, safeCode, safeMessage, false);
+  }
+
+  private ResponsesTransportException(
+      Category category,
+      ModelTokenUsage usage,
+      boolean retryAllowed,
+      String safeCode,
+      String safeMessage,
+      boolean confirmedAppUsageLimit) {
     super("Responses transport failed: " + category);
     this.category = category;
     this.usage = usage;
+    this.safeCode = safeCode;
+    this.safeMessage = safeMessage;
+    this.confirmedAppUsageLimit = confirmedAppUsageLimit;
     this.retryAllowed =
         retryAllowed
             && (category == Category.TRANSIENT
@@ -160,13 +191,65 @@ final class ResponsesTransportException extends IllegalStateException
     return category;
   }
 
+  /** An accepted Plan invocation must never automatically replay an uncertain outcome. */
+  static ResponsesTransportException nonRetryable(Throwable error) {
+    var failure = normalize(error);
+    return failure.retryAllowed()
+        ? new ResponsesTransportException(
+            failure.category,
+            failure.usage,
+            false,
+            failure.safeCode,
+            failure.safeMessage,
+            failure.confirmedAppUsageLimit)
+        : failure;
+  }
+
   static ResponsesTransportException normalize(Throwable error) {
+    return normalize(error, false);
+  }
+
+  static ResponsesTransportException normalizePlan(Throwable error) {
+    return nonRetryable(normalize(error, true));
+  }
+
+  /** Only exact documented codes establish a Plan usage failure; HTTP status alone does not. */
+  static ResponsesTransportException planUsageFailure(String code, ModelTokenUsage usage) {
+    return switch (code) {
+      case "subscription_sharing_usage_limit_exceeded" ->
+          new ResponsesTransportException(
+              Category.RATE_LIMIT,
+              usage,
+              false,
+              "chatgpt_usage_limit",
+              "このアプリでの ChatGPT 呼び出しが利用枠の制限に達しました。ChatGPT 設定の使用量を確認してください。",
+              true);
+      case "subscription_sharing_usage_unavailable" ->
+          new ResponsesTransportException(
+              Category.TRANSIENT,
+              usage,
+              false,
+              "chatgpt_usage_unavailable",
+              "ChatGPT の利用可否を確認できませんでした。認証情報を保持し、保存済みの状態を確認してから再開してください。");
+      default -> null;
+    };
+  }
+
+  private static ResponsesTransportException normalize(Throwable error, boolean plan) {
     error = reactor.core.Exceptions.unwrap(error);
     while (error instanceof java.util.concurrent.CompletionException && error.getCause() != null)
       error = error.getCause();
     Throwable nested = error;
-    for (int depth = 0; nested != null && depth < 32; depth++, nested = nested.getCause())
+    for (int depth = 0; nested != null && depth < 32; depth++, nested = nested.getCause()) {
       if (nested instanceof ResponsesTransportException failure) return failure;
+      if (nested instanceof dev.mikoto2000.rei.toolcontract.ExternalReadFailure failure)
+        return new ResponsesTransportException(
+            Category.PROVIDER, null, false, failure.diagnosticCode(), failure.diagnosticMessage());
+      if (plan && nested instanceof com.openai.errors.OpenAIServiceException service) {
+        var usageFailure = planUsageFailure(service.code().orElse(""), null);
+        if (usageFailure != null) return usageFailure;
+      }
+    }
     if (error instanceof com.openai.errors.OpenAIInvalidDataException
         || error instanceof IllegalArgumentException)
       return new ResponsesTransportException(Category.INVALID_RESPONSE);

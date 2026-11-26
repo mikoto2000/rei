@@ -20,6 +20,14 @@ public final class ChatConnectionService
   public static final String SELECTION_SCOPE =
       "Selection scope: process-wide; next Run only; resets on restart. Inference not verified.";
 
+  private java.util.function.Supplier<dev.mikoto2000.rei.modeloptions.ChatPlanAccounts>
+      planAccounts = () -> null;
+
+  @org.springframework.beans.factory.annotation.Autowired
+  void setPlanAccounts(ObjectProvider<dev.mikoto2000.rei.modeloptions.ChatPlanAccounts> accounts) {
+    this.planAccounts = accounts::getIfAvailable;
+  }
+
   private final ChatEndpointCatalog catalog;
   private final Integer defaultOutputTokens;
   private final java.util.function.BiFunction<
@@ -78,7 +86,7 @@ public final class ChatConnectionService
                     selected == null && (configuredModel == null || configuredModel.isBlank())
                         ? holder.get()
                         : selected),
-            account -> null);
+            this::accountRegistration);
     this.connections = new ChatRunConnections(catalog, factory);
     this.modelCache =
         new PinnedChatModels(
@@ -86,7 +94,25 @@ public final class ChatConnectionService
             factory::verifyBinding,
             captures.getIfAvailable(),
             32,
-            models::decorateRunChatModel);
+            (connection, model) ->
+                models.decorateRunChatModel(
+                    connection.authentication() == LlmAuthentication.CHATGPT_OAUTH
+                        ? new PlanRequestChatModel(
+                            model,
+                            () ->
+                                requirePlanAccounts()
+                                    .begin(
+                                        connection.accountRef(),
+                                        connection.accountRegistration(),
+                                        connection.endpoint().model()),
+                            failure -> {
+                              if (failure instanceof ResponsesTransportException transport
+                                  && transport.confirmedAppUsageLimit())
+                                requirePlanAccounts()
+                                    .pauseRequests(
+                                        connection.accountRef(), connection.accountRegistration());
+                            })
+                        : model));
     this.routed = new RunLlmConnectionModel(modelCache::model, factory::verifyBinding);
   }
 
@@ -208,8 +234,21 @@ public final class ChatConnectionService
           var authenticationState = authenticationState(profile.authentication());
           if (profile.authentication() == LlmAuthentication.UNCONFIGURED)
             reasons.add("Authentication is not configured");
-          if (profile.provider() == LlmProvider.CHATGPT_PLAN)
-            reasons.add("ChatGPT account registration requires verification");
+          if (profile.provider() == LlmProvider.CHATGPT_PLAN) {
+            try {
+              var registration = accountRegistration(profile.accountRef());
+              if (registration == null)
+                reasons.add("ChatGPT account registration requires verification");
+              else {
+                authenticationState = "authorized";
+                if (requirePlanAccounts().requestsPaused(profile.accountRef(), registration))
+                  reasons.add("ChatGPT app requests paused; check usage and explicitly resume");
+              }
+            } catch (RuntimeException unavailable) {
+              authenticationState = "unavailable";
+              reasons.add("ChatGPT account registration is unavailable");
+            }
+          }
           if (profile.api() == LlmApiType.RESPONSES) {
             for (var capability :
                 java.util.List.of(
@@ -240,6 +279,19 @@ public final class ChatConnectionService
   @Override
   public dev.mikoto2000.rei.modeloptions.ChatModelSelection.Models models() {
     var selected = selection(connections.selection());
+    var profile =
+        catalog.profiles().stream()
+            .filter(value -> value.id().equals(selected.endpoint()))
+            .findFirst()
+            .orElseThrow();
+    if (profile.provider() == LlmProvider.CHATGPT_PLAN) {
+      var accounts = requirePlanAccounts();
+      var registration = accounts.registration(profile.accountRef());
+      if (registration == null)
+        throw new IllegalStateException("ChatGPT account registration is unavailable");
+      return new dev.mikoto2000.rei.modeloptions.ChatModelSelection.Models(
+          selected, accounts.models(profile.accountRef(), registration));
+    }
     var connection = factory.discovery(selected.endpoint(), selected.model());
     return new dev.mikoto2000.rei.modeloptions.ChatModelSelection.Models(
         selected, modelCache.models(connection));
@@ -340,9 +392,30 @@ public final class ChatConnectionService
   private String credential(RunLlmConnection connection) {
     factory.verifyBinding(connection);
     if (!connection.named()) return legacy.credential(connection);
+    if (connection.authentication() == LlmAuthentication.CHATGPT_OAUTH)
+      return requirePlanAccounts()
+          .credential(
+              connection.accountRef(),
+              connection.accountRegistration(),
+              connection.endpoint().model());
     if (connection.authentication() != LlmAuthentication.API_KEY)
       throw new IllegalStateException("Accepted inference credentials are unavailable");
     return catalog.connection(connection.profileId()).getApiKey();
+  }
+
+  private dev.mikoto2000.rei.modeloptions.ChatPlanAccounts requirePlanAccounts() {
+    var accounts = planAccounts.get();
+    if (accounts == null) throw new IllegalStateException("ChatGPT account access is unavailable");
+    return accounts;
+  }
+
+  private String accountRegistration(String account) {
+    try {
+      var accounts = planAccounts.get();
+      return accounts == null ? null : accounts.registration(account);
+    } catch (RuntimeException unavailable) {
+      throw new IllegalStateException("ChatGPT account registration is unavailable");
+    }
   }
 
   @Override

@@ -20,6 +20,11 @@ final class ResponsesSdkBoundary {
 
   static com.openai.client.OpenAIClient safe(
       com.openai.client.OpenAIClient client, ReasoningReplayMode replay) {
+    return safe(client, replay, false);
+  }
+
+  static com.openai.client.OpenAIClient safe(
+      com.openai.client.OpenAIClient client, ReasoningReplayMode replay, boolean plan) {
     boolean plaintext = replay == ReasoningReplayMode.PLAINTEXT;
     var service = client.responses();
     var safeService =
@@ -35,13 +40,11 @@ final class ResponsesSdkBoundary {
                       if (response
                           .status()
                           .filter(com.openai.models.responses.ResponseStatus.FAILED::equals)
-                          .isPresent())
-                        throw new ResponsesTransportException(
-                            ResponsesTransportException.Category.PROVIDER, usage);
+                          .isPresent()) throw responseFailure(response, usage, plan);
                     }
                     return result;
                   } catch (InvocationTargetException error) {
-                    throw ResponsesTransportException.normalize(error.getCause());
+                    throw normalize(error.getCause(), plan);
                   }
                 });
     return (com.openai.client.OpenAIClient)
@@ -53,7 +56,7 @@ final class ResponsesSdkBoundary {
               try {
                 return method.invoke(client, arguments);
               } catch (InvocationTargetException error) {
-                throw ResponsesTransportException.normalize(error.getCause());
+                throw normalize(error.getCause(), plan);
               }
             });
   }
@@ -130,6 +133,11 @@ final class ResponsesSdkBoundary {
   }
 
   static OpenAIClientAsync safe(OpenAIClientAsync client, ReasoningReplayMode replay) {
+    return safe(client, replay, false);
+  }
+
+  static OpenAIClientAsync safe(
+      OpenAIClientAsync client, ReasoningReplayMode replay, boolean plan) {
     boolean plaintext = replay == ReasoningReplayMode.PLAINTEXT;
     var service = client.responses();
     var safeService =
@@ -144,11 +152,11 @@ final class ResponsesSdkBoundary {
                       var stream =
                           (AsyncStreamResponse<ResponseStreamEvent>)
                               method.invoke(service, requestArguments(arguments, replay));
-                      return new SafeStream(stream, plaintext);
+                      return new SafeStream(stream, plaintext, plan);
                     }
                     return method.invoke(service, requestArguments(arguments, replay));
                   } catch (InvocationTargetException error) {
-                    throw ResponsesTransportException.normalize(error.getCause());
+                    throw normalize(error.getCause(), plan);
                   }
                 });
     return (OpenAIClientAsync)
@@ -160,7 +168,7 @@ final class ResponsesSdkBoundary {
               try {
                 return method.invoke(client, arguments);
               } catch (InvocationTargetException error) {
-                throw ResponsesTransportException.normalize(error.getCause());
+                throw normalize(error.getCause(), plan);
               }
             });
   }
@@ -203,7 +211,27 @@ final class ResponsesSdkBoundary {
       throw new ResponsesTransportException(ResponsesTransportException.Category.INVALID_RESPONSE);
   }
 
-  private record SafeStream(AsyncStreamResponse<ResponseStreamEvent> delegate, boolean plaintext)
+  private static ResponsesTransportException normalize(Throwable error, boolean plan) {
+    return plan
+        ? ResponsesTransportException.normalizePlan(error)
+        : ResponsesTransportException.normalize(error);
+  }
+
+  private static ResponsesTransportException responseFailure(
+      com.openai.models.responses.Response response,
+      dev.mikoto2000.rei.modelmessage.ModelTokenUsage usage,
+      boolean plan) {
+    if (plan) {
+      var code =
+          response.error().map(error -> error.code()._value().asString().orElse("")).orElse("");
+      var failure = ResponsesTransportException.planUsageFailure(code, usage);
+      if (failure != null) return failure;
+    }
+    return new ResponsesTransportException(ResponsesTransportException.Category.PROVIDER, usage);
+  }
+
+  private record SafeStream(
+      AsyncStreamResponse<ResponseStreamEvent> delegate, boolean plaintext, boolean plan)
       implements AsyncStreamResponse<ResponseStreamEvent> {
     private Handler<ResponseStreamEvent> safeHandler(Handler<? super ResponseStreamEvent> handler) {
       return new Handler<>() {
@@ -216,26 +244,34 @@ final class ResponsesSdkBoundary {
             if (plaintext && event.isOutputItemAdded())
               validatePlaintextItem(event.outputItemAdded().orElseThrow().item());
             if (event.isFailed())
-              throw new ResponsesTransportException(
-                  ResponsesTransportException.Category.PROVIDER,
-                  validateResponse(event.failed().orElseThrow().response(), plaintext));
+              throw responseFailure(
+                  event.failed().orElseThrow().response(),
+                  validateResponse(event.failed().orElseThrow().response(), plaintext),
+                  plan);
             if (event.isCompleted())
               validateResponse(event.completed().orElseThrow().response(), plaintext);
             if (event.isIncomplete())
               validateResponse(event.incomplete().orElseThrow().response(), plaintext);
             if (event.isCreated())
               validateResponse(event.created().orElseThrow().response(), plaintext);
-            if (event.isError())
+            if (event.isError()) {
+              if (plan) {
+                var failure =
+                    ResponsesTransportException.planUsageFailure(
+                        event.error().orElseThrow().code().orElse(""), null);
+                if (failure != null) throw failure;
+              }
               throw new ResponsesTransportException(ResponsesTransportException.Category.PROVIDER);
+            }
           } catch (RuntimeException invalid) {
-            throw ResponsesTransportException.normalize(invalid);
+            throw normalize(invalid, plan);
           }
           handler.onNext(event);
         }
 
         @Override
         public void onComplete(Optional<Throwable> error) {
-          handler.onComplete(error.map(ResponsesTransportException::normalize));
+          handler.onComplete(error.map(failure -> normalize(failure, plan)));
         }
       };
     }
@@ -262,7 +298,7 @@ final class ResponsesSdkBoundary {
             if (error != null) {
               while (error instanceof CompletionException && error.getCause() != null)
                 error = error.getCause();
-              throw new CompletionException(ResponsesTransportException.normalize(error));
+              throw new CompletionException(normalize(error, plan));
             }
             return null;
           });

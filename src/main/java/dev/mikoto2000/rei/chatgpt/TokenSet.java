@@ -15,6 +15,7 @@ import java.util.Set;
  * @param refreshToken 認証を更新するトークン
  * @param scopes 権限の範囲
  * @param expiresAt 有効期限
+ * @param registrationId トークン更新から独立した登録識別子
  */
 public record TokenSet(
     String clientId,
@@ -24,15 +25,34 @@ public record TokenSet(
     String accessToken,
     String refreshToken,
     Set<String> scopes,
-    long expiresAt) {
+    long expiresAt,
+    String registrationId) {
   /** 受け取った情報からTokenSetを作成する。 */
   public TokenSet {
     scopes = Set.copyOf(scopes);
+    if (registrationId == null) registrationId = java.util.UUID.randomUUID().toString();
+    if (registrationId.isBlank()
+        || registrationId.length() > 128
+        || registrationId.codePoints().anyMatch(Character::isISOControl))
+      throw new IllegalArgumentException("Invalid ChatGPT registration identity");
+  }
+
+  /** Creates a new local registration while retaining the existing constructor contract. */
+  public TokenSet(
+      String clientId,
+      String subject,
+      String email,
+      String idToken,
+      String accessToken,
+      String refreshToken,
+      Set<String> scopes,
+      long expiresAt) {
+    this(clientId, subject, email, idToken, accessToken, refreshToken, scopes, expiresAt, null);
   }
 
   /** ChatGPTとの連携で用いるなしトークン数を返す。 */
   public TokenSet withoutTokens() {
-    return new TokenSet(clientId, subject, email, null, null, null, Set.of(), 0);
+    return new TokenSet(clientId, subject, email, null, null, null, Set.of(), 0, registrationId);
   }
 
   /** ChatGPTとの連携の情報を、表示や診断で確認できる文字列表現にする。 */

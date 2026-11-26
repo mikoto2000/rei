@@ -32,7 +32,8 @@ import java.util.function.BooleanSupplier;
  *
  * <p>Dedicated OAuth inference adapter: explicit request whitelist, no Tools, repair or retries.
  */
-public final class PlanClient implements PlanInference {
+public final class PlanClient
+    implements PlanInference, dev.mikoto2000.rei.modeloptions.ChatPlanAccounts {
   /** モデル利用可能な項目上限バイト数。 */
   static final int MODEL_CATALOG_LIMIT_BYTES = 2 * 1024 * 1024;
 
@@ -98,13 +99,22 @@ public final class PlanClient implements PlanInference {
    *
    * @param clientId クライアントの識別子
    * @param subject 対象
+   * @param registrationId 登録識別子
    * @param expires 有効期限
    * @param models モデル一覧
    */
-  private record Catalog(String clientId, String subject, Instant expires, List<Model> models) {}
+  private record Catalog(
+      String clientId,
+      String subject,
+      String registrationId,
+      Instant expires,
+      List<Model> models) {}
 
   /** OAuth認証。 */
   private final PlanOAuth oauth;
+
+  private final PlanRequestSlots requestSlots;
+  private final Map<String, String> usagePauses = new ConcurrentHashMap<>();
 
   /** 通信経路。 */
   private final PlanTransport transport;
@@ -125,9 +135,114 @@ public final class PlanClient implements PlanInference {
 
   /** 指定された値や利用先を使って、PlanClientを初期化する。 */
   public PlanClient(PlanOAuth oauth, PlanTransport transport, Clock clock) {
+    this(oauth, transport, clock, 1);
+  }
+
+  /** Creates shared request admission with the operator's per-registration capacity. */
+  public PlanClient(PlanOAuth oauth, PlanTransport transport, Clock clock, int maxConcurrent) {
+    this.requestSlots = new PlanRequestSlots(maxConcurrent);
     this.oauth = oauth;
     this.transport = transport;
     this.clock = clock;
+    oauth.onRegistrationInvalidated((account, registration, reason) -> {
+      if (registration == null) stop(account, reason);
+      else requestSlots.invalidate(account, registration, reason);
+    });
+  }
+
+  /** Observes local authorization without reading tokens into the common connection layer. */
+  @Override
+  public String registration(String account) {
+    return oauth.registration(account);
+  }
+
+  private static void requireRegistration(String expected) {
+    if (expected == null
+        || expected.isBlank()
+        || expected.length() > 128
+        || expected.codePoints().anyMatch(Character::isISOControl))
+      throw ChatGptException.of(AUTH_REQUIRED);
+  }
+
+  /** Admits one inference without acquiring a credential or retaining a whole Run. */
+  @Override
+  public dev.mikoto2000.rei.modeloptions.ChatPlanAccounts.Request begin(
+      String account, String registration, String model) {
+    requireRegistration(registration);
+    var generation =
+        generations.computeIfAbsent(
+            account, value -> new java.util.concurrent.atomic.AtomicInteger());
+    int initial = generation.get();
+    if (model == null || model.isBlank() || model.codePoints().anyMatch(Character::isISOControl))
+      throw ChatGptException.of(MODEL_UNAVAILABLE);
+    var admitted =
+        new java.util.concurrent.atomic.AtomicReference<
+            dev.mikoto2000.rei.modeloptions.ChatPlanAccounts.Request>();
+    // Pause publication and admission share one local linearization point, with no HTTP.
+    usagePauses.compute(
+        account,
+        (ignored, paused) -> {
+          if (!registration.equals(oauth.registration(account)))
+            throw ChatGptException.of(AUTH_REQUIRED);
+          if (registration.equals(paused))
+            throw ChatGptException.of(ChatGptException.Code.USAGE_LIMIT);
+          admitted.set(requestSlots.begin(account, registration));
+          return paused;
+        });
+    var request = java.util.Objects.requireNonNull(admitted.get());
+    try {
+      if (generation.get() != initial || !registration.equals(oauth.registration(account)))
+        throw ChatGptException.of(CANCELLED);
+      return request;
+    } catch (RuntimeException | Error failure) {
+      request.close();
+      throw failure;
+    }
+  }
+
+  @Override
+  public void pauseRequests(String account, String registration) {
+    changeRequestPause(account, registration, true);
+  }
+
+  @Override
+  public boolean requestsPaused(String account, String registration) {
+    return account != null && registration != null && registration.equals(usagePauses.get(account));
+  }
+
+  @Override
+  public void resumeRequests(String account, String registration) {
+    changeRequestPause(account, registration, false);
+  }
+
+  private void changeRequestPause(String account, String registration, boolean paused) {
+    requireRegistration(registration);
+    usagePauses.compute(
+        account,
+        (ignored, previous) -> {
+          if (!registration.equals(oauth.registration(account)))
+            throw ChatGptException.of(AUTH_REQUIRED);
+          return paused ? registration : null;
+        });
+  }
+
+  /** Reuses the protected refresh and visible model catalog for an accepted account. */
+  @Override
+  public String credential(String account, String registration, String model) {
+    requireRegistration(registration);
+    if (!models(account, registration).contains(model))
+      throw ChatGptException.of(MODEL_UNAVAILABLE);
+    return oauth.access(account, registration).accessToken();
+  }
+
+  /** Keeps server order and verifies the account before refresh and after discovery. */
+  @Override
+  public List<String> models(String account, String registration) {
+    requireRegistration(registration);
+    oauth.access(account, registration);
+    var values = models(account, false);
+    oauth.access(account, registration);
+    return values.stream().map(Model::id).toList();
   }
 
   /** ChatGPTとの連携で用いるモデル一覧を返す。 */
@@ -138,6 +253,7 @@ public final class PlanClient implements PlanInference {
         && saved != null
         && saved.clientId().equals(tokens.clientId())
         && saved.subject().equals(tokens.subject())
+        && saved.registrationId().equals(tokens.registrationId())
         && clock.instant().isBefore(saved.expires())) return saved.models();
     try (var response =
         transport.send(
@@ -183,10 +299,16 @@ public final class PlanClient implements PlanInference {
         values.add(new Model(id, PlanOAuth.required(model, "display_name")));
       }
       var result = List.copyOf(values);
+      if (!tokens.registrationId().equals(oauth.registration(account)))
+        throw ChatGptException.of(AUTH_REQUIRED);
       catalog.put(
           account,
           new Catalog(
-              tokens.clientId(), tokens.subject(), clock.instant().plusSeconds(60), result));
+              tokens.clientId(),
+              tokens.subject(),
+              tokens.registrationId(),
+              clock.instant().plusSeconds(60),
+              result));
       return result;
     } catch (ChatGptException e) {
       throw e;
@@ -202,9 +324,15 @@ public final class PlanClient implements PlanInference {
 
   /** 実行中の処理を停止する。 */
   public void stop(String account) {
+    stop(account, dev.mikoto2000.rei.modeloptions.ChatPlanAccounts.Invalidation.STOPPED);
+  }
+
+  private void stop(
+      String account, dev.mikoto2000.rei.modeloptions.ChatPlanAccounts.Invalidation reason) {
     generations
         .computeIfAbsent(account, a -> new java.util.concurrent.atomic.AtomicInteger())
         .incrementAndGet();
+    requestSlots.invalidate(account, reason);
   }
 
   /**
@@ -228,13 +356,27 @@ public final class PlanClient implements PlanInference {
     var generation =
         generations.computeIfAbsent(account, a -> new java.util.concurrent.atomic.AtomicInteger());
     int initial = generation.get();
+    String registration = oauth.registration(account);
+    if (registration == null) throw ChatGptException.of(AUTH_REQUIRED);
     if (models(account, false).stream().noneMatch(m -> m.id().equals(model)))
       throw ChatGptException.of(MODEL_UNAVAILABLE);
     var tokens = oauth.access(account);
+    if (!registration.equals(tokens.registrationId())) throw ChatGptException.of(AUTH_REQUIRED);
     BooleanSupplier valid =
-        () -> generation.get() == initial && clock.instant().getEpochSecond() < tokens.expiresAt();
+        () ->
+            generation.get() == initial
+                && clock.instant().getEpochSecond() < tokens.expiresAt()
+                && registrationMatches(account, registration);
     if (!valid.getAsBoolean()) throw ChatGptException.of(AUTH_REQUIRED);
     return new Lease(tokens, valid);
+  }
+
+  private boolean registrationMatches(String account, String expected) {
+    try {
+      return expected.equals(oauth.registration(account));
+    } catch (ChatGptException unavailable) {
+      return false;
+    }
   }
 
   /** ChatGPTとの連携で用いる推定を返す。 */
@@ -294,50 +436,60 @@ public final class PlanClient implements PlanInference {
     int initialGeneration = generation.get();
     BooleanSupplier stop = () -> cancelled.getAsBoolean() || generation.get() != initialGeneration;
     if (stop.getAsBoolean()) throw ChatGptException.of(CANCELLED);
-    if (models(account, false).stream().noneMatch(m -> m.id().equals(model)))
+    var registration = oauth.access(account).registrationId();
+    if (!models(account, registration).contains(model))
       throw ChatGptException.of(MODEL_UNAVAILABLE);
     byte[] body = encodeRequest(model, instructions, input);
     if (body.length > sendLimit) throw ChatGptException.of(SEND_LIMIT);
-    var token = oauth.access(account);
-    if (stop.getAsBoolean()) throw ChatGptException.of(CANCELLED);
-    if (System.nanoTime() >= deadline) throw ChatGptException.of(TIMEOUT);
-    onDispatch.run();
-    try (var response =
-        transport.send(
-            URI.create(PlanOAuth.RESOURCE + "/responses"),
-            "POST",
-            Map.of(
-                "Authorization",
-                "Bearer " + token.accessToken(),
-                "Content-Type",
-                "application/json",
-                "Accept",
-                "text/event-stream",
-                "Accept-Encoding",
-                "identity"),
-            body,
-            Duration.ofNanos(deadline - System.nanoTime()),
-            stop)) {
-      var remaining = Duration.ofNanos(Math.max(1, deadline - System.nanoTime()));
-      if (response.status() != 200) {
-        throw httpError(response, "responses", remaining, stop);
+    try (var request = begin(account, registration, model)) {
+      var invalidated = request.invalidated().toCompletableFuture();
+      BooleanSupplier requestStop = () -> stop.getAsBoolean() || invalidated.isDone();
+      var token = oauth.access(account, registration);
+      if (requestStop.getAsBoolean()) throw ChatGptException.of(CANCELLED);
+      if (System.nanoTime() >= deadline) throw ChatGptException.of(TIMEOUT);
+      onDispatch.run();
+      try (var response =
+          transport.send(
+              URI.create(PlanOAuth.RESOURCE + "/responses"),
+              "POST",
+              Map.of(
+                  "Authorization",
+                  "Bearer " + token.accessToken(),
+                  "Content-Type",
+                  "application/json",
+                  "Accept",
+                  "text/event-stream",
+                  "Accept-Encoding",
+                  "identity"),
+              body,
+              Duration.ofNanos(deadline - System.nanoTime()),
+              requestStop)) {
+        var remaining = Duration.ofNanos(Math.max(1, deadline - System.nanoTime()));
+        if (response.status() != 200) {
+          var failure = httpError(response, "responses", remaining, requestStop);
+          if (failure.confirmedAppUsageLimit()) pauseRequests(account, registration);
+          throw failure;
+        }
+        String type = mediaType(response);
+        if ((!type.isEmpty() && !type.equals("text/event-stream")) || !identityEncoding(response))
+          throw failure(PROTOCOL, response, "responses", -1, receiveLimit);
+        var assembler = new PlanSseAssembler();
+        var result =
+            PlanIO.read(
+                response.body(),
+                remaining,
+                requestStop,
+                () -> {
+                  try {
+                    return assembler.read(response.body(), receiveLimit, type.isEmpty());
+                  } catch (ChatGptException e) {
+                    throw failure(
+                        e.code(), response, "responses", assembler.receivedBytes(), receiveLimit);
+                  }
+                });
+        if (assembler.confirmedAppUsageLimit()) pauseRequests(account, registration);
+        return result;
       }
-      String type = mediaType(response);
-      if ((!type.isEmpty() && !type.equals("text/event-stream")) || !identityEncoding(response))
-        throw failure(PROTOCOL, response, "responses", -1, receiveLimit);
-      var assembler = new PlanSseAssembler();
-      return PlanIO.read(
-          response.body(),
-          remaining,
-          stop,
-          () -> {
-            try {
-              return assembler.read(response.body(), receiveLimit, type.isEmpty());
-            } catch (ChatGptException e) {
-              throw failure(
-                  e.code(), response, "responses", assembler.receivedBytes(), receiveLimit);
-            }
-          });
     }
   }
 
