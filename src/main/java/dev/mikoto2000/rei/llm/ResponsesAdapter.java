@@ -100,9 +100,9 @@ final class ResponsesAdapter implements LlmProtocolAdapter, ChatModel {
       throw new IllegalArgumentException(
           "Responses SDK retries must stay zero at client construction");
     Objects.requireNonNull(client, "client");
-    boolean plaintext = endpoint.capabilities().reasoningReplay() == ReasoningReplayMode.PLAINTEXT;
-    var sync = ResponsesSdkBoundary.safe(client, plaintext);
-    var async = ResponsesSdkBoundary.safe(client.async(), plaintext);
+    var replay = endpoint.capabilities().reasoningReplay();
+    var sync = ResponsesSdkBoundary.safe(client, replay);
+    var async = ResponsesSdkBoundary.safe(client.async(), replay);
     var model =
         OpenAiResponsesChatModel.builder()
             .options(options)
@@ -209,10 +209,8 @@ final class ResponsesAdapter implements LlmProtocolAdapter, ChatModel {
                 ObservationRegistry.NOOP,
                 null,
                 transportCustomizers),
-            endpoint.capabilities().reasoningReplay() == ReasoningReplayMode.PLAINTEXT);
-    var asyncClient =
-        ResponsesSdkBoundary.safe(
-            client, endpoint.capabilities().reasoningReplay() == ReasoningReplayMode.PLAINTEXT);
+            endpoint.capabilities().reasoningReplay());
+    var asyncClient = ResponsesSdkBoundary.safe(client, endpoint.capabilities().reasoningReplay());
     var model =
         OpenAiResponsesChatModel.builder()
             .options(options)
