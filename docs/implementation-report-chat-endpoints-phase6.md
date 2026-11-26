@@ -26,3 +26,13 @@ Phase 6 は進行中。外部送信同意の実装と統合検証が完了する
 - Plan の個別関数名を強制する `tool_choice` は namespace と組み合わせた契約が未確認のため送信前に拒否する。`auto` / `none` / `required` は保持する。API キー・ローカル経路の既存の個別関数選択は変更しない。
 - 実アカウントでの推論、実ローカル LLM、実 app-server は利用していない。
 - Phase 6 全体の完了、全回帰・静的解析・クライアント検証、PR・マージ・マージ後 CI の成功はまだ主張しない。
+
+## 個別依存レビュー（推論送信の所有者確認）
+
+追加対象は `dev.mikoto2000.rei.core.policy.InferenceExportGuard -> dev.mikoto2000.rei.core.chat.AgentRunContext` の 1 ペアだけである。
+
+承認判定は既存の `ToolApprovalRepository.request/consume` と、その API が受け取る実際の Run 所有者を再利用する。Project・root・Session・Run・mode・source・voice を承認に結び付け、単に同じ接続先を選んだ別の Run が承認を使えないようにする。既存の承認保存やツール権限ガードも `AgentRunContext` を受け取る。別の所有者台帳や推論用の独立した承認ストアを作らず、この型依存を必要な境界として扱う。依頼された Phase 6 の送信権限分離の範囲で、PR の個別レビュー対象に含める。
+
+最初の検査で報告された Mode・RequestSource・ResponseStyle の 3 型への依存は実装で解消した。mode/source は既存の中立な文字列取得メソッドを使用する。ResponseStyle は既存定義上、表示だけに関わり実行権限を変更しないため、権限の識別条件に使用しない。実際に送信するシステム指示や本文が変わる場合は内容ハッシュが変わる。
+
+最新の通常コンパイルと full プロファイルの検査で、追加が所有者型への 1 辺だけ、解消済み辺は 0、他の予算の変更は 0 と確認した。この 1 ペアのみを手入力し C-business を 2913 → 2914 とする。Phase 6 のここまでの追加は、内容固定の配信属性保持と、この所有者確認の計 2 ペアである。列挙型への不要な依存、分類・検査ルール・抑制の追加は受け入れない。
