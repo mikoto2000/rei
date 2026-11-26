@@ -341,6 +341,8 @@ final class ResponsesAdapter implements LlmProtocolAdapter, ChatModel {
     requireCapability(options.getVerbosity(), LlmCapabilities.Setting.TEXT_VERBOSITY, "verbosity");
     var defaults = delegate.getOptions();
     var requestTimeout = options.getTimeout();
+    var allowedDeadline =
+        acceptedConnection == null ? endpoint.readTimeout() : acceptedConnection.requestTimeout();
     if (!Objects.equals(defaults.getBaseUrl(), options.getBaseUrl())
         || !Objects.equals(defaults.getApiKey(), options.getApiKey())
         || !Objects.equals(defaults.getCredential(), options.getCredential())
@@ -352,7 +354,7 @@ final class ResponsesAdapter implements LlmProtocolAdapter, ChatModel {
         || !Objects.equals(defaults.getProxy(), options.getProxy())
         || (requestTimeout != null
             && (requestTimeout.compareTo(java.time.Duration.ofMillis(1)) < 0
-                || requestTimeout.compareTo(endpoint.readTimeout()) > 0))
+                || requestTimeout.compareTo(allowedDeadline) > 0))
         || !Objects.equals(defaults.getOrganizationId(), options.getOrganizationId())
         || !Objects.equals(defaults.getCustomHeaders(), options.getCustomHeaders()))
       throw new IllegalArgumentException("Responses connection differs from the bound endpoint");

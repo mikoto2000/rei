@@ -88,6 +88,7 @@ final class PinnedOpenAiClients {
             .baseUrl(endpoint.baseUrl())
             .timeout(
                 com.openai.core.Timeout.builder()
+                    .connect(connectTimeout(attributes))
                     .request(deadline)
                     .read(endpoint.readTimeout())
                     .build())
@@ -112,6 +113,8 @@ final class PinnedOpenAiClients {
       default ->
           throw new IllegalArgumentException("Pinned authentication must be resolved explicitly");
     }
+    builder.addInterceptor(
+        chain -> boundedTimeouts(chain, endpoint, attributes).proceed(chain.request()));
     for (var interceptor : interceptors) builder.addInterceptor(interceptor);
     var expected =
         okhttp3.HttpUrl.get(
@@ -152,13 +155,35 @@ final class PinnedOpenAiClients {
         request = request.newBuilder().method(request.method(), nonReplayable(body)).build();
       }
       return PinnedWireLimits.response(
-          chain.proceed(request),
+          boundedTimeouts(chain, endpoint, attributes).proceed(request),
           RunTransportSettings.byteLimit(
               attributes,
               "response_limit_bytes",
               RunTransportSettings.DEFAULT_RESPONSE_LIMIT_BYTES));
     });
     return builder.build();
+  }
+
+  private static java.time.Duration connectTimeout(java.util.Map<String, String> attributes) {
+    var configured = attributes.get("connect_timeout");
+    return configured == null
+        ? java.time.Duration.ofMinutes(1)
+        : RunTransportSettings.timeout(configured);
+  }
+
+  /** SDK per-request timeout options must not expand the accepted connection/read bounds. */
+  private static okhttp3.Interceptor.Chain boundedTimeouts(
+      okhttp3.Interceptor.Chain chain,
+      ResolvedLlmEndpoint endpoint,
+      java.util.Map<String, String> attributes) {
+    int connect =
+        ChatStreamTimeoutInterceptor.validatedReadTimeoutMillis(connectTimeout(attributes));
+    int read = ChatStreamTimeoutInterceptor.validatedReadTimeoutMillis(endpoint.readTimeout());
+    if (chain.connectTimeoutMillis() > 0) connect = Math.min(connect, chain.connectTimeoutMillis());
+    if (chain.readTimeoutMillis() > 0) read = Math.min(read, chain.readTimeoutMillis());
+    return chain
+        .withConnectTimeout(connect, java.util.concurrent.TimeUnit.MILLISECONDS)
+        .withReadTimeout(read, java.util.concurrent.TimeUnit.MILLISECONDS);
   }
 
   private static void requireAttribute(okhttp3.Request request, String header, String expected)

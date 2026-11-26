@@ -127,7 +127,8 @@ final class PinnedChatModels implements AutoCloseable {
   private com.openai.client.OpenAIClient client(
       RunLlmConnection connection, java.util.List<okhttp3.Interceptor> extra) {
     var interceptors = new java.util.ArrayList<okhttp3.Interceptor>();
-    interceptors.add(new ChatStreamTimeoutInterceptor(connection.endpoint().readTimeout()));
+    interceptors.add(
+        new ChatStreamTimeoutInterceptor(connection.endpoint().readTimeout(), connection.named()));
     interceptors.add(new ShowUiSdkRequestInterceptor());
     interceptors.addAll(extra);
     return PinnedOpenAiClients.open(

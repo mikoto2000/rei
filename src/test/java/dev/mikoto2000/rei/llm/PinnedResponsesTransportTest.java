@@ -243,7 +243,7 @@ class PinnedResponsesTransportTest {
           fixture.client(
               pin,
               List.of(
-                  new ChatStreamTimeoutInterceptor(Duration.ofSeconds(3)),
+                  new ChatStreamTimeoutInterceptor(Duration.ofSeconds(3), true),
                   chain -> {
                     observed.put("connect", (long) chain.connectTimeoutMillis());
                     observed.put("read", (long) chain.readTimeoutMillis());

@@ -16,13 +16,19 @@ final class ChatStreamTimeoutInterceptor implements Interceptor {
   static final Duration DEFAULT_READ_TIMEOUT = Duration.ofMinutes(5);
 
   private final int readTimeoutMillis;
+  private final boolean preserveRequestDeadline;
 
   ChatStreamTimeoutInterceptor() {
     this(DEFAULT_READ_TIMEOUT);
   }
 
   ChatStreamTimeoutInterceptor(Duration readTimeout) {
+    this(readTimeout, false);
+  }
+
+  ChatStreamTimeoutInterceptor(Duration readTimeout, boolean preserveRequestDeadline) {
     this.readTimeoutMillis = validatedReadTimeoutMillis(readTimeout);
+    this.preserveRequestDeadline = preserveRequestDeadline;
   }
 
   static int validatedReadTimeoutMillis(Duration timeout) {
@@ -42,13 +48,15 @@ final class ChatStreamTimeoutInterceptor implements Interceptor {
     }
     // Spring AI supplies a per-request timeout that overrides the client defaults.
     // Clear the active call deadline after that override, retaining connect/write limits.
-    var timeout = chain.call().timeout();
-    // OkHttp enters its AsyncTimeout before application interceptors run.
-    // Remove the already scheduled watchdog as well as clearing its duration.
-    if (timeout instanceof okio.AsyncTimeout asyncTimeout) {
-      asyncTimeout.exit();
+    if (!preserveRequestDeadline) {
+      var timeout = chain.call().timeout();
+      // OkHttp enters its AsyncTimeout before application interceptors run.
+      // Remove the already scheduled watchdog as well as clearing its duration.
+      if (timeout instanceof okio.AsyncTimeout asyncTimeout) {
+        asyncTimeout.exit();
+      }
+      timeout.clearTimeout().clearDeadline();
     }
-    timeout.clearTimeout().clearDeadline();
     return chain.withReadTimeout(readTimeoutMillis, TimeUnit.MILLISECONDS).proceed(chain.request());
   }
 }
