@@ -45,6 +45,16 @@ class ChatEndpointClientTest {
   }
 
   @Test
+  void groupAndHelpExplainActionsWithoutContactingTheConnection() throws Exception {
+    try (var fixture = new Fixture()) {
+      for (var command : List.of("/llm chat", "/llm chat --help", "/llm chat use --help"))
+        fixture.client.command(command);
+      assertTrue(fixture.text().contains("list|show|use"));
+      assertEquals(0, fixture.requests.get());
+    }
+  }
+
+  @Test
   void noninteractiveUseExplainsDirectSyntaxAndDoesNotSelectADefault() throws Exception {
     try (var fixture = new Fixture()) {
       fixture.client.command("/llm chat use");
@@ -76,6 +86,7 @@ class ChatEndpointClientTest {
 
   private final class Fixture implements AutoCloseable {
     final AtomicInteger mutations = new AtomicInteger();
+    final AtomicInteger requests = new AtomicInteger();
     final ByteArrayOutputStream output = new ByteArrayOutputStream();
     final HttpServer server;
     final BackendClient backend;
@@ -86,6 +97,7 @@ class ChatEndpointClientTest {
       server.createContext(
           "/api/v1/llm/chat",
           exchange -> {
+            requests.incrementAndGet();
             if (exchange.getRequestMethod().equals("PUT")) {
               assertEquals(
                   "{\"endpoint\":\"local\"}",
