@@ -19,7 +19,9 @@ class ChatEndpointCapabilitiesTest {
         "streaming",
         "function-calling",
         "tool-namespace",
-        "reasoning-replay"
+        "reasoning-replay",
+        "vision",
+        "file-input"
       })
   void verifiedPlanAdapterCapabilitiesStillRequireServerAndModelConfirmation(String capability) {
     var settings = plan();
@@ -46,6 +48,27 @@ class ChatEndpointCapabilitiesTest {
     assertThat(view.at("/capabilities/effective/FUNCTION_CALLING").asText()).isEqualTo("UNKNOWN");
     assertThat(view.at("/capabilities/effective/CHAT_COMPLETIONS").asText()).isEqualTo("UNKNOWN");
     assertThat(view.at("/capabilities/effective/RESPONSES").asText()).isEqualTo("UNSUPPORTED");
+  }
+
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(strings = {"chat-completions", "responses"})
+  void implementedFileInputStillRequiresIndependentLocalServerAndModelDeclarations(String api) {
+    var settings = local();
+    String prefix = "rei.llm.features.chat.endpoints.local.";
+    settings.put(prefix + "api", api);
+    settings.put(prefix + "reasoning-replay", "none");
+    assertThat(view(settings).at("/capabilities/route/FILE_INPUT").asText()).isEqualTo("SUPPORTED");
+    assertThat(view(settings).at("/capabilities/effective/FILE_INPUT").asText())
+        .isEqualTo("UNKNOWN");
+    settings.put(prefix + "server-capabilities.file-input", "supported");
+    assertThat(view(settings).at("/capabilities/effective/FILE_INPUT").asText())
+        .isEqualTo("UNKNOWN");
+    settings.put(prefix + "model-capabilities.file-input", "supported");
+    assertThat(view(settings).at("/capabilities/effective/FILE_INPUT").asText())
+        .isEqualTo("SUPPORTED");
+    settings.put(prefix + "model-capabilities.file-input", "unsupported");
+    assertThat(view(settings).at("/capabilities/effective/FILE_INPUT").asText())
+        .isEqualTo("UNSUPPORTED");
   }
 
   @Test
