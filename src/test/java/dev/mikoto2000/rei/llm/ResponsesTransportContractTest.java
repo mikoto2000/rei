@@ -1007,6 +1007,37 @@ class ResponsesTransportContractTest {
         .hasMessageContaining("Responses");
   }
 
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.CsvSource({
+    "NONE,false", "NONE,true", "PLAINTEXT,false", "PLAINTEXT,true", "ENCRYPTED,false", "ENCRYPTED,true"
+  })
+  void replayModeControlsEncryptedIncludeInFinalWireJson(
+      ReasoningReplayMode mode, boolean streaming) {
+    replayMode = mode;
+    if (streaming) {
+      contentType = "text/event-stream";
+      reply = textDelta() + event("response.completed", "\"response\":" + completed());
+    }
+    var options = options()
+        .toolContext(java.util.Map.of(ResponsesReasoningReplay.OWNER_CONTEXT_KEY, "fixture-owner"))
+        .build();
+    var model = transport(options);
+    if (streaming) model.stream(new Prompt("fixture", options)).collectList().block();
+    else model.call(new Prompt("fixture", options));
+    assertThat(requests).hasSize(1);
+    var wire = requests.getFirst();
+    if (mode == ReasoningReplayMode.ENCRYPTED)
+      assertThat(wire.path("include")).containsExactly(
+          new ObjectMapper().getNodeFactory().textNode("reasoning.encrypted_content"));
+    else assertThat(wire.has("include")).isFalse();
+    assertThat(wire.has("reasoning")).isFalse();
+    assertThat(wire.has("service_tier")).isFalse();
+    assertThat(wire.path("store").asBoolean(true)).isFalse();
+    assertThat(wire.path("stream").asBoolean()).isEqualTo(streaming);
+  }
+
+  private ReasoningReplayMode replayMode = ReasoningReplayMode.NONE;
+
   private OpenAiResponsesChatOptions.Builder options() {
     return OpenAiResponsesChatOptions.builder()
         .baseUrl("https://responses-fixture.invalid/v1")
@@ -1051,7 +1082,7 @@ class ResponsesTransportContractTest {
         options.getBaseUrl(),
         "fixture-credential",
         options.getModel(),
-        new LlmCapabilities(ReasoningReplayMode.NONE, 128, supportedSettings),
+        new LlmCapabilities(replayMode, 128, supportedSettings),
         options.getMaxOutputTokens(),
         options.getTemperature(),
         readTimeout);
