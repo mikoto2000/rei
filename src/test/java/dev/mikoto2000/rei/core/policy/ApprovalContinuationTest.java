@@ -657,6 +657,33 @@ class ApprovalContinuationTest {
   }
 
   @Test
+  void failedPreparationRetiresTheUnclaimedGuidanceGrantAndKeepsTheOriginalReceipt() {
+    String id = pauseInferenceForInspection();
+    var original = store.find(id).orElseThrow();
+    store = org.mockito.Mockito.spy(store);
+    service = createService(clock);
+    org.mockito.Mockito.doThrow(new IllegalStateException("synthetic preparation failure"))
+        .when(store)
+        .prepareInference(
+            anyString(),
+            any(),
+            anyString(),
+            any(),
+            org.mockito.ArgumentMatchers.anyBoolean(),
+            any(),
+            any(),
+            any());
+    assertThrows(
+        IllegalStateException.class,
+        () -> service.acceptGuidance(owner, List.of(new UserMessage("NEW HUMAN GUIDANCE"))));
+    assertEquals(original, store.find(id).orElseThrow());
+    var remaining = approvals.list(owner.projectId());
+    assertEquals(1, remaining.size());
+    assertEquals(id, remaining.getFirst().id());
+    verifyNoInteractions(chat);
+  }
+
+  @Test
   void inferenceGuidanceRejectsNonHumanMessagesBeforeReplacingAnyReceipt() {
     String id = pauseInferenceForInspection();
     var before = store.find(id).orElseThrow();
