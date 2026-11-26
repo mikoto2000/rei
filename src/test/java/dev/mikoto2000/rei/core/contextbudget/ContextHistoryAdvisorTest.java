@@ -104,6 +104,8 @@ class ContextHistoryAdvisorTest {
     "COMPLETED,true,ok",
     "COMPLETED,true,checkpointGrant",
     "COMPLETED,false,ok",
+    "COMPLETED,false,completedTool",
+    "FAILED,false,completedTool",
     "FAILED,true,ok",
     "CANCELLED,true,ok",
     "RUNNING,true,ok",
@@ -156,8 +158,45 @@ class ContextHistoryAdvisorTest {
                     "rei.llm.replay-origin-endpoint",
                     "endpoint-a"))
             .build();
+    if (scenario.equals("completedTool"))
+      original =
+          original
+              .mutate()
+              .parts(
+                  java.util.stream.Stream.concat(
+                          original.getParts().stream(),
+                          java.util.stream.Stream.of(
+                              org.springframework.ai.chat.messages.part.ToolCallPart.of(
+                                  new AssistantMessage.ToolCall(
+                                      "successful-call",
+                                      "function",
+                                      "fixtureOperation",
+                                      "{\"target\":\"fixture\"}"))))
+                      .toList())
+              .build();
     var userRef = previousExchange.withKey("input").reference(new UserMessage("old actual input"));
     var assistantRef = previousExchange.withKey("answer").reference(original);
+    var protocolEntries =
+        new java.util.ArrayList<
+            dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.History.Entry>();
+    protocolEntries.add(
+        new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.History.Entry(
+            "input", userRef));
+    protocolEntries.add(
+        new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.History.Entry(
+            "answer", assistantRef));
+    if (scenario.equals("completedTool")) {
+      var result =
+          org.springframework.ai.chat.messages.ToolResponseMessage.builder()
+              .responses(
+                  java.util.List.of(
+                      new org.springframework.ai.chat.messages.ToolResponseMessage.ToolResponse(
+                          "successful-call", "fixtureOperation", "SUCCESSFUL_OPERATION_RESULT")))
+              .build();
+      protocolEntries.add(
+          new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.History.Entry(
+              "result", previousExchange.withKey("result").reference(result)));
+    }
     var pointers =
         payloads.historyReferences(
             previousExchange.scope(),
@@ -166,11 +205,7 @@ class ContextHistoryAdvisorTest {
                 old.runId(),
                 new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Origin(
                     previousExchange.ownerKey(), "endpoint-a"),
-                java.util.List.of(
-                    new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.History.Entry(
-                        "input", userRef),
-                    new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.History.Entry(
-                        "answer", assistantRef))),
+                protocolEntries),
             "turn:old");
     var logs =
         new dev.mikoto2000.rei.conversation.ConversationLogStore(
@@ -366,6 +401,27 @@ class ContextHistoryAdvisorTest {
       assertThat(assembler.assemble(projected, "chat", current.runId(), () -> {}).getContents())
           .contains("retained native summary", "current request")
           .doesNotContain("old actual", "opaque-native-history");
+      return;
+    }
+    if (scenario.equals("completedTool") && status == ConversationTurnStore.Status.COMPLETED) {
+      assertThat(projected.getContents())
+          .contains(
+              "old display request",
+              "old display answer",
+              "fixtureOperation",
+              "SUCCESSFUL_OPERATION_RESULT",
+              "current request")
+          .doesNotContain("opaque-native-history");
+      assertThat(
+              projected.getInstructions().stream()
+                  .filter(AssistantMessage.class::isInstance)
+                  .map(AssistantMessage.class::cast)
+                  .flatMap(message -> message.getParts().stream()))
+          .noneMatch(part ->
+              part instanceof org.springframework.ai.chat.messages.part.ReasoningPart
+                  || part instanceof org.springframework.ai.chat.messages.part.ToolCallPart);
+      assertThat(payloads.restoreHistory(previousExchange.scope(), pointers.get(1)).orElseThrow())
+          .isEqualTo(original);
       return;
     }
     if (status != ConversationTurnStore.Status.COMPLETED) {
