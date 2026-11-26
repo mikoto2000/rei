@@ -166,7 +166,7 @@ class PlanResponsesRequestTest {
     }
   }
 
-  private static final class Fixture implements AutoCloseable {
+  static final class Fixture implements AutoCloseable {
     final RunLlmConnection pin =
         new RunLlmConnection(
             "plan",
@@ -202,6 +202,8 @@ class PlanResponsesRequestTest {
             .retryOnConnectionFailure(false)
             .build();
     final com.openai.client.OpenAIClient client;
+    int status = 200;
+    String mediaType = "text/event-stream";
     String reply =
         event(
             "response.completed",
@@ -231,11 +233,9 @@ class PlanResponsesRequestTest {
                 return new okhttp3.Response.Builder()
                     .request(chain.request())
                     .protocol(okhttp3.Protocol.HTTP_1_1)
-                    .code(200)
+                    .code(status)
                     .message("fixture")
-                    .body(
-                        okhttp3.ResponseBody.create(
-                            reply, okhttp3.MediaType.get("text/event-stream")))
+                    .body(okhttp3.ResponseBody.create(reply, okhttp3.MediaType.get(mediaType)))
                     .build();
               }),
               () -> {});
