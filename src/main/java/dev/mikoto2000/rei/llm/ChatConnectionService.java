@@ -100,6 +100,31 @@ public final class ChatConnectionService implements AutoCloseable {
     return new Selection(selected.endpoint(), model);
   }
 
+  /** Public endpoint projection; no URL, credential reference or native options. */
+  public record Endpoint(
+      ChatEndpointCatalog.Profile profile,
+      boolean active,
+      ReasoningReplayMode reasoningReplay,
+      String authenticationState,
+      String unavailableReason,
+      java.util.Map<String, Object> generationSettings,
+      java.util.Map<String, String> unappliedSettings,
+      java.util.List<String> diagnostics) {
+    public Endpoint {
+      java.util.Objects.requireNonNull(profile, "profile");
+      generationSettings = RunGenerationSettings.copy(generationSettings);
+      unappliedSettings = java.util.Map.copyOf(unappliedSettings);
+      diagnostics = java.util.List.copyOf(diagnostics);
+    }
+    @Override public java.util.Map<String, Object> generationSettings() {
+      return java.util.Collections.unmodifiableMap(new java.util.LinkedHashMap<>(generationSettings));
+    }
+  }
+
+  public java.util.List<Endpoint> endpoints() {
+    return java.util.List.of();
+  }
+
   public RunLlmConnection accept(AgentRunContext owner) {
     return connections.accept(owner);
   }
