@@ -344,13 +344,17 @@ class ApprovalContinuationTest {
     return Arrays.stream(dev.mikoto2000.rei.llm.LlmApiType.values())
         .flatMap(api ->
             java.util.stream.Stream.of(false, true)
-                .map(assembled -> org.junit.jupiter.params.provider.Arguments.of(api, assembled)));
+                .flatMap(assembled ->
+                    java.util.stream.Stream.of(false, true)
+                        .map(changed ->
+                            org.junit.jupiter.params.provider.Arguments.of(
+                                api, assembled, changed))));
   }
 
   @org.junit.jupiter.params.ParameterizedTest
   @org.junit.jupiter.params.provider.MethodSource("approvedInputVariants")
   void resumedApprovedInputKeepsItsReviewedGuidance(
-      dev.mikoto2000.rei.llm.LlmApiType api, boolean assembled) {
+      dev.mikoto2000.rei.llm.LlmApiType api, boolean assembled, boolean changedContext) {
     var pin =
         new dev.mikoto2000.rei.llm.RunLlmConnection(
             "local",
@@ -495,11 +499,51 @@ class ApprovalContinuationTest {
         dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.EXCHANGE_CONTEXT_KEY,
         payloads.newExchange(owner));
     resumed.setModelOptions(options.mutate().toolContext(null).toolContext(resumedContext).build());
-    org.junit.jupiter.api.Assertions.assertDoesNotThrow(() ->
-        loop.stream(new Prompt("PRIVATE REVIEW FIXTURE", resumed.modelOptions())).blockLast());
+    var finalExecution = resumed;
+    var currentInput =
+        changedContext
+            ? List.<org.springframework.ai.chat.messages.Message>of(
+                org.springframework.ai.chat.messages.SystemMessage.builder()
+                    .text("CHANGED WORK CONTEXT")
+                    .metadata(Map.of("rei.workContext", true))
+                    .build(),
+                new UserMessage("PRIVATE REVIEW FIXTURE"))
+            : List.<org.springframework.ai.chat.messages.Message>of(
+                new UserMessage("PRIVATE REVIEW FIXTURE"));
+    if (changedContext) {
+      var changedPrompt = new Prompt(currentInput, resumed.modelOptions());
+      assertThrows(RunWaitingException.class, () -> loop.stream(changedPrompt).blockLast());
+      assertEquals(0, calls.get());
+      var replacement = approvals.list(owner.projectId()).getFirst();
+      assertNotEquals(approval.id(), replacement.id());
+      assertEquals("CONSUMED", approvals.get(owner.projectId(), approval.id()).status());
+      var replacementEntry = store.find(replacement.id()).orElseThrow();
+      assertNotEquals(
+          store.document(entry).inference().contentFingerprint(),
+          store.document(replacementEntry).inference().contentFingerprint());
+      expected = store.saved(replacementEntry).messages();
+      assertTrue(
+          expected.stream().anyMatch(message -> "CHANGED WORK CONTEXT".equals(message.getText())));
+      service.decide(owner.projectId(), replacement.id(), true, true);
+      assertTrue(store.claim(replacement.id()));
+      assertTrue(registry.transition(owner.runId(), RunStatus.RUNNING, null));
+      finalExecution = execution();
+      finalExecution.resume(service.restore(owner));
+      finalExecution.beginContextRestoration();
+      var updatedContext = new java.util.HashMap<>(options.getToolContext());
+      updatedContext.put(RunExecutionContext.KEY, finalExecution);
+      updatedContext.put(
+          dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.EXCHANGE_CONTEXT_KEY,
+          payloads.newExchange(owner));
+      finalExecution.setModelOptions(
+          options.mutate().toolContext(null).toolContext(updatedContext).build());
+      approval = replacement;
+    }
+    var finalPrompt = new Prompt(currentInput, finalExecution.modelOptions());
+    org.junit.jupiter.api.Assertions.assertDoesNotThrow(() -> loop.stream(finalPrompt).blockLast());
     assertEquals(1, calls.get());
     assertEquals(
-        1,
+        changedContext ? 2 : 1,
         org.springframework.jdbc.core.simple.JdbcClient.create(source)
             .sql("SELECT COUNT(*) FROM tool_approvals WHERE project=?")
             .param(owner.projectId())
@@ -507,7 +551,7 @@ class ApprovalContinuationTest {
             .single());
     assertTrue(approvals.list(owner.projectId()).isEmpty());
     assertEquals("CONSUMED", approvals.get(owner.projectId(), approval.id()).status());
-    assertEquals(1, resumed.budgetSnapshot().llmCalls());
+    assertEquals(1, finalExecution.budgetSnapshot().llmCalls());
     var codec = new dev.mikoto2000.rei.modelmessage.ModelMessageCodec();
     assertEquals(expected.size(), sent.get().getInstructions().size());
     for (int i = 0; i < expected.size(); i++)
