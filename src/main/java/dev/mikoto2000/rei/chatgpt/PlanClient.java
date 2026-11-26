@@ -190,11 +190,14 @@ public final class PlanClient
           return paused;
         });
     var request = java.util.Objects.requireNonNull(admitted.get());
-    if (generation.get() != initial || !registration.equals(oauth.registration(account))) {
+    try {
+      if (generation.get() != initial || !registration.equals(oauth.registration(account)))
+        throw ChatGptException.of(CANCELLED);
+      return request;
+    } catch (RuntimeException | Error failure) {
       request.close();
-      throw ChatGptException.of(CANCELLED);
+      throw failure;
     }
-    return request;
   }
 
   @Override
