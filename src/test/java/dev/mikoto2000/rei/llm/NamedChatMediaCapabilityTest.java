@@ -16,6 +16,64 @@ import org.springframework.util.MimeType;
 class NamedChatMediaCapabilityTest {
   @ParameterizedTest
   @CsvSource({
+    "image/png,relative/PRIVATE",
+    "image/png,file:///PRIVATE",
+    "image/png,javascript:PRIVATE",
+    "image/png,https://user:PRIVATE@example.invalid/image.png",
+    "image/png,https://example.invalid/PRIVATE#fragment",
+    "image/png,'data:text/plain;base64,AQID'",
+    "image/png,'data:image/png;base64,%%%'",
+    "application/pdf,http://example.invalid/PRIVATE",
+    "text/plain,INLINE",
+    "application/json,INLINE",
+    "audio/mpeg,INLINE",
+    "video/mp4,INLINE",
+    "image/tiff,INLINE"
+  })
+  void unsafeMediaAndUnsupportedFileShapesNeverBecomeOrdinaryText(String mime, String data)
+      throws Exception {
+    try (var fixture = new PinnedChatModelsTest.Fixture();
+        var models =
+            new PinnedChatModels(
+                pin -> {
+                  throw new AssertionError("No-auth media read a credential");
+                },
+                pin -> {},
+                null,
+                2)) {
+      var base = fixture.pin("media", "fixture-model", LlmAuthentication.NONE);
+      var connection =
+          new RunLlmConnection(
+              base.profileId(),
+              true,
+              base.provider(),
+              base.authentication(),
+              null,
+              null,
+              base.endpoint(),
+              Map.of(
+                  LlmEndpointCapabilities.Capability.VISION,
+                  LlmEndpointCapabilities.Support.SUPPORTED,
+                  LlmEndpointCapabilities.Capability.FILE_INPUT,
+                  LlmEndpointCapabilities.Support.SUPPORTED),
+              base.generation());
+      var mediaBuilder = Media.builder().mimeType(MimeType.valueOf(mime)).name("fixture.bin");
+      if (data.equals("INLINE")) mediaBuilder.data(new byte[] {1, 2, 3});
+      else mediaBuilder.data(data);
+      var media = mediaBuilder.build();
+      var input = UserMessage.builder().text("fixture").media(List.of(media)).build();
+      assertThatThrownBy(() ->
+              models
+                  .model(connection)
+                  .call(new Prompt(input, RunNativeOptions.options(connection))))
+          .isInstanceOf(IllegalArgumentException.class)
+          .hasMessageNotContaining("PRIVATE");
+      assertThat(fixture.bodies).isEmpty();
+    }
+  }
+
+  @ParameterizedTest
+  @CsvSource({
     "image/png,NONE",
     "image/png,API_KEY",
     "application/pdf,NONE",
