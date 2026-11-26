@@ -2,6 +2,7 @@ package dev.mikoto2000.rei.core.policy;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import dev.mikoto2000.rei.core.chat.AgentRunContext;
 import dev.mikoto2000.rei.modeloptions.AcceptedRunOptions;
@@ -105,6 +106,53 @@ class InferenceExportGuardTest {
   private ToolApprovalRepository approvals() {
     return new ToolApprovalRepository(
         new DriverManagerDataSource("jdbc:sqlite:" + directory.resolve("approvals.db")), clock);
+  }
+
+  @Test
+  void savedBindingVerificationNeitherGrantsNorConsumesInferenceAuthority() {
+    var approvals = approvals();
+    var guard = new InferenceExportGuard(approvals, clock);
+    var owner = owner("run", AgentRunContext.Mode.CONVERSATION);
+    var connection = connection(true, "a");
+    var prompt = prompt(connection, "fixture");
+    var decision = guard.authorize(owner, connection, prompt);
+    var input = InferenceExportRequest.prepare(decision.prompt()).input();
+    guard.verifySavedApproval(decision.approvalId(), owner, connection, input);
+    assertThat(approvals.get(owner.projectId(), decision.approvalId()).status())
+        .isEqualTo("PENDING");
+    approvals.decide(owner.projectId(), decision.approvalId(), true);
+    guard.verifySavedApproval(decision.approvalId(), owner, connection, input);
+    assertThat(approvals.get(owner.projectId(), decision.approvalId()).status())
+        .isEqualTo("APPROVED");
+  }
+
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(
+      strings = {"purpose", "content", "connection", "owner"})
+  void savedInputCannotBeAttachedToAnotherApprovalBinding(String changed) {
+    var approvals = approvals();
+    var guard = new InferenceExportGuard(approvals, clock);
+    var owner = owner("run", AgentRunContext.Mode.READ_ONLY);
+    var connection = connection(true, "a");
+    var prompt = prompt(connection, "fixture");
+    var decision = guard.authorize(owner, connection, prompt);
+    var input = InferenceExportRequest.prepare(decision.prompt()).input();
+    var id =
+        changed.equals("purpose")
+            ? approvals.request("writeMultiFile", "{}", owner).id()
+            : decision.approvalId();
+    var suppliedOwner = changed.equals("owner") ? owner("other-run", owner.mode()) : owner;
+    var suppliedConnection = changed.equals("connection") ? connection(true, "b") : connection;
+    var suppliedInput =
+        changed.equals("content")
+            ? InferenceExportRequest.prepare(prompt(connection, "changed")).input()
+            : input;
+    assertThatThrownBy(
+            () -> guard.verifySavedApproval(id, suppliedOwner, suppliedConnection, suppliedInput))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("binding");
+    assertThat(approvals.get(owner.projectId(), decision.approvalId()).status())
+        .isEqualTo("PENDING");
   }
 
   private AgentRunContext owner(String id, AgentRunContext.Mode mode) {

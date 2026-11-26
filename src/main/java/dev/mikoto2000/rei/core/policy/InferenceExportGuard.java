@@ -50,6 +50,15 @@ public final class InferenceExportGuard {
     }
   }
 
+  /** Verify a saved input's exact approval binding without granting or consuming authority. */
+  public void verifySavedApproval(
+      String id,
+      AgentRunContext owner,
+      AcceptedRunOptions connection,
+      ApprovalContinuationStore.InferenceInput input) {
+    // API introduced for the next content-bound continuation test; not wired into dispatch.
+  }
+
   public Decision authorize(AgentRunContext owner, AcceptedRunOptions connection, Prompt prompt) {
     java.util.Objects.requireNonNull(connection, "Accepted inference connection required");
     if (!connection.named()) return new Decision(prompt, null);
