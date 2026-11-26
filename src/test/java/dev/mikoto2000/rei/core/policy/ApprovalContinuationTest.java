@@ -217,13 +217,16 @@ class ApprovalContinuationTest {
     return java.util.Arrays.stream(AgentRunContext.Mode.values())
         .flatMap(mode ->
             java.util.Arrays.stream(dev.mikoto2000.rei.llm.LlmApiType.values())
-                .map(api -> org.junit.jupiter.params.provider.Arguments.of(mode, api)));
+                .flatMap(api ->
+                    java.util.stream.Stream.of(false, true)
+                        .map(assembled ->
+                            org.junit.jupiter.params.provider.Arguments.of(mode, api, assembled))));
   }
 
   @org.junit.jupiter.params.ParameterizedTest
   @org.junit.jupiter.params.provider.MethodSource("namedInferenceModes")
   void normalChatWaitsForInferenceConsentBeforeCallingEitherApi(
-      AgentRunContext.Mode mode, dev.mikoto2000.rei.llm.LlmApiType api) {
+      AgentRunContext.Mode mode, dev.mikoto2000.rei.llm.LlmApiType api, boolean assembled) {
     owner =
         new AgentRunContext(
             "inference-run",
@@ -297,10 +300,28 @@ class ApprovalContinuationTest {
             throw new AssertionError("Inference invoked before export consent");
           }
         };
+    var compression = new dev.mikoto2000.rei.core.contextbudget.ContextCompressionProperties();
+    compression.setEnabled(true);
+    var estimator = dev.mikoto2000.rei.core.contextbudget.TokenEstimator.conservative();
+    var assembler =
+        new dev.mikoto2000.rei.core.contextbudget.ContextAssembler(
+            compression,
+            estimator,
+            new dev.mikoto2000.rei.core.contextbudget.ConversationSummaryRepository(directory),
+            new dev.mikoto2000.rei.core.contextbudget.ToolResultCompressor(
+                new dev.mikoto2000.rei.core.contextbudget.RawToolResultStore(directory),
+                estimator,
+                100,
+                70),
+            (previous, messages, limit, request) -> {
+              throw new AssertionError("Short fixture must not invoke a summary model");
+            },
+            new AgentEventFactory(Clock.systemUTC()),
+            ignored -> {});
     assertThrows(
         RunWaitingException.class,
         () ->
-            new StagnationChatModel(model)
+            new StagnationChatModel(model, assembled ? assembler : null)
                 .stream(new Prompt("PRIVATE INFERENCE FIXTURE", execution.modelOptions()))
                     .blockLast());
     assertEquals(0, calls.get());
