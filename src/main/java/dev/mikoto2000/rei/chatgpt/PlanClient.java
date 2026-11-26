@@ -32,7 +32,8 @@ import java.util.function.BooleanSupplier;
  *
  * <p>Dedicated OAuth inference adapter: explicit request whitelist, no Tools, repair or retries.
  */
-public final class PlanClient implements PlanInference {
+public final class PlanClient
+    implements PlanInference, dev.mikoto2000.rei.modeloptions.ChatPlanAccounts {
   /** モデル利用可能な項目上限バイト数。 */
   static final int MODEL_CATALOG_LIMIT_BYTES = 2 * 1024 * 1024;
 
@@ -134,6 +135,39 @@ public final class PlanClient implements PlanInference {
     this.oauth = oauth;
     this.transport = transport;
     this.clock = clock;
+  }
+
+  /** Observes local authorization without reading tokens into the common connection layer. */
+  @Override
+  public String registration(String account) {
+    return oauth.registration(account);
+  }
+
+  private static void requireRegistration(String expected) {
+    if (expected == null
+        || expected.isBlank()
+        || expected.length() > 128
+        || expected.codePoints().anyMatch(Character::isISOControl))
+      throw ChatGptException.of(AUTH_REQUIRED);
+  }
+
+  /** Reuses the protected refresh and visible model catalog for an accepted account. */
+  @Override
+  public String credential(String account, String registration, String model) {
+    requireRegistration(registration);
+    if (!models(account, registration).contains(model))
+      throw ChatGptException.of(MODEL_UNAVAILABLE);
+    return oauth.access(account, registration).accessToken();
+  }
+
+  /** Keeps server order and verifies the account before refresh and after discovery. */
+  @Override
+  public List<String> models(String account, String registration) {
+    requireRegistration(registration);
+    oauth.access(account, registration);
+    var values = models(account, false);
+    oauth.access(account, registration);
+    return values.stream().map(Model::id).toList();
   }
 
   /** ChatGPTとの連携で用いるモデル一覧を返す。 */

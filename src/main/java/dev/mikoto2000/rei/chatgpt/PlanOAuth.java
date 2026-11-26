@@ -263,9 +263,17 @@ public final class PlanOAuth {
 
   /** ChatGPTとの連携で用いるアクセスを返す。 */
   public TokenSet access(String account) {
+    return access(account, null);
+  }
+
+  /** Checks an optional accepted incarnation under the same lock as token rotation. */
+  public TokenSet access(String account, String expectedRegistration) {
     return store.locked(s -> {
       var saved = s.load(account);
-      if (saved == null || saved.accessToken() == null) throw ChatGptException.of(AUTH_REQUIRED);
+      if (saved == null
+          || saved.accessToken() == null
+          || expectedRegistration != null && !expectedRegistration.equals(saved.registrationId()))
+        throw ChatGptException.of(AUTH_REQUIRED);
       if (!saved.scopes().contains("chatgpt.tokens.use.direct"))
         throw ChatGptException.of(CONSENT_REQUIRED);
       if (saved.expiresAt() > clock.instant().getEpochSecond()) return saved;
@@ -286,6 +294,8 @@ public final class PlanOAuth {
         var replacement =
             tokenSet(grant, saved.clientId(), new Identity(saved.subject(), saved.email()), saved);
         s.save(account, replacement);
+        if (!replacement.scopes().contains("chatgpt.tokens.use.direct"))
+          throw ChatGptException.of(CONSENT_REQUIRED);
         return replacement;
       } catch (ChatGptException e) {
         if (e.code() == AUTH_INVALID) s.save(account, saved.withoutTokens());
