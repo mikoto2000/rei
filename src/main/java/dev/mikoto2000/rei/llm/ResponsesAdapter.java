@@ -464,6 +464,20 @@ final class ResponsesAdapter implements LlmProtocolAdapter, ChatModel {
 
   @Override
   public ChatResponse call(Prompt prompt) {
+    if (acceptedConnection != null && acceptedConnection.provider() == LlmProvider.CHATGPT_PLAN) {
+      var result = new java.util.concurrent.atomic.AtomicReference<ChatResponse>();
+      try {
+        new org.springframework.ai.chat.model.MessageAggregator()
+            .aggregate(stream(prompt), result::set)
+            .blockLast();
+        if (result.get() == null)
+          throw new ResponsesTransportException(
+              ResponsesTransportException.Category.INVALID_RESPONSE);
+        return result.get();
+      } catch (RuntimeException error) {
+        throw ResponsesTransportException.normalize(error);
+      }
+    }
     var request = prepare(prompt);
     try {
       var response = delegate.call(request);
@@ -572,6 +586,14 @@ final class ResponsesAdapter implements LlmProtocolAdapter, ChatModel {
                       .doOnNext(response -> {
                         requireNoRefusal(response);
                         if (response.getMetadata().containsKey(OpenAiResponsesMetadata.STATUS)) {
+                          if (acceptedConnection != null
+                              && acceptedConnection.provider() == LlmProvider.CHATGPT_PLAN
+                              && !"completed"
+                                  .equals(
+                                      response.getMetadata().get(OpenAiResponsesMetadata.STATUS)))
+                            throw new ResponsesTransportException(
+                                ResponsesTransportException.Category.INCOMPLETE,
+                                ResponsesTransportException.usage(response));
                           requireCompleted(response);
                           completed.set(true);
                         }

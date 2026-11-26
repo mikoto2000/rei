@@ -19,8 +19,26 @@ final class ResponsesProfilePolicy {
         || endpoint.model().codePoints().anyMatch(Character::isISOControl))
       throw new IllegalStateException("Named Responses connection binding is invalid");
     requireCapability(connection, LlmEndpointCapabilities.Capability.RESPONSES);
-    if (connection.provider() == LlmProvider.CHATGPT_PLAN)
-      throw new IllegalStateException("ChatGPT Responses requires its verified account policy");
+    if (endpoint.readTimeout().compareTo(java.time.Duration.ofMillis(1)) < 0)
+      throw new IllegalStateException("Responses read timeout must be positive");
+    if (connection.provider() == LlmProvider.CHATGPT_PLAN) {
+      if (connection.authentication() != LlmAuthentication.CHATGPT_OAUTH
+          || !"https://api.openai.com/v1".equals(endpoint.baseUrl())
+          || connection.accountRef() == null
+          || !connection.accountRef().matches("[A-Za-z0-9_-]{1,64}")
+          || connection.accountRegistration() == null
+          || connection.accountRegistration().isBlank()
+          || connection.accountRegistration().codePoints().anyMatch(Character::isISOControl)
+          || endpoint.capabilities().reasoningReplay() != ReasoningReplayMode.ENCRYPTED
+          || endpoint.maxOutputTokens() != null
+          || endpoint.temperature() != null
+          || connection.transport().keySet().stream()
+              .anyMatch(key -> !key.equals("request_timeout")))
+        throw new IllegalStateException("ChatGPT Responses account or resource binding is invalid");
+      requireCapability(connection, LlmEndpointCapabilities.Capability.STREAMING);
+      requireCapability(connection, LlmEndpointCapabilities.Capability.REASONING_REPLAY);
+      return;
+    }
     if (connection.accountRef() != null
         || connection.accountRegistration() != null
         || connection.authentication() != LlmAuthentication.API_KEY
@@ -30,8 +48,6 @@ final class ResponsesProfilePolicy {
         && (connection.authentication() != LlmAuthentication.API_KEY
             || !"https://api.openai.com/v1".equals(endpoint.baseUrl())))
       throw new IllegalStateException("OpenAI Responses requires its API key resource binding");
-    if (endpoint.readTimeout().compareTo(java.time.Duration.ofMillis(1)) < 0)
-      throw new IllegalStateException("Responses read timeout must be positive");
     if (endpoint.maxOutputTokens() != null)
       requireCapability(connection, LlmEndpointCapabilities.Capability.MAX_OUTPUT_TOKENS);
     if (endpoint.capabilities().reasoningReplay() != ReasoningReplayMode.NONE)
@@ -53,6 +69,13 @@ final class ResponsesProfilePolicy {
             context.get(dev.mikoto2000.rei.modeloptions.ModelOptions.RUN_CONNECTION_CONTEXT_KEY)))
       throw new IllegalArgumentException(
           "Responses request must retain the accepted Run connection");
+    if (connection.provider() == LlmProvider.CHATGPT_PLAN
+        && (options.getMaxOutputTokens() != null
+            || options.getTemperature() != null
+            || options.getTopP() != null
+            || options.getMaxToolCalls() != null
+            || options.getTruncation() != null))
+      throw new IllegalArgumentException("ChatGPT Responses request contains an unsupported field");
     if (options.getMaxOutputTokens() != null)
       requireCapability(connection, LlmEndpointCapabilities.Capability.MAX_OUTPUT_TOKENS);
     var include = options.getInclude();
@@ -68,7 +91,11 @@ final class ResponsesProfilePolicy {
       throw new IllegalArgumentException(
           "Responses platform setting requires a supported profile contract");
     var tools = options.getToolCallbacks();
-    if (tools != null && !tools.isEmpty())
+    if (tools != null && !tools.isEmpty()) {
+      if (connection.provider() == LlmProvider.CHATGPT_PLAN)
+        throw new IllegalArgumentException(
+            "ChatGPT Responses tools require the namespace contract");
       requireCapability(connection, LlmEndpointCapabilities.Capability.FUNCTION_CALLING);
+    }
   }
 }

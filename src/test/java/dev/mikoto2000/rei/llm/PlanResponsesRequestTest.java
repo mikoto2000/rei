@@ -170,7 +170,7 @@ class PlanResponsesRequestTest {
           + "\ndata: {\"type\":\""
           + type
           + "\",\"sequence_number\":1,"
-          + fields
+          + fields.replace("\n", "").replace("\r", "")
           + "}\n\n";
     }
 
