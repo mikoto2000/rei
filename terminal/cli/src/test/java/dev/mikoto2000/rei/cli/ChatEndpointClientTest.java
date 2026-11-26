@@ -19,7 +19,8 @@ import org.junit.jupiter.api.io.TempDir;
 class ChatEndpointClientTest {
   @TempDir Path directory;
 
-  private static final String ENTRY = """
+  private static final String ENTRY =
+      """
       {"profile":{"id":"local","model":"local-model","provider":"openai-compatible",
         "api":"CHAT_COMPLETIONS","authentication":"none","usagePath":"local-llm",
         "capabilities":{"effective":{"STREAMING":"UNKNOWN"}}},
@@ -57,10 +58,19 @@ class ChatEndpointClientTest {
     try (var fixture = new Fixture()) {
       fixture.client.command("/llm chat list");
       assertTrue(fixture.client.completionValues(List.of("/llm", ""), 1, "").contains("chat"));
-      assertTrue(fixture.client.completionValues(List.of("/llm", "chat", ""), 2, "")
-          .containsAll(List.of("list", "show", "use")));
-      assertEquals(List.of("local"), fixture.client.completionValues(List.of("/llm", "chat", "use", "lo"), 3, "lo"));
-      assertTrue(fixture.client.completionValues(List.of("/llm", "capture", "use", "lo"), 3, "lo").isEmpty());
+      assertTrue(
+          fixture
+              .client
+              .completionValues(List.of("/llm", "chat", ""), 2, "")
+              .containsAll(List.of("list", "show", "use")));
+      assertEquals(
+          List.of("local"),
+          fixture.client.completionValues(List.of("/llm", "chat", "use", "lo"), 3, "lo"));
+      assertTrue(
+          fixture
+              .client
+              .completionValues(List.of("/llm", "capture", "use", "lo"), 3, "lo")
+              .isEmpty());
     }
   }
 
@@ -73,28 +83,49 @@ class ChatEndpointClientTest {
 
     Fixture() throws Exception {
       server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
-      server.createContext("/api/v1/llm/chat", exchange -> {
-        if (exchange.getRequestMethod().equals("PUT")) {
-          assertEquals("{\"endpoint\":\"local\"}", new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
-          mutations.incrementAndGet();
-        }
-        var bytes = (exchange.getRequestURI().getPath().endsWith("/current") ? ENTRY : "[" + ENTRY + "]")
-            .getBytes(StandardCharsets.UTF_8);
-        exchange.getResponseHeaders().set("Content-Type", "application/json");
-        exchange.sendResponseHeaders(200, bytes.length);
-        exchange.getResponseBody().write(bytes);
-        exchange.close();
-      });
+      server.createContext(
+          "/api/v1/llm/chat",
+          exchange -> {
+            if (exchange.getRequestMethod().equals("PUT")) {
+              assertEquals(
+                  "{\"endpoint\":\"local\"}",
+                  new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
+              mutations.incrementAndGet();
+            }
+            var bytes =
+                (exchange.getRequestURI().getPath().endsWith("/current")
+                        ? ENTRY
+                        : "[" + ENTRY + "]")
+                    .getBytes(StandardCharsets.UTF_8);
+            exchange.getResponseHeaders().set("Content-Type", "application/json");
+            exchange.sendResponseHeaders(200, bytes.length);
+            exchange.getResponseBody().write(bytes);
+            exchange.close();
+          });
       server.start();
-      backend = new BackendClient(URI.create("http://127.0.0.1:" + server.getAddress().getPort()), "fixture");
-      client = new TerminalClient(backend, directory, true,
-          new DumbTerminal(new ByteArrayInputStream(new byte[0]), output));
+      backend =
+          new BackendClient(
+              URI.create("http://127.0.0.1:" + server.getAddress().getPort()), "fixture");
+      client =
+          new TerminalClient(
+              backend,
+              directory,
+              true,
+              new DumbTerminal(new ByteArrayInputStream(new byte[0]), output));
     }
 
-    String text() { return output.toString(StandardCharsets.UTF_8); }
+    String text() {
+      return output.toString(StandardCharsets.UTF_8);
+    }
 
-    @Override public void close() throws Exception {
-      try { client.close(); } finally { backend.close(); server.stop(0); }
+    @Override
+    public void close() throws Exception {
+      try {
+        client.close();
+      } finally {
+        backend.close();
+        server.stop(0);
+      }
     }
   }
 }

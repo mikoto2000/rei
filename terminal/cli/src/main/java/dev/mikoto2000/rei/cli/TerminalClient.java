@@ -90,6 +90,7 @@ public final class TerminalClient implements AutoCloseable {
 
   /** モデル識別子一覧。 */
   private volatile List<String> modelIds = List.of();
+
   private volatile List<String> endpointIds = List.of();
 
   /** プロジェクトパス一覧。 */
@@ -761,8 +762,10 @@ public final class TerminalClient implements AutoCloseable {
 
   private void chatEndpointCommand(List<String> words) throws IOException, InterruptedException {
     var request = RemoteCommands.route(words, project, session);
-    var response = request.method().equals("GET") ? backend.get(request.path())
-        : backend.mutation(request.method(), request.path(), request.body());
+    var response =
+        request.method().equals("GET")
+            ? backend.get(request.path())
+            : backend.mutation(request.method(), request.path(), request.body());
     String operation = words.get(2);
     if (response.isArray()) {
       var ids = new ArrayList<String>();
@@ -782,8 +785,12 @@ public final class TerminalClient implements AutoCloseable {
         return;
       }
       var choice = MeetingSelectionMenu.chooseOne(reader, candidates);
-      if (choice.isEmpty()) { out("Selection cancelled."); return; }
-      var selected = RemoteCommands.route(List.of("/llm", "chat", "use", choice.get()), project, session);
+      if (choice.isEmpty()) {
+        out("Selection cancelled.");
+        return;
+      }
+      var selected =
+          RemoteCommands.route(List.of("/llm", "chat", "use", choice.get()), project, session);
       response = backend.mutation(selected.method(), selected.path(), selected.body());
     }
     if (operation.equals("show")) out(ChatEndpointOutput.detail(response));
