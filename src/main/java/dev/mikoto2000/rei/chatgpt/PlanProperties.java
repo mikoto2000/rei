@@ -10,11 +10,22 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * @param enabled 有効状態
  * @param credentialDirectory 認証情報ディレクトリ
  * @param allowedRoles 許可役割一覧
+ * @param maxConcurrent 登録ごとの同時推論要求数
  */
 @ConfigurationProperties(prefix = "rei.chatgpt-plan")
-public record PlanProperties(boolean enabled, Path credentialDirectory, Set<String> allowedRoles) {
+public record PlanProperties(
+    boolean enabled, Path credentialDirectory, Set<String> allowedRoles, Integer maxConcurrent) {
+  /** Retains the existing registration settings constructor with conservative request capacity. */
+  public PlanProperties(boolean enabled, Path credentialDirectory, Set<String> allowedRoles) {
+    this(enabled, credentialDirectory, allowedRoles, 1);
+  }
+
   /** 受け取った情報からPlanPropertiesを作成する。 */
+  @org.springframework.boot.context.properties.bind.ConstructorBinding
   public PlanProperties {
+    maxConcurrent = maxConcurrent == null ? 1 : maxConcurrent;
+    if (maxConcurrent < 1 || maxConcurrent > 8)
+      throw new IllegalArgumentException("rei.chatgpt-plan.max-concurrent must be between 1 and 8");
     if (credentialDirectory == null)
       credentialDirectory =
           dev.mikoto2000.rei.core.datasource.ReiDataDirectory.current()

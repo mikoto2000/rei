@@ -113,7 +113,7 @@ public final class PlanClient
   /** OAuth認証。 */
   private final PlanOAuth oauth;
 
-  private final PlanRequestSlots requestSlots = new PlanRequestSlots(1);
+  private final PlanRequestSlots requestSlots;
 
   /** 通信経路。 */
   private final PlanTransport transport;
@@ -134,6 +134,12 @@ public final class PlanClient
 
   /** 指定された値や利用先を使って、PlanClientを初期化する。 */
   public PlanClient(PlanOAuth oauth, PlanTransport transport, Clock clock) {
+    this(oauth, transport, clock, 1);
+  }
+
+  /** Creates shared request admission with the operator's per-registration capacity. */
+  public PlanClient(PlanOAuth oauth, PlanTransport transport, Clock clock, int maxConcurrent) {
+    this.requestSlots = new PlanRequestSlots(maxConcurrent);
     this.oauth = oauth;
     this.transport = transport;
     this.clock = clock;
