@@ -211,6 +211,60 @@ class PinnedResponsesTransportTest {
     }
   }
 
+  @Test
+  void acceptedNamedDeadlineIsIndependentFromReadInactivity() throws Exception {
+    try (var fixture = new Fixture(false)) {
+      var source = namedPin(fixture, false, LlmEndpointCapabilities.Support.SUPPORTED);
+      var original = source.endpoint();
+      var pin =
+          new RunLlmConnection(
+              source.profileId(),
+              true,
+              source.provider(),
+              source.authentication(),
+              null,
+              null,
+              new ResolvedLlmEndpoint(
+                  original.endpointId(),
+                  original.generation(),
+                  original.apiType(),
+                  original.baseUrl(),
+                  original.credentialRef(),
+                  original.model(),
+                  original.capabilities(),
+                  64,
+                  null,
+                  Duration.ofSeconds(3)),
+              source.capabilities(),
+              source.generation(),
+              Map.of("connect_timeout", "PT2S", "request_timeout", "PT4S"));
+      var observed = new java.util.concurrent.ConcurrentHashMap<String, Long>();
+      var client =
+          fixture.client(
+              pin,
+              List.of(
+                  new ChatStreamTimeoutInterceptor(Duration.ofSeconds(3)),
+                  chain -> {
+                    observed.put("connect", (long) chain.connectTimeoutMillis());
+                    observed.put("read", (long) chain.readTimeoutMillis());
+                    observed.put(
+                        "request",
+                        java.util.concurrent.TimeUnit.NANOSECONDS.toMillis(
+                            chain.call().timeout().timeoutNanos()));
+                    return chain.proceed(chain.request());
+                  }));
+      var options = (OpenAiResponsesChatOptions) RunNativeOptions.options(pin);
+      var model = ResponsesAdapter.createForRun(pin, options, client);
+      assertThat(model.call(new Prompt("fixture", options)).getResult().getOutput().getText())
+          .isEqualTo("done");
+      assertThat(observed)
+          .containsEntry("connect", 2000L)
+          .containsEntry("read", 3000L)
+          .containsEntry("request", 4000L);
+      assertThat(fixture.requests).hasSize(1);
+    }
+  }
+
   private static RunLlmConnection namedPin(
       Fixture fixture, boolean omitOutputLimit, LlmEndpointCapabilities.Support responses) {
     var source = fixture.pin();
@@ -330,6 +384,11 @@ class PinnedResponsesTransportTest {
     }
 
     com.openai.client.OpenAIClient client(RunLlmConnection pin) {
+      return client(pin, List.of());
+    }
+
+    com.openai.client.OpenAIClient client(
+        RunLlmConnection pin, List<okhttp3.Interceptor> interceptors) {
       var client =
           PinnedOpenAiClients.open(
               pin,
@@ -337,7 +396,7 @@ class PinnedResponsesTransportTest {
                 throw new AssertionError("No-auth read credentials");
               },
               transport,
-              List.of(),
+              interceptors,
               () -> {});
       clients.add(client);
       return client;
