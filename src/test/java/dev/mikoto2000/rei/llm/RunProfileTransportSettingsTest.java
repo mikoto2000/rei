@@ -74,6 +74,39 @@ class RunProfileTransportSettingsTest {
     assertThatThrownBy(() -> properties(values)).isInstanceOf(Exception.class);
   }
 
+  @ParameterizedTest
+  @CsvSource({
+    "chat,request-limit-bytes,128",
+    "chat,response-limit-bytes,512",
+    "chat,connect-timeout,2s",
+    "chat,read-timeout,3s",
+    "chat,request-timeout,4s",
+    "memory,request-limit-bytes,128",
+    "memory,response-limit-bytes,512",
+    "memory,connect-timeout,2s",
+    "memory,read-timeout,3s",
+    "memory,request-timeout,4s"
+  })
+  void profileControlsCannotBeSilentlyIgnoredOnOuterOrHelperFeatures(
+      String feature, String field, String value) {
+    var values = settings();
+    values.put("rei.llm.features." + feature + "." + field, value);
+    assertThatThrownBy(() -> new ChatEndpointCatalog(properties(values)))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining(field);
+  }
+
+  @Test
+  void flatLegacyConfigurationCannotSilentlyIgnoreANamedOnlyControl() {
+    var values = new HashMap<String, String>();
+    values.put("rei.llm.features.chat.base-url", "http://owned-fixture.invalid/v1");
+    values.put("rei.llm.features.chat.model", "fixture-model");
+    values.put("rei.llm.features.chat.request-limit-bytes", "128");
+    assertThatThrownBy(() -> new ChatEndpointCatalog(properties(values)))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("request-limit-bytes");
+  }
+
   private static RunLlmConnectionFactory factory(LlmProperties properties) {
     return new RunLlmConnectionFactory(
         new ChatEndpointCatalog(properties),
