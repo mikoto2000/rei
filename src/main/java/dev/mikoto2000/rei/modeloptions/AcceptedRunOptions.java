@@ -9,4 +9,9 @@ public interface AcceptedRunOptions {
   boolean supportsOutputLimit();
 
   Integer maxOutputTokens();
+
+  /** Public, credential-free destination details; unknown implementations cannot infer a route. */
+  default java.util.Map<String, String> inferenceDescription() {
+    return java.util.Map.of();
+  }
 }

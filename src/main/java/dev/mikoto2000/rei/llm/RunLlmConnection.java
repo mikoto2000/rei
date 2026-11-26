@@ -57,6 +57,20 @@ public record RunLlmConnection(
   }
 
   @Override
+  public Map<String, String> inferenceDescription() {
+    var values = new java.util.LinkedHashMap<String, String>();
+    values.put("endpoint", profileId);
+    values.put("provider", provider.name());
+    values.put("api", endpoint.apiType().name());
+    values.put("authentication", authentication.name());
+    values.put("base_url", endpoint.baseUrl());
+    values.put("model", java.util.Objects.toString(endpoint.model(), ""));
+    if (accountRef != null) values.put("account", accountRef);
+    if (accountRegistration != null) values.put("registration", accountRegistration);
+    return Map.copyOf(values);
+  }
+
+  @Override
   public Integer maxOutputTokens() {
     return endpoint.maxOutputTokens();
   }
