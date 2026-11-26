@@ -97,7 +97,9 @@ class InferenceExportRequestTest {
     var prepared = new AtomicReference<InferenceExportRequest>();
     assertThatCode(() -> prepared.set(InferenceExportRequest.prepare(prompt)))
         .doesNotThrowAnyException();
-    bytes[0] = 9;
+    // Media copies a Resource on construction; mutate the actual supplied message data.
+    ((byte[]) media.getData())[0] = 9;
+    assertThat(media.getDataAsByteArray()[0]).isEqualTo((byte) 9);
     var frozen = (UserMessage) prepared.get().prompt().getInstructions().getFirst();
     assertThat(frozen.getMedia().getFirst().getDataAsByteArray())
         .isEqualTo(new byte[] {1, 2, 3, 4});
