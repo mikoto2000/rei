@@ -144,7 +144,10 @@ public final class PlanClient
     this.oauth = oauth;
     this.transport = transport;
     this.clock = clock;
-    oauth.onInvalidated(this::stop);
+    oauth.onRegistrationInvalidated((account, registration, reason) -> {
+      if (registration == null) stop(account, reason);
+      else requestSlots.invalidate(account, registration, reason);
+    });
   }
 
   /** Observes local authorization without reading tokens into the common connection layer. */
@@ -187,7 +190,7 @@ public final class PlanClient
           return paused;
         });
     var request = java.util.Objects.requireNonNull(admitted.get());
-    if (generation.get() != initial) {
+    if (generation.get() != initial || !registration.equals(oauth.registration(account))) {
       request.close();
       throw ChatGptException.of(CANCELLED);
     }
@@ -436,8 +439,10 @@ public final class PlanClient
     byte[] body = encodeRequest(model, instructions, input);
     if (body.length > sendLimit) throw ChatGptException.of(SEND_LIMIT);
     try (var request = begin(account, registration, model)) {
+      var invalidated = request.invalidated().toCompletableFuture();
+      BooleanSupplier requestStop = () -> stop.getAsBoolean() || invalidated.isDone();
       var token = oauth.access(account, registration);
-      if (stop.getAsBoolean()) throw ChatGptException.of(CANCELLED);
+      if (requestStop.getAsBoolean()) throw ChatGptException.of(CANCELLED);
       if (System.nanoTime() >= deadline) throw ChatGptException.of(TIMEOUT);
       onDispatch.run();
       try (var response =
@@ -455,10 +460,10 @@ public final class PlanClient
                   "identity"),
               body,
               Duration.ofNanos(deadline - System.nanoTime()),
-              stop)) {
+              requestStop)) {
         var remaining = Duration.ofNanos(Math.max(1, deadline - System.nanoTime()));
         if (response.status() != 200) {
-          var failure = httpError(response, "responses", remaining, stop);
+          var failure = httpError(response, "responses", remaining, requestStop);
           if (failure.confirmedAppUsageLimit()) pauseRequests(account, registration);
           throw failure;
         }
@@ -470,7 +475,7 @@ public final class PlanClient
             PlanIO.read(
                 response.body(),
                 remaining,
-                stop,
+                requestStop,
                 () -> {
                   try {
                     return assembler.read(response.body(), receiveLimit, type.isEmpty());

@@ -45,9 +45,14 @@ final class PlanRequestSlots {
   }
 
   void invalidate(String account, ChatPlanAccounts.Invalidation reason) {
+    invalidate(account, null, reason);
+  }
+
+  void invalidate(String account, String registration, ChatPlanAccounts.Invalidation reason) {
     var cancelled = new java.util.ArrayList<Permit>();
     active.forEach((key, scope) -> {
       if (!key.account().equals(account)) return;
+      if (registration != null && !key.registration().equals(registration)) return;
       active.computeIfPresent(
           key,
           (ignored, current) -> {

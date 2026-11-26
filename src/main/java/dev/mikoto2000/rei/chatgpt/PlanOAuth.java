@@ -163,22 +163,42 @@ public final class PlanOAuth {
     if (loggingOut(account)) throw ChatGptException.of(AUTH_REQUIRED);
   }
 
-  private final java.util.List<
-          java.util.function.BiConsumer<
-              String, dev.mikoto2000.rei.modeloptions.ChatPlanAccounts.Invalidation>>
-      invalidationListeners = new java.util.concurrent.CopyOnWriteArrayList<>();
+  /** Host-local invalidation; a null registration is reserved for account-wide stop/logout. */
+  @FunctionalInterface
+  interface RegistrationInvalidationListener {
+    /** Delivers the registration captured under the store lock, without tokens or remote text. */
+    void accept(
+        String account,
+        String registration,
+        dev.mikoto2000.rei.modeloptions.ChatPlanAccounts.Invalidation reason);
+  }
+
+  private final java.util.List<RegistrationInvalidationListener> invalidationListeners =
+      new java.util.concurrent.CopyOnWriteArrayList<>();
 
   void onInvalidated(
       java.util.function.BiConsumer<
               String, dev.mikoto2000.rei.modeloptions.ChatPlanAccounts.Invalidation>
           listener) {
+    java.util.Objects.requireNonNull(listener);
+    onRegistrationInvalidated((account, registration, reason) -> listener.accept(account, reason));
+  }
+
+  void onRegistrationInvalidated(RegistrationInvalidationListener listener) {
     invalidationListeners.add(java.util.Objects.requireNonNull(listener));
   }
 
   private void invalidate(
       String account, dev.mikoto2000.rei.modeloptions.ChatPlanAccounts.Invalidation reason) {
+    invalidate(account, null, reason);
+  }
+
+  private void invalidate(
+      String account,
+      String registration,
+      dev.mikoto2000.rei.modeloptions.ChatPlanAccounts.Invalidation reason) {
     if (account != null)
-      for (var listener : invalidationListeners) listener.accept(account, reason);
+      for (var listener : invalidationListeners) listener.accept(account, registration, reason);
   }
 
   /** 指定された値や利用先を使って、PlanOAuthを初期化する。 */
@@ -268,17 +288,21 @@ public final class PlanOAuth {
     if (attempt.subject() != null && !attempt.subject().equals(identity.subject()))
       throw ChatGptException.of(AUTH_INVALID);
     var tokens = tokenSet(grant, client, identity, null);
-    store.locked(s -> {
-      var current = s.load(attempt.account());
-      if (current != null
-          && (!current.clientId().equals(client) || !current.subject().equals(identity.subject())))
-        throw ChatGptException.of(AUTH_INVALID);
-      s.save(attempt.account(), tokens);
-      return null;
-    });
-    invalidate(
-        attempt.account(),
-        dev.mikoto2000.rei.modeloptions.ChatPlanAccounts.Invalidation.REGISTRATION_CHANGED);
+    String previousRegistration =
+        store.locked(s -> {
+          var current = s.load(attempt.account());
+          if (current != null
+              && (!current.clientId().equals(client)
+                  || !current.subject().equals(identity.subject())))
+            throw ChatGptException.of(AUTH_INVALID);
+          s.save(attempt.account(), tokens);
+          return current == null ? null : current.registrationId();
+        });
+    if (previousRegistration != null)
+      invalidate(
+          attempt.account(),
+          previousRegistration,
+          dev.mikoto2000.rei.modeloptions.ChatPlanAccounts.Invalidation.REGISTRATION_CHANGED);
   }
 
   /** Returns a local authorization incarnation without refreshing or exposing credentials. */
@@ -303,22 +327,28 @@ public final class PlanOAuth {
 
   /** Checks an optional accepted incarnation under the same lock as token rotation. */
   public TokenSet access(String account, String expectedRegistration) {
+    var observedRegistration = new java.util.concurrent.atomic.AtomicReference<String>();
     try {
-      return accessLocked(account, expectedRegistration);
+      return accessLocked(account, expectedRegistration, observedRegistration);
     } catch (ChatGptException invalid) {
-      if (invalid.code() == AUTH_INVALID)
+      if (invalid.code() == AUTH_INVALID && observedRegistration.get() != null)
         invalidate(
             account,
+            observedRegistration.get(),
             dev.mikoto2000.rei.modeloptions.ChatPlanAccounts.Invalidation.AUTHENTICATION_INVALID);
-      else if (invalid.code() == CONSENT_REQUIRED)
+      else if (invalid.code() == CONSENT_REQUIRED && observedRegistration.get() != null)
         invalidate(
             account,
+            observedRegistration.get(),
             dev.mikoto2000.rei.modeloptions.ChatPlanAccounts.Invalidation.CONSENT_REQUIRED);
       throw invalid;
     }
   }
 
-  private TokenSet accessLocked(String account, String expectedRegistration) {
+  private TokenSet accessLocked(
+      String account,
+      String expectedRegistration,
+      java.util.concurrent.atomic.AtomicReference<String> observedRegistration) {
     requireNotLoggingOut(account);
     return store.locked(s -> {
       requireNotLoggingOut(account);
@@ -328,6 +358,7 @@ public final class PlanOAuth {
           || saved.accessToken() == null
           || expectedRegistration != null && !expectedRegistration.equals(saved.registrationId()))
         throw ChatGptException.of(AUTH_REQUIRED);
+      observedRegistration.set(saved.registrationId());
       if (!saved.scopes().contains("chatgpt.tokens.use.direct"))
         throw ChatGptException.of(CONSENT_REQUIRED);
       if (saved.expiresAt() > clock.instant().getEpochSecond()) return saved;
