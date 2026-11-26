@@ -111,6 +111,132 @@ class ChatExecutionPinnedConnectionTest {
     }
   }
 
+  @ParameterizedTest
+  @EnumSource(AgentRunContext.Mode.class)
+  void approvedInferenceResumesTheSameReceiverAndUsesItsAlreadyReservedCall(
+      AgentRunContext.Mode mode) throws Exception {
+    try (var first = new Server();
+        var second = new Server();
+        var fixture = fixture(first, second)) {
+      var owner =
+          new AgentRunContext(
+              "inference-resume",
+              "chat:fixture",
+              root,
+              java.util.UUID.randomUUID().toString(),
+              AgentRunContext.RequestSource.SHELL,
+              mode,
+              false);
+      var approval = approval(fixture, owner);
+      var savedProgress =
+          new java.util.concurrent.atomic.AtomicReference<
+              dev.mikoto2000.rei.core.stagnation.RunExecutionContext.ProgressState>();
+      var atHttp =
+          new java.util.concurrent.atomic.AtomicReference<
+              dev.mikoto2000.rei.core.stagnation.RunExecutionContext.ProgressState>();
+      var checkpoints = mock(dev.mikoto2000.rei.checkpoint.PersistentCheckpointService.class);
+      when(checkpoints.modelHandoff(org.mockito.ArgumentMatchers.anyString()))
+          .thenReturn(
+              new dev.mikoto2000.rei.checkpoint.PersistentCheckpointService.ModelHandoff(
+                  "", false));
+      org.mockito.Mockito.doAnswer(
+              invocation -> {
+                savedProgress.set(invocation.getArgument(2));
+                return null;
+              })
+          .when(checkpoints)
+          .preserveResults(
+              org.mockito.ArgumentMatchers.eq(owner),
+              org.mockito.ArgumentMatchers.anyList(),
+              org.mockito.ArgumentMatchers.any(
+                  dev.mikoto2000.rei.core.stagnation.RunExecutionContext.ProgressState.class));
+      fixture.engine.setCheckpoints(checkpoints);
+      first.beforeReply = () -> atHttp.set(savedProgress.get());
+      var waiting = fixture.engine.execute(owner, "fixture", new UserInterventionQueue());
+      assertThat(waiting.status())
+          .as("%s: %s", waiting.stopCode(), waiting.errorMessage())
+          .isEqualTo(ChatExecutionResult.Status.WAITING);
+      assertThat(first.requests).isEmpty();
+      assertThat(second.requests).isEmpty();
+      var request = approval.requests.list(owner.projectId()).getFirst();
+      var document = approval.store.document(approval.store.find(request.id()).orElseThrow());
+      assertThat(document.budget().llmCalls()).isEqualTo(1);
+      assertThat(document.budget().usageUnknown()).isFalse();
+      assertThat(document.pending()).isNull();
+      fixture.connections.select("second");
+      approval.continuations.decide(owner.projectId(), request.id(), true, true);
+      assertThat(approval.store.claim(request.id())).isTrue();
+      assertThat(
+              approval.registry.transition(
+                  owner.runId(), dev.mikoto2000.rei.application.run.RunStatus.RUNNING, null))
+          .isTrue();
+      var result = fixture.engine.execute(owner, "fixture", new UserInterventionQueue());
+      assertThat(result.success()).as("%s: %s", result.stopCode(), result.errorMessage()).isTrue();
+      assertThat(first.requests).hasSize(1);
+      assertThat(second.requests).isEmpty();
+      assertThat(first.requests.getFirst().path("model").asText()).isEqualTo("first-model");
+      assertThat(atHttp.get()).isNotNull();
+      assertThat(atHttp.get().connection()).isEqualTo(document.connection());
+      assertThat(atHttp.get().budget().llmCalls())
+          .as("the pending request was already reserved")
+          .isEqualTo(1);
+    }
+  }
+
+  private ApprovalFixture approval(Fixture fixture, AgentRunContext owner) {
+    var clock = java.time.Clock.systemUTC();
+    var registry = new dev.mikoto2000.rei.application.run.RunRegistry(clock, fixture.data);
+    var bus = new dev.mikoto2000.rei.event.InMemoryAgentEventBus();
+    var runs =
+        new dev.mikoto2000.rei.application.run.RunService(
+            registry,
+            bus,
+            new dev.mikoto2000.rei.event.AgentEventFactory(clock),
+            new CommandCancellationService(),
+            id -> false);
+    var projects = mock(dev.mikoto2000.rei.core.project.ProjectRegistry.class);
+    when(projects.resolveById(owner.projectId()))
+        .thenReturn(
+            Optional.of(
+                new dev.mikoto2000.rei.core.project.ProjectContext(
+                    owner.projectId(), "fixture", root)));
+    var sessions = mock(dev.mikoto2000.rei.application.session.SessionRepository.class);
+    when(sessions.findById(owner.conversationId()))
+        .thenReturn(
+            Optional.of(
+                new dev.mikoto2000.rei.application.session.SessionMetadata(
+                    owner.conversationId(),
+                    owner.projectId(),
+                    "fixture",
+                    clock.instant(),
+                    clock.instant())));
+    var requests = new dev.mikoto2000.rei.core.policy.ToolApprovalRepository(fixture.data, clock);
+    var store = new dev.mikoto2000.rei.core.policy.ApprovalContinuationStore(fixture.data);
+    var continuations =
+        new dev.mikoto2000.rei.core.policy.ApprovalContinuationService(
+            requests,
+            store,
+            provider(dev.mikoto2000.rei.application.run.RunRegistry.class, registry),
+            provider(dev.mikoto2000.rei.application.run.RunService.class, runs),
+            provider(ConversationInputRouter.class, mock(ConversationInputRouter.class)),
+            provider(ChatExecutionService.class, fixture.engine),
+            provider(dev.mikoto2000.rei.slack.SlackAgentService.class, null),
+            provider(dev.mikoto2000.rei.core.project.ProjectRegistry.class, projects),
+            provider(dev.mikoto2000.rei.application.session.SessionRepository.class, sessions),
+            fixture.data,
+            clock);
+    fixture.engine.setContinuations(provider(RunContinuation.class, continuations));
+    registry.register(owner);
+    registry.transition(owner.runId(), dev.mikoto2000.rei.application.run.RunStatus.RUNNING, null);
+    return new ApprovalFixture(requests, store, continuations, registry);
+  }
+
+  private record ApprovalFixture(
+      dev.mikoto2000.rei.core.policy.ToolApprovalRepository requests,
+      dev.mikoto2000.rei.core.policy.ApprovalContinuationStore store,
+      dev.mikoto2000.rei.core.policy.ApprovalContinuationService continuations,
+      dev.mikoto2000.rei.application.run.RunRegistry registry) {}
+
   @Test
   void anAvailableStructuredDoctorCommandDoesNotCaptureAnInferenceConnection() throws Exception {
     try (var first = new Server();
