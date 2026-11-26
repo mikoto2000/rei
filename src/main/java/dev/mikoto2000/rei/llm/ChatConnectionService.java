@@ -58,8 +58,8 @@ public final class ChatConnectionService implements AutoCloseable {
             },
             () -> System.getenv("OPENAI_API_KEY"));
     var configuredModel = catalog.hasNamedProfiles() ? null : catalog.profiles().getFirst().model();
-    this.legacyModel = configuredModel == null || configuredModel.isBlank()
-        ? holder::get : () -> configuredModel;
+    this.legacyModel =
+        configuredModel == null || configuredModel.isBlank() ? holder::get : () -> configuredModel;
     this.factory =
         RunLlmConnectionFactory.withLegacySettings(
             catalog,
@@ -88,9 +88,14 @@ public final class ChatConnectionService implements AutoCloseable {
     var selected = connections.selection();
     var model = selected.models().get(selected.endpoint());
     if (model == null) {
-      model = catalog.profiles().stream().filter(profile -> profile.id().equals(selected.endpoint()))
-          .findFirst().orElseThrow().model();
-      if ((model == null || model.isBlank()) && !catalog.hasNamedProfiles()) model = legacyModel.get();
+      model =
+          catalog.profiles().stream()
+              .filter(profile -> profile.id().equals(selected.endpoint()))
+              .findFirst()
+              .orElseThrow()
+              .model();
+      if ((model == null || model.isBlank()) && !catalog.hasNamedProfiles())
+        model = legacyModel.get();
     }
     return new Selection(selected.endpoint(), model);
   }

@@ -151,14 +151,19 @@ class ChatConnectionServiceTest {
   @Test
   void selectionViewFollowsTheEndpointAndRemembersEachEndpointsModel() {
     var holder = new ModelHolderService("static-helper");
-    try (var service = service(named("http://first.invalid", "http://second.invalid"), holder, new ArrayList<>())) {
-      assertThat(service.selection()).isEqualTo(new ChatConnectionService.Selection("first", "first-model"));
+    try (var service =
+        service(
+            named("http://first.invalid", "http://second.invalid"), holder, new ArrayList<>())) {
+      assertThat(service.selection())
+          .isEqualTo(new ChatConnectionService.Selection("first", "first-model"));
       service.selectModel("first-picked");
       service.select("second");
-      assertThat(service.selection()).isEqualTo(new ChatConnectionService.Selection("second", "second-model"));
+      assertThat(service.selection())
+          .isEqualTo(new ChatConnectionService.Selection("second", "second-model"));
       service.selectModel("second-picked");
       service.select("first");
-      assertThat(service.selection()).isEqualTo(new ChatConnectionService.Selection("first", "first-picked"));
+      assertThat(service.selection())
+          .isEqualTo(new ChatConnectionService.Selection("first", "first-picked"));
       assertThat(holder.get()).isEqualTo("static-helper");
     }
   }
@@ -171,10 +176,13 @@ class ChatConnectionServiceTest {
     properties.setFeature(LlmFeature.CHAT, feature);
     var holder = new ModelHolderService("static-helper");
     try (var service = service(properties, holder, new ArrayList<>())) {
-      assertThat(service.selection()).isEqualTo(new ChatConnectionService.Selection("default", "feature-model"));
+      assertThat(service.selection())
+          .isEqualTo(new ChatConnectionService.Selection("default", "feature-model"));
       service.selectModel("chosen-chat-model");
-      assertThat(service.selection()).isEqualTo(new ChatConnectionService.Selection("default", "chosen-chat-model"));
-      assertThat(service.accept(owner("selected", AgentRunContext.Mode.EXCLUSIVE)).endpoint().model())
+      assertThat(service.selection())
+          .isEqualTo(new ChatConnectionService.Selection("default", "chosen-chat-model"));
+      assertThat(
+              service.accept(owner("selected", AgentRunContext.Mode.EXCLUSIVE)).endpoint().model())
           .isEqualTo("chosen-chat-model");
       assertThat(holder.get()).isEqualTo("static-helper");
     }
@@ -182,17 +190,22 @@ class ChatConnectionServiceTest {
 
   @Test
   void observingSubscriptionSelectionDoesNotRequireLoginOrReadAmbientModelSettings() {
-    var properties = new Binder(new MapConfigurationPropertySource(Map.of(
-        "rei.llm.features.chat.active", "subscription",
-        "rei.llm.features.chat.endpoints.subscription.provider", "chatgpt-plan",
-        "rei.llm.features.chat.endpoints.subscription.api", "responses",
-        "rei.llm.features.chat.endpoints.subscription.account-ref", "personal",
-        "rei.llm.features.chat.endpoints.subscription.model", "configured-model")))
-        .bind("rei.llm", LlmProperties.class).get();
+    var properties =
+        new Binder(
+                new MapConfigurationPropertySource(
+                    Map.of(
+                        "rei.llm.features.chat.active", "subscription",
+                        "rei.llm.features.chat.endpoints.subscription.provider", "chatgpt-plan",
+                        "rei.llm.features.chat.endpoints.subscription.api", "responses",
+                        "rei.llm.features.chat.endpoints.subscription.account-ref", "personal",
+                        "rei.llm.features.chat.endpoints.subscription.model", "configured-model")))
+            .bind("rei.llm", LlmProperties.class)
+            .get();
     var holder = mock(ModelHolderService.class);
     when(holder.get()).thenThrow(new AssertionError("Selection consulted ambient model"));
     try (var service = service(properties, holder, new ArrayList<>())) {
-      assertThat(service.selection()).isEqualTo(new ChatConnectionService.Selection("subscription", "configured-model"));
+      assertThat(service.selection())
+          .isEqualTo(new ChatConnectionService.Selection("subscription", "configured-model"));
     }
   }
 
@@ -202,10 +215,12 @@ class ChatConnectionServiceTest {
     try (var first = service(properties, new ModelHolderService("helper"), new ArrayList<>())) {
       first.select("second");
       first.selectModel("runtime-model");
-      assertThat(first.selection()).isEqualTo(new ChatConnectionService.Selection("second", "runtime-model"));
+      assertThat(first.selection())
+          .isEqualTo(new ChatConnectionService.Selection("second", "runtime-model"));
     }
     try (var restarted = service(properties, new ModelHolderService("helper"), new ArrayList<>())) {
-      assertThat(restarted.selection()).isEqualTo(new ChatConnectionService.Selection("first", "first-model"));
+      assertThat(restarted.selection())
+          .isEqualTo(new ChatConnectionService.Selection("first", "first-model"));
     }
   }
 
