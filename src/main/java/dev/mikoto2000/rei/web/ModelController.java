@@ -24,7 +24,7 @@ import org.springframework.web.bind.annotation.RestController;
 @ConditionalOnProperty(name = "rei.web.enabled", havingValue = "true")
 @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
 @RequestMapping("/api/v1/models")
-public class ModelController {
+public final class ModelController {
   /** モデル一覧。 */
   private final Supplier<Models> modelCatalog;
 
