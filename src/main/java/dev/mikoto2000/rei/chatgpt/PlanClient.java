@@ -190,6 +190,8 @@ public final class PlanClient implements PlanInference {
         values.add(new Model(id, PlanOAuth.required(model, "display_name")));
       }
       var result = List.copyOf(values);
+      if (!tokens.registrationId().equals(oauth.registration(account)))
+        throw ChatGptException.of(AUTH_REQUIRED);
       catalog.put(
           account,
           new Catalog(
