@@ -107,7 +107,7 @@ final class RunLlmConnectionFactory {
         endpoint,
         capabilities.effective(),
         java.util.Map.of(),
-        RunTransportSettings.profile(source));
+        transport(source));
   }
 
   RunLlmConnection capture(String profile, String modelOverride) {
@@ -197,7 +197,7 @@ final class RunLlmConnectionFactory {
         resolved,
         capabilities,
         generation(resolved),
-        RunTransportSettings.profile(connection));
+        transport(connection));
   }
 
   /**
@@ -241,6 +241,19 @@ final class RunLlmConnectionFactory {
     if (!java.util.Objects.equals(identity, saved.accountRegistration())
         || metadata.provider() == LlmProvider.CHATGPT_PLAN && identity == null)
       throw new IllegalStateException("Run account registration changed or unavailable");
+  }
+
+  private static java.util.Map<String, String> transport(LlmProperties.Server source) {
+    var values = new java.util.HashMap<String, String>();
+    if (source.getRequestLimitBytes() != null)
+      values.put("request_limit_bytes", source.getRequestLimitBytes().toString());
+    if (source.getResponseLimitBytes() != null)
+      values.put("response_limit_bytes", source.getResponseLimitBytes().toString());
+    if (source.getConnectTimeout() != null)
+      values.put("connect_timeout", source.getConnectTimeout().toString());
+    if (source.getRequestTimeout() != null)
+      values.put("request_timeout", source.getRequestTimeout().toString());
+    return RunTransportSettings.defaults(values);
   }
 
   private static java.util.Map<String, Object> generation(ResolvedLlmEndpoint endpoint) {

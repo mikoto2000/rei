@@ -43,19 +43,6 @@ final class RunTransportSettings {
     return copy(values);
   }
 
-  static Map<String, String> profile(LlmProperties.Server source) {
-    var values = new java.util.HashMap<String, String>();
-    if (source.getRequestLimitBytes() != null)
-      values.put("request_limit_bytes", source.getRequestLimitBytes().toString());
-    if (source.getResponseLimitBytes() != null)
-      values.put("response_limit_bytes", source.getResponseLimitBytes().toString());
-    if (source.getConnectTimeout() != null)
-      values.put("connect_timeout", source.getConnectTimeout().toString());
-    if (source.getRequestTimeout() != null)
-      values.put("request_timeout", source.getRequestTimeout().toString());
-    return defaults(values);
-  }
-
   static long byteLimit(String value) {
     try {
       long limit = Long.parseLong(value);
