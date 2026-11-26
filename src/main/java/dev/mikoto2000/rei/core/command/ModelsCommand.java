@@ -12,6 +12,9 @@ import picocli.CommandLine.Command;
 @RequiredArgsConstructor
 public class ModelsCommand implements Runnable {
 
+  @org.springframework.beans.factory.annotation.Autowired(required = false)
+  public void setChatConnections(dev.mikoto2000.rei.modeloptions.ChatModelSelection connections) {}
+
   /** モデル一覧サービス。 */
   private final OpenAiCompatibleModelsService modelsService;
 

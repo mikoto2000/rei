@@ -26,7 +26,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/v1/models")
 public class ModelController {
   /** モデル一覧。 */
-  private final OpenAiCompatibleModelsService models;
+  private final Supplier<Models> modelCatalog;
 
   /** 保持先。 */
   private final Supplier<String> selectedModel;
@@ -35,9 +35,16 @@ public class ModelController {
 
   /** 指定された値や利用先を使って、ModelControllerを初期化する。 */
   public ModelController(OpenAiCompatibleModelsService models, ModelHolderService holder) {
-    this.models = models;
+    this.modelCatalog = () -> new Models(models.listModels(), holder.get());
     this.selectedModel = () -> holder.get();
     this.selectModel = model -> holder.set(model);
+  }
+
+  @org.springframework.beans.factory.annotation.Autowired
+  public ModelController(dev.mikoto2000.rei.modeloptions.ChatModelSelection selection) {
+    this.modelCatalog = () -> new Models(List.of(), "unimplemented");
+    this.selectedModel = () -> "unimplemented";
+    this.selectModel = model -> {};
   }
 
   /**
@@ -71,7 +78,7 @@ public class ModelController {
   /** 条件に合う対象を一覧にして、呼び出し元が参照できるようにする。 */
   @GetMapping
   public Models list() {
-    return new Models(models.listModels(), selectedModel.get());
+    return modelCatalog.get();
   }
 
   /** Web APIによる操作で用いる現在を返す。 */

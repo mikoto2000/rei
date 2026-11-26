@@ -217,6 +217,11 @@ public final class ChatConnectionService
         .toList();
   }
 
+  @Override
+  public dev.mikoto2000.rei.modeloptions.ChatModelSelection.Models models() {
+    throw new IllegalStateException("Selected model discovery is not implemented");
+  }
+
   public RunLlmConnection accept(AgentRunContext owner) {
     return connections.accept(owner);
   }
