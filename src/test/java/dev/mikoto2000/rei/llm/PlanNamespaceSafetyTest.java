@@ -106,6 +106,68 @@ class PlanNamespaceSafetyTest {
     }
   }
 
+  static Stream<Arguments> unconfirmedNativeFields() {
+    return Stream.of("caller", "metadata", "signature")
+        .flatMap(field -> Stream.of(false, true).map(added -> Arguments.of(field, added)));
+  }
+
+  @ParameterizedTest
+  @MethodSource("unconfirmedNativeFields")
+  void unconfirmedNativeCallFieldsCannotBeSilentlyDropped(String field, boolean added)
+      throws Exception {
+    try (var fixture = new PlanResponsesRequestTest.Fixture()) {
+      var pin = PlanNamespaceRequestTest.pin(fixture);
+      var options = options(fixture, pin);
+      var call = new LinkedHashMap<String, Object>();
+      call.put("type", "function_call");
+      call.put("id", "fc_fixture");
+      call.put("call_id", "call_fixture");
+      call.put("name", "searchTools");
+      call.put("namespace", "rei");
+      call.put("arguments", "{}");
+      call.put("status", "completed");
+      var json = new com.fasterxml.jackson.databind.ObjectMapper();
+      String prefix = "";
+      if (added) {
+        var partial = new LinkedHashMap<>(call);
+        partial.put("arguments", "");
+        partial.put("status", "in_progress");
+        partial.put(field, Map.of("value", "PRIVATE_NATIVE_EXTRA"));
+        prefix =
+            PlanResponsesRequestTest.Fixture.event(
+                "response.output_item.added",
+                "\"output_index\":0,\"item\":" + json.writeValueAsString(partial));
+      } else call.put(field, Map.of("value", "PRIVATE_NATIVE_EXTRA"));
+      fixture.reply =
+          prefix
+              + PlanResponsesRequestTest.Fixture.event(
+                  "response.completed",
+                  "\"response\":"
+                      + json.writeValueAsString(
+                          Map.of(
+                              "id",
+                              "resp_fixture",
+                              "object",
+                              "response",
+                              "created_at",
+                              0,
+                              "status",
+                              "completed",
+                              "model",
+                              "fixture-model",
+                              "output",
+                              List.of(call),
+                              "usage",
+                              Map.of("input_tokens", 3, "output_tokens", 2, "total_tokens", 5))));
+      var model = ResponsesAdapter.createForRun(pin, options, fixture.client);
+      assertThatThrownBy(() -> model.call(new Prompt("fixture", options)))
+          .isInstanceOf(ResponsesTransportException.class)
+          .hasMessageContaining("INVALID_RESPONSE")
+          .hasMessageNotContaining("PRIVATE_NATIVE_EXTRA");
+      assertThat(fixture.requests).hasSize(1);
+    }
+  }
+
   private static OpenAiResponsesChatOptions options(
       PlanResponsesRequestTest.Fixture fixture, RunLlmConnection pin) {
     var context = new java.util.HashMap<>(fixture.options().getToolContext());
