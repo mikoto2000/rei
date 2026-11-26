@@ -444,7 +444,8 @@ public final class PlanOAuth {
         required(value, "access_token"),
         required(value, "refresh_token"),
         new HashSet<>(Arrays.asList(scope.split(" +"))),
-        clock.instant().plusSeconds(seconds).getEpochSecond());
+        clock.instant().plusSeconds(seconds).getEpochSecond(),
+        previous == null ? null : previous.registrationId());
   }
 
   /** ChatGPTとの連携で用いる必須を返す。 */

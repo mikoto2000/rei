@@ -88,7 +88,11 @@ public final class ProtectedCredentialStore {
       try {
         var all = read();
         var node = all.get(account);
-        return node == null ? null : json.treeToValue(node, TokenSet.class);
+        if (node == null) return null;
+        var tokens = json.treeToValue(node, TokenSet.class);
+        // Persist legacy identities before publishing them, under this transaction's file lock.
+        if (!node.hasNonNull("registrationId")) save(account, tokens);
+        return tokens;
       } catch (IOException | RuntimeException e) {
         throw ChatGptException.of(STORE_UNAVAILABLE);
       }
