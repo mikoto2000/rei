@@ -96,7 +96,7 @@ final class RunLlmConnectionFactory {
                 ReasoningReplayMode.NONE, capabilities.maxTools(), java.util.Set.of()),
             null,
             null,
-            readTimeout);
+            source.getReadTimeout() == null ? readTimeout : source.getReadTimeout());
     return new RunLlmConnection(
         profile,
         true,
@@ -106,7 +106,8 @@ final class RunLlmConnectionFactory {
         null,
         endpoint,
         capabilities.effective(),
-        java.util.Map.of());
+        java.util.Map.of(),
+        RunTransportSettings.profile(source));
   }
 
   RunLlmConnection capture(String profile, String modelOverride) {
@@ -134,7 +135,7 @@ final class RunLlmConnectionFactory {
           resolved,
           metadata.capabilities().effective(),
           settings.generation(),
-          settings.transport());
+          RunTransportSettings.defaults(settings.transport()));
     }
     var model = modelOverride == null ? metadata.model() : modelOverride;
     if (model == null || model.isBlank() || model.codePoints().anyMatch(Character::isISOControl))
@@ -181,7 +182,7 @@ final class RunLlmConnectionFactory {
             new LlmCapabilities(replay, metadata.capabilities().maxTools(), settings),
             output,
             connection.getTemperature(),
-            readTimeout);
+            connection.getReadTimeout() == null ? readTimeout : connection.getReadTimeout());
     var accountRegistration =
         metadata.accountRef() == null ? null : registration.apply(metadata.accountRef());
     if (metadata.provider() == LlmProvider.CHATGPT_PLAN && accountRegistration == null)
@@ -195,7 +196,8 @@ final class RunLlmConnectionFactory {
         accountRegistration,
         resolved,
         capabilities,
-        generation(resolved));
+        generation(resolved),
+        RunTransportSettings.profile(connection));
   }
 
   /**

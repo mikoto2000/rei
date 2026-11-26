@@ -11,6 +11,7 @@ final class RunTransportSettings {
   static final long MAX_LIMIT_BYTES = 134_217_728;
   private static final Set<String> FIELDS =
       Set.of(
+          "connect_timeout",
           "request_timeout",
           "organization_id",
           "project_id",
@@ -27,11 +28,32 @@ final class RunTransportSettings {
           || value == null
           || value.isBlank()
           || value.codePoints().anyMatch(Character::isISOControl)) throw invalid();
-      if (name.equals("request_timeout")) timeout(value);
+      if (name.equals("request_timeout") || name.equals("connect_timeout")) timeout(value);
       if (name.equals("request_limit_bytes") || name.equals("response_limit_bytes"))
         byteLimit(value);
     });
     return Map.copyOf(values);
+  }
+
+  static Map<String, String> defaults(Map<String, String> source) {
+    var values = new java.util.HashMap<>(source);
+    values.putIfAbsent("request_limit_bytes", Long.toString(DEFAULT_REQUEST_LIMIT_BYTES));
+    values.putIfAbsent("response_limit_bytes", Long.toString(DEFAULT_RESPONSE_LIMIT_BYTES));
+    values.putIfAbsent("connect_timeout", Duration.ofMinutes(1).toString());
+    return copy(values);
+  }
+
+  static Map<String, String> profile(LlmProperties.Server source) {
+    var values = new java.util.HashMap<String, String>();
+    if (source.getRequestLimitBytes() != null)
+      values.put("request_limit_bytes", source.getRequestLimitBytes().toString());
+    if (source.getResponseLimitBytes() != null)
+      values.put("response_limit_bytes", source.getResponseLimitBytes().toString());
+    if (source.getConnectTimeout() != null)
+      values.put("connect_timeout", source.getConnectTimeout().toString());
+    if (source.getRequestTimeout() != null)
+      values.put("request_timeout", source.getRequestTimeout().toString());
+    return defaults(values);
   }
 
   static long byteLimit(String value) {
@@ -61,6 +83,7 @@ final class RunTransportSettings {
   static Map<String, String> binding(Map<String, String> values) {
     var binding = new java.util.HashMap<>(values);
     binding.remove("request_timeout");
+    binding.remove("connect_timeout");
     binding.remove("request_limit_bytes");
     binding.remove("response_limit_bytes");
     return Map.copyOf(binding);
