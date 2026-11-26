@@ -236,9 +236,14 @@ public final class ChatConnectionService
             reasons.add("Authentication is not configured");
           if (profile.provider() == LlmProvider.CHATGPT_PLAN) {
             try {
-              if (accountRegistration(profile.accountRef()) == null)
+              var registration = accountRegistration(profile.accountRef());
+              if (registration == null)
                 reasons.add("ChatGPT account registration requires verification");
-              else authenticationState = "authorized";
+              else {
+                authenticationState = "authorized";
+                if (requirePlanAccounts().requestsPaused(profile.accountRef(), registration))
+                  reasons.add("ChatGPT app requests paused; check usage and explicitly resume");
+              }
             } catch (RuntimeException unavailable) {
               authenticationState = "unavailable";
               reasons.add("ChatGPT account registration is unavailable");
