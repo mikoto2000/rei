@@ -28,6 +28,7 @@ import org.springframework.context.annotation.AnnotationConfigApplicationContext
 /** The common connection service consumes account access without implementing OAuth again. */
 class ChatPlanAccountBridgeTest {
   private static final class Accounts implements ChatPlanAccounts {
+    boolean paused;
     final AtomicInteger registrations = new AtomicInteger();
     final AtomicInteger credentials = new AtomicInteger();
     final AtomicInteger catalogs = new AtomicInteger();
@@ -48,6 +49,13 @@ class ChatPlanAccountBridgeTest {
       assertThat(account).isEqualTo("personal");
       assertThat(registration).isEqualTo("registration-one");
       return List.of("first-visible", "configured-model");
+    }
+
+    @Override
+    public boolean requestsPaused(String account, String registration) {
+      assertThat(account).isEqualTo("personal");
+      assertThat(registration).isEqualTo("registration-one");
+      return paused;
     }
   }
 
@@ -149,6 +157,20 @@ class ChatPlanAccountBridgeTest {
       assertThat(selected.selection())
           .isEqualTo(new ChatModelSelection.Selection("local", "local-model"));
       assertThat(accounts.registrations).hasValue(0);
+      assertThat(accounts.credentials).hasValue(0);
+      assertThat(accounts.catalogs).hasValue(0);
+    }
+  }
+
+  @Test
+  void aKnownAppUsagePauseIsVisibleWithoutLoggingOutOrAcquiringCredentials() {
+    var accounts = new Accounts();
+    accounts.paused = true;
+    try (var context = context(properties(true), accounts)) {
+      var endpoint = context.getBean(ChatConnectionService.class).currentEndpoint();
+      assertThat(endpoint.authenticationState()).isEqualTo("authorized");
+      assertThat(endpoint.unavailableReason()).contains("ChatGPT app requests paused");
+      assertThat(accounts.registrations).hasValue(1);
       assertThat(accounts.credentials).hasValue(0);
       assertThat(accounts.catalogs).hasValue(0);
     }
