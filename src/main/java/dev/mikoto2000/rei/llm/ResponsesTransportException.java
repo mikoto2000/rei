@@ -175,6 +175,15 @@ final class ResponsesTransportException extends IllegalStateException
     return category;
   }
 
+  /** An accepted Plan invocation must never automatically replay an uncertain outcome. */
+  static ResponsesTransportException nonRetryable(Throwable error) {
+    var failure = normalize(error);
+    return failure.retryAllowed()
+        ? new ResponsesTransportException(
+            failure.category, failure.usage, false, failure.safeCode, failure.safeMessage)
+        : failure;
+  }
+
   static ResponsesTransportException normalize(Throwable error) {
     error = reactor.core.Exceptions.unwrap(error);
     while (error instanceof java.util.concurrent.CompletionException && error.getCause() != null)

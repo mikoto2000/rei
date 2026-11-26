@@ -89,8 +89,8 @@ class PlanRequestChatModelTest {
     assertThat(
             model.stream(prompt)
                 .onErrorResume(error -> {
-              recoveryActive.set(active.get());
-              observed.set(error);
+                  recoveryActive.set(active.get());
+                  observed.set(error);
                   when(delegate.stream(any(Prompt.class))).thenReturn(Flux.just(response));
                   return model.stream(prompt);
                 })
