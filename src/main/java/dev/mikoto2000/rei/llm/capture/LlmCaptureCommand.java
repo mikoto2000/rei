@@ -25,16 +25,31 @@ import picocli.CommandLine.Spec;
 @Component
 @Command(
     name = "llm",
-    description = "LLM リクエストの記録を操作します",
-    subcommands = LlmCaptureCommand.Capture.class,
+    description = "通常チャットの接続先と LLM リクエストの記録を操作します",
+    subcommands = {LlmCaptureCommand.Capture.class, LlmCaptureCommand.Chat.class},
     mixinStandardHelpOptions = true)
 public final class LlmCaptureCommand implements Runnable {
+  private Supplier<java.util.List<dev.mikoto2000.rei.llm.ChatConnectionService.Endpoint>>
+      chatEndpoints = () -> { throw new IllegalStateException("Chat connections are unavailable"); };
+  private java.util.function.Consumer<String> selectEndpoint = name -> {
+    throw new IllegalStateException("Chat connections are unavailable");
+  };
+  private java.util.function.Function<
+      java.util.List<dev.mikoto2000.rei.llm.ChatConnectionService.Endpoint>,
+      java.util.Optional<String>> endpointMenu = entries -> java.util.Optional.empty();
+
   @org.springframework.beans.factory.annotation.Autowired(required = false)
-  public void setChatConnections(dev.mikoto2000.rei.llm.ChatConnectionService connections) {}
+  public void setChatConnections(dev.mikoto2000.rei.llm.ChatConnectionService connections) {
+    Objects.requireNonNull(connections);
+    chatEndpoints = connections::endpoints;
+    selectEndpoint = connections::select;
+  }
 
   public void setEndpointMenu(java.util.function.Function<
       java.util.List<dev.mikoto2000.rei.llm.ChatConnectionService.Endpoint>,
-      java.util.Optional<String>> menu) {}
+      java.util.Optional<String>> menu) {
+    endpointMenu = Objects.requireNonNull(menu);
+  }
 
   /** 保存先。 */
   private final java.util.function.BiConsumer<Object, String> reserveCapture;
@@ -185,6 +200,81 @@ public final class LlmCaptureCommand implements Runnable {
     var output = out();
     output.print(spec.commandLine().getUsageMessage());
     output.flush();
+  }
+
+  /** Configuration changes never perform inference or grant history export consent. */
+  @Command(name = "chat", description = "通常チャット用の接続先を確認・選択します",
+      mixinStandardHelpOptions = true)
+  public static final class Chat implements Runnable {
+    @ParentCommand private LlmCaptureCommand parent;
+    @Spec private CommandSpec spec;
+
+    @Override public void run() {
+      parent.out().print(spec.commandLine().getUsageMessage());
+      parent.out().flush();
+    }
+
+    @Command(name = "list", description = "登録済み接続先を一覧表示します")
+    public int list() { return parent.chatAction("list", null); }
+
+    @Command(name = "show", description = "現在の接続先の実効設定を表示します")
+    public int show() { return parent.chatAction("show", null); }
+
+    @Command(name = "use", description = "接続先を選択します（省略時は対話選択）")
+    public int use(@Parameters(arity = "0..1", paramLabel = "ENDPOINT") String endpoint) {
+      return parent.chatAction("use", endpoint);
+    }
+  }
+
+  private static final String SELECTION_SCOPE =
+      "Selection scope: process-wide; next Run only; resets on restart. Inference not verified.";
+
+  private int chatAction(String action, String endpoint) {
+    var output = out();
+    try {
+      var entries = chatEndpoints.get();
+      if (action.equals("list")) {
+        entries.forEach(entry -> output.println(endpointLabel(entry)));
+        return 0;
+      }
+      if (action.equals("show")) {
+        var entry = entries.stream().filter(value -> value.active()).findFirst().orElseThrow();
+        output.println(endpointLabel(entry));
+        output.println("capabilities: " + entry.profile().capabilities().effective());
+        output.println("generation: " + entry.generationSettings());
+        output.println("unapplied: " + entry.unappliedSettings());
+        entry.diagnostics().forEach(output::println);
+      } else {
+        var choice = endpoint == null ? endpointMenu.apply(entries).orElse(null) : endpoint;
+        if (choice == null) {
+          output.println("Selection cancelled. Noninteractive: /llm chat use <endpoint-name>");
+          return 0;
+        }
+        var entry = entries.stream().filter(value -> value.profile().id().equals(choice))
+            .findFirst().orElseThrow(() -> new IllegalArgumentException("Unknown chat endpoint"));
+        selectEndpoint.accept(choice);
+        output.println("Selected: " + endpointLabel(entry));
+      }
+      output.println(SELECTION_SCOPE);
+      return 0;
+    } catch (IllegalArgumentException | IllegalStateException error) {
+      output.println(error.getMessage());
+      return 2;
+    } finally {
+      output.flush();
+    }
+  }
+
+  public static String endpointLabel(dev.mikoto2000.rei.llm.ChatConnectionService.Endpoint entry) {
+    var profile = entry.profile();
+    return (profile.id() + (entry.active() ? " [active]" : "") + " | "
+        + profile.provider().id() + " / "
+        + profile.api().name().toLowerCase(java.util.Locale.ROOT).replace('_', '-')
+        + " | " + profile.model() + " | " + profile.usagePath().id()
+        + " | account=" + (profile.accountRef() == null ? "-" : profile.accountRef())
+        + " | auth=" + profile.authentication().id() + " / " + entry.authenticationState()
+        + (entry.unavailableReason() == null ? "" : " | unavailable: " + entry.unavailableReason()))
+        .replaceAll("[\\p{Cntrl}\\p{Cf}]", " ");
   }
 
   /** 次のCLI依頼のHTTP本文をJVMメモリへ記録を行うための利用者コマンド。 */
