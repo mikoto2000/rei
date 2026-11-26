@@ -28,22 +28,40 @@ final class InferenceExportRequest {
             ? java.util.List.<ToolCallback>of()
             : supplied.stream().map(InferenceExportRequest::snapshot).toList();
     var frozen = new Prompt(messages, options.mutate().toolCallbacks(callbacks).build());
+    var frozenOptions = (ToolCallingChatOptions) frozen.getOptions();
+    var context = frozenOptions.getToolContext();
+    var captured =
+        context == null
+            ? null
+            : context.get(dev.mikoto2000.rei.modeloptions.ModelOptions.PREPARATION_CONTEXT_KEY);
+    String preparation =
+        captured == null
+            ? dev.mikoto2000.rei.modeloptions.ModelOptions.preparationFingerprint(frozen)
+            : captured instanceof String value ? value : null;
+    return new InferenceExportRequest(
+        frozen, fingerprint(preparation, definitions(callbacks), messages));
+  }
+
+  static String fingerprint(
+      String preparation,
+      java.util.List<ApprovalContinuationStore.InferenceTool> tools,
+      java.util.List<org.springframework.ai.chat.messages.Message> messages) {
+    if (preparation == null || !preparation.matches("[0-9a-f]{64}"))
+      throw new IllegalArgumentException("Invalid inference content preparation binding");
     try {
       var digest = java.security.MessageDigest.getInstance("SHA-256");
-      add(digest, "rei.inference-export.v1".getBytes(java.nio.charset.StandardCharsets.UTF_8));
-      add(
-          digest,
-          dev.mikoto2000.rei.modeloptions.ModelOptions.preparationFingerprint(frozen)
-              .getBytes(java.nio.charset.StandardCharsets.UTF_8));
-      for (var callback : callbacks) {
-        add(
-            digest,
-            callback.getToolDefinition().name().getBytes(java.nio.charset.StandardCharsets.UTF_8));
-        digest.update((byte) (callback.getToolMetadata().requiresConfirmation() ? 1 : 0));
+      add(digest, "rei.inference-export.v2".getBytes(java.nio.charset.StandardCharsets.UTF_8));
+      add(digest, preparation.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+      for (var tool : tools) {
+        add(digest, tool.name().getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        add(digest, tool.description().getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        add(digest, tool.schema().getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        digest.update((byte) (tool.returnDirect() ? 1 : 0));
+        digest.update((byte) (tool.requiresConfirmation() ? 1 : 0));
       }
-      for (byte[] message : encoded) add(digest, message);
-      return new InferenceExportRequest(
-          frozen, java.util.HexFormat.of().formatHex(digest.digest()));
+      var codec = new dev.mikoto2000.rei.modelmessage.ModelMessageCodec();
+      for (var message : messages) add(digest, codec.encode(message));
+      return java.util.HexFormat.of().formatHex(digest.digest());
     } catch (java.security.NoSuchAlgorithmException impossible) {
       throw new IllegalStateException("Inference export digest unavailable");
     }
@@ -55,6 +73,28 @@ final class InferenceExportRequest {
 
   String fingerprint() {
     return fingerprint;
+  }
+
+  ApprovalContinuationStore.InferenceInput input() {
+    return new ApprovalContinuationStore.InferenceInput(
+        fingerprint,
+        definitions(((ToolCallingChatOptions) prompt.getOptions()).getToolCallbacks()));
+  }
+
+  private static java.util.List<ApprovalContinuationStore.InferenceTool> definitions(
+      java.util.List<ToolCallback> callbacks) {
+    return callbacks.stream()
+        .map(callback -> {
+          var definition = callback.getToolDefinition();
+          var metadata = callback.getToolMetadata();
+          return new ApprovalContinuationStore.InferenceTool(
+              definition.name(),
+              definition.description(),
+              definition.inputSchema(),
+              metadata.returnDirect(),
+              metadata.requiresConfirmation());
+        })
+        .toList();
   }
 
   @Override

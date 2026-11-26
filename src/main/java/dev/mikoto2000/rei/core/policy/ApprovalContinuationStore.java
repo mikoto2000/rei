@@ -217,6 +217,15 @@ public class ApprovalContinuationStore {
             .equals(protocolHistory.origin().owner())
         || !connection.fingerprint().equals(protocolHistory.origin().endpoint()))
       throw new IllegalStateException("Inference continuation ownership mismatch");
+    var messages =
+        protocolHistory.input().entries().stream()
+            .map(pointer ->
+                payloads
+                    .obtain()
+                    .loadEntry(
+                        scope, pointer, ModelMessagePayloadStore.ReferenceKind.RUN, owner.runId()))
+            .toList();
+    verifyInferenceContent(inference, protocolHistory, messages);
     String encoded =
         encode(
             new Document(
@@ -594,6 +603,7 @@ public class ApprovalContinuationStore {
               .toList();
     }
     List<ModelMessagePayloadStore.ReplayReference> references = null;
+    if (d.inference() != null) verifyInferenceContent(d.inference(), d.protocolHistory(), messages);
     if (d.protocolHistory() != null
         || backendNative(pendingMessage)
         || messages.stream().anyMatch(ApprovalContinuationStore::backendNative)) {
@@ -640,6 +650,19 @@ public class ApprovalContinuationStore {
     return message instanceof AssistantMessage
         && message.getMetadata().get("rei.llm.replay-origin-owner") instanceof String owner
         && owner.matches("[0-9a-fA-F]{64}");
+  }
+
+  private static void verifyInferenceContent(
+      InferenceInput inference, ModelMessagePayloadStore.History history, List<Message> messages) {
+    if (history == null
+        || history.input() == null
+        || messages.isEmpty()
+        || !inference
+            .contentFingerprint()
+            .equals(
+                InferenceExportRequest.fingerprint(
+                    history.input().preparationFingerprint(), inference.tools(), messages)))
+      throw new IllegalArgumentException("Inference approval content mismatch");
   }
 
   /** ツール利用の権限制御において、実行待ちに該当するか判定する。 */
