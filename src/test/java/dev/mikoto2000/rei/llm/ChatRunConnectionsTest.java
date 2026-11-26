@@ -181,14 +181,56 @@ class ChatRunConnectionsTest {
         .hasMessageContaining("unavailable");
   }
 
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.EnumSource(
+      value = LlmEndpointCapabilities.Support.class,
+      names = {"UNKNOWN", "UNSUPPORTED"})
+  void normalChatRequiresStreamingBeforeAdmissionOrRestore(
+      LlmEndpointCapabilities.Support support) {
+    var connections = responsesConnections(LlmEndpointCapabilities.Support.SUPPORTED, support);
+    var owner = owner("unavailable-stream", "session");
+    assertThatThrownBy(() -> connections.accept(owner))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("STREAMING");
+    assertThatThrownBy(() -> connections.require(owner)).isInstanceOf(IllegalStateException.class);
+    var source =
+        responsesConnections(LlmEndpointCapabilities.Support.SUPPORTED)
+            .accept(owner("original", "session"));
+    var capabilities = new HashMap<>(source.capabilities());
+    capabilities.put(LlmEndpointCapabilities.Capability.STREAMING, support);
+    var saved =
+        new RunLlmConnection(
+            source.profileId(),
+            source.named(),
+            source.provider(),
+            source.authentication(),
+            source.accountRef(),
+            source.accountRegistration(),
+            source.endpoint(),
+            capabilities,
+            source.generation(),
+            source.transport());
+    var restarted = responsesConnections(LlmEndpointCapabilities.Support.SUPPORTED);
+    assertThatThrownBy(() -> restarted.restore(owner, saved))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("STREAMING");
+    assertThatThrownBy(() -> restarted.require(owner)).isInstanceOf(IllegalStateException.class);
+  }
+
   private ChatRunConnections responsesConnections(LlmEndpointCapabilities.Support support) {
+    return responsesConnections(support, LlmEndpointCapabilities.Support.SUPPORTED);
+  }
+
+  private ChatRunConnections responsesConnections(
+      LlmEndpointCapabilities.Support support, LlmEndpointCapabilities.Support streaming) {
     var server = new LlmProperties.Server();
     server.setBaseUrl("http://owned-fixture.invalid/v1");
     server.setApi(LlmApiType.RESPONSES);
     server.setAuthentication("none");
     server.setModel("fixture-model");
     server.setReasoningReplay(ReasoningReplayMode.NONE);
-    server.setServerCapabilities(java.util.Map.of("responses", support.name()));
+    server.setServerCapabilities(
+        java.util.Map.of("responses", support.name(), "streaming", streaming.name()));
     var chat = new LlmProperties.Server();
     chat.setActive("responses");
     chat.setEndpoints(java.util.Map.of("responses", server));

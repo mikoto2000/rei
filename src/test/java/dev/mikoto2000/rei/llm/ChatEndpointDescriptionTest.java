@@ -99,6 +99,47 @@ class ChatEndpointDescriptionTest {
     }
   }
 
+  @Test
+  void declaredLocalResponsesReportsTheImplementedPolicyWithoutPerformingInference() {
+    var values = settings();
+    values.put(prefix("second") + "server-capabilities.responses", "supported");
+    values.put(prefix("second") + "server-capabilities.streaming", "supported");
+    try (var service = service(values)) {
+      var endpoint = service.endpoints().getLast();
+      assertThat(endpoint.unavailableReason()).isNull();
+      assertThat(endpoint.authenticationState()).isEqualTo("not-required");
+      assertThat(endpoint.generationSettings()).doesNotContainKey("max_output_tokens");
+      assertThat(endpoint.selectionScope()).contains("Inference not verified");
+    }
+  }
+
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.EnumSource(
+      value = LlmEndpointCapabilities.Support.class,
+      names = {"UNKNOWN", "UNSUPPORTED"})
+  void metadataNamesTheProtocolCapabilityThatPreventsAdmission(
+      LlmEndpointCapabilities.Support support) {
+    var values = settings();
+    values.put(prefix("second") + "server-capabilities.responses", support.name());
+    values.put(prefix("second") + "server-capabilities.streaming", "supported");
+    try (var service = service(values)) {
+      assertThat(service.endpoints().getLast().unavailableReason()).contains("RESPONSES");
+    }
+  }
+
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.EnumSource(
+      value = LlmEndpointCapabilities.Support.class,
+      names = {"UNKNOWN", "UNSUPPORTED"})
+  void metadataNamesMissingStreamingForNormalChat(LlmEndpointCapabilities.Support support) {
+    var values = settings();
+    values.put(prefix("second") + "server-capabilities.responses", "supported");
+    values.put(prefix("second") + "server-capabilities.streaming", support.name());
+    try (var service = service(values)) {
+      assertThat(service.endpoints().getLast().unavailableReason()).contains("STREAMING");
+    }
+  }
+
   private static String prefix(String name) {
     return "rei.llm.features.chat.endpoints." + name + ".";
   }
