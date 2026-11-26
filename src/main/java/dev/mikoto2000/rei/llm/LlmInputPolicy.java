@@ -39,6 +39,8 @@ final class LlmInputPolicy {
   private static void requireData(
       Media media, String mime, LlmEndpointCapabilities.Capability capability, LlmApiType api) {
     if (capability == LlmEndpointCapabilities.Capability.FILE_INPUT) {
+      if (api == LlmApiType.CHAT_COMPLETIONS && !mime.equals("application/pdf"))
+        throw new IllegalArgumentException("Chat Completions FILE_INPUT supports inline PDF only");
       String name = media.getName();
       if (name == null
           || name.isBlank()
@@ -70,7 +72,8 @@ final class LlmInputPolicy {
       throw new IllegalArgumentException("Chat Completions FILE_INPUT requires inline data");
     try {
       var uri = java.net.URI.create(text);
-      if (!Set.of("http", "https").contains(uri.getScheme())
+      if (uri.getScheme() == null
+          || !Set.of("http", "https").contains(uri.getScheme())
           || uri.getHost() == null
           || uri.getUserInfo() != null
           || uri.getFragment() != null
