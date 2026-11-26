@@ -529,19 +529,19 @@ public class ApprovalContinuationService implements RunContinuation {
         inferenceGuard.requestRevisedApproval(owner, revised.connection(), revised.inference());
     if (replacement.id().equals(original.approvalId()))
       throw new IllegalStateException("Inference guidance did not change the input");
-    var encoded =
-        store
-            .get()
-            .prepareInference(
-                replacement.id(),
-                owner,
-                revised.request(),
-                revised.budget(),
-                revised.managedParent(),
-                revised.protocolHistory(),
-                revised.connection(),
-                revised.inference());
     try {
+      var encoded =
+          store
+              .get()
+              .prepareInference(
+                  replacement.id(),
+                  owner,
+                  revised.request(),
+                  revised.budget(),
+                  revised.managedParent(),
+                  revised.protocolHistory(),
+                  revised.connection(),
+                  revised.inference());
       transaction.executeWithoutResult(tx -> {
         var current = registry.getObject().get(owner.runId());
         if (!current.context().equals(owner)
