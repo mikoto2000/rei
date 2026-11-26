@@ -483,6 +483,37 @@ class ApprovalContinuationTest {
     }
   }
 
+  @Test
+  void contentCannotChangeBetweenPreflightAndAtomicApprovalDecision() {
+    String id = pauseInferenceForInspection();
+    store = org.mockito.Mockito.spy(store);
+    service = createService(clock);
+    var reads = new AtomicInteger();
+    var changed = new java.util.concurrent.atomic.AtomicBoolean();
+    doAnswer(
+            invocation -> {
+              if (reads.incrementAndGet() == 2) {
+                org.springframework.jdbc.core.simple.JdbcClient.create(source)
+                    .sql(
+                        "UPDATE approval_continuations SET document=json_set(document,'$.inference.tools[0].description',?) WHERE approval=?")
+                    .params("changed after content preflight", id)
+                    .update();
+                changed.set(true);
+              }
+              return invocation.callRealMethod();
+            })
+        .when(store)
+        .find(id);
+    var failure =
+        assertThrows(
+            IllegalArgumentException.class,
+            () -> service.decide(owner.projectId(), id, true, true));
+    assertTrue(failure.getMessage().contains("changed"));
+    assertTrue(changed.get());
+    assertEquals("PENDING", approvals.get(owner.projectId(), id).status());
+    assertEquals("WAITING_APPROVAL", service.state(id).orElseThrow());
+  }
+
   /** 承認続行後も所有者の追加入力が同じ実行キューへ届き、完了後は受け付けない。 */
   @Test
   void continuedRunAcceptsOwnedWebGuidanceWithoutResettingSavedBudget() {

@@ -346,6 +346,20 @@ public class ApprovalContinuationService implements RunContinuation {
       String project, String id, boolean approved, boolean continueRun) {
     if (continueRun && !approved)
       throw new IllegalArgumentException("Only approval can continue a Run");
+    String verifiedInferenceDocument = null;
+    if (approved) {
+      var request = findApproval.apply(project, id);
+      var saved = store.find(id);
+      if (saved.isPresent()
+          && saved.get().state().equals("WAITING_APPROVAL")
+          && store.document(saved.get()).inference() != null) {
+        // Protected payloads use their own transaction. Verify before the short decision
+        // transaction, then compare the exact immutable document again before granting.
+        verifyInferenceBinding(saved.get(), request, true);
+        verifiedInferenceDocument = saved.get().document();
+      }
+    }
+    String verifiedDocument = verifiedInferenceDocument;
     return transaction.execute(tx -> {
       var current = findApproval.apply(project, id);
       var entry = store.find(id);
@@ -369,6 +383,15 @@ public class ApprovalContinuationService implements RunContinuation {
         if (registry.getObject().get(owner.runId()).status() != RunStatus.WAITING_APPROVAL)
           throw new IllegalStateException("Run no longer waiting for approval");
       }
+      if (approved)
+        entry.ifPresent(saved -> {
+          if (saved.state().equals("WAITING_APPROVAL")
+              && store.document(saved).inference() != null
+              && !java.util.Objects.equals(verifiedDocument, saved.document()))
+            throw new IllegalArgumentException(
+                "Inference approval content changed during decision");
+          verifyInferenceBinding(saved, current, false);
+        });
       var decided =
           current.status().equals("PENDING")
               ? decideApproval.apply(new ApprovalDecision(project, id, approved))
@@ -390,6 +413,8 @@ public class ApprovalContinuationService implements RunContinuation {
     if (entry.isPresent()) {
       if (!store.document(entry.get()).owner().equals(owner))
         throw new IllegalArgumentException("Continuation ownership mismatch");
+      verifyInferenceBinding(
+          entry.get(), findApproval.apply(owner.projectId(), entry.get().approvalId()), false);
       return store.saved(entry.get());
     }
     var external = slack.getIfAvailable();
@@ -500,6 +525,28 @@ public class ApprovalContinuationService implements RunContinuation {
             .isEmpty()) throw new IllegalStateException("Project or Session ownership changed");
   }
 
+  private void verifyInferenceBinding(
+      ApprovalContinuationStore.Entry entry,
+      ToolApprovalRepository.Request request,
+      boolean verifyContent) {
+    var document = store.document(entry);
+    if (document.inference() == null) {
+      if (request.tool().equals("inferenceExport"))
+        throw new IllegalArgumentException("Inference approval binding unavailable");
+      return;
+    }
+    var owner = document.owner();
+    if (!request.projectId().equals(owner.projectId())
+        || !request.sessionId().equals(owner.conversationId())
+        || !request.runId().equals(owner.runId())
+        || !entry.runId().equals(owner.runId()))
+      throw new IllegalArgumentException("Inference approval ownership binding mismatch");
+    validate(owner);
+    inferenceGuard.verifySavedApproval(
+        entry.approvalId(), owner, document.connection(), document.inference());
+    if (verifyContent) store.saved(entry);
+  }
+
   /** 後続の操作を進められるか判断するため、実行を確認する。 */
   public void checkExecution(AgentRunContext owner) {
     validate(owner);
@@ -552,6 +599,7 @@ public class ApprovalContinuationService implements RunContinuation {
             || router.getObject().containsRun(owner.projectId(), owner.runId())) continue;
         try {
           validate(owner);
+          verifyInferenceBinding(entry, request, true);
         } catch (RuntimeException changed) {
           retireContinuationGrant.accept(owner.projectId(), entry.approvalId());
           store.state(entry.approvalId(), "UNKNOWN");
