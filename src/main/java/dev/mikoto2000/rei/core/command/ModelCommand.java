@@ -12,6 +12,9 @@ import picocli.CommandLine.Parameters;
 @Command(name = "model", description = "使用する chat モデルを確認・指定します")
 @RequiredArgsConstructor
 public class ModelCommand implements Runnable {
+  @org.springframework.beans.factory.annotation.Autowired(required = false)
+  public void setChatConnections(dev.mikoto2000.rei.llm.ChatConnectionService connections) {}
+
   /** 現在モデル保持先。 */
   private final ModelHolderService currentModelHolder;
 

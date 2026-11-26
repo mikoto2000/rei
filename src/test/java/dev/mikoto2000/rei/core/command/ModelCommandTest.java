@@ -10,6 +10,39 @@ import org.junit.jupiter.api.Test;
 
 /** モデルコマンドの結果と状態の契約を検証するテスト。 */
 class ModelCommandTest {
+  @Test
+  void readsSelectedProfileModelInsteadOfStaticHelperModel() {
+    var holder = new ModelHolderService("helper-default");
+    var service = org.mockito.Mockito.mock(dev.mikoto2000.rei.llm.ChatConnectionService.class);
+    org.mockito.Mockito.when(service.selection()).thenReturn(
+        new dev.mikoto2000.rei.llm.ChatConnectionService.Selection("local", "named-model"));
+    var output = new ByteArrayOutputStream();
+    var original = System.out;
+    System.setOut(new PrintStream(output));
+    try {
+      var command = new ModelCommand(holder);
+      command.setChatConnections(service);
+      command.modelName = Optional.empty();
+      command.run();
+    } finally { System.setOut(original); }
+    assertEquals("named-model", output.toString().trim());
+    assertEquals("helper-default", holder.get());
+  }
+
+  @Test
+  void selectsThroughCommonConnectionServiceWithoutChangingHelperModel() {
+    var holder = new ModelHolderService("helper-default");
+    var service = org.mockito.Mockito.mock(dev.mikoto2000.rei.llm.ChatConnectionService.class);
+    org.mockito.Mockito.when(service.selection()).thenReturn(
+        new dev.mikoto2000.rei.llm.ChatConnectionService.Selection("local", "chosen"));
+    var command = new ModelCommand(holder);
+    command.setChatConnections(service);
+    command.modelName = Optional.of("chosen");
+    command.run();
+    assertEquals("helper-default", holder.get());
+    org.mockito.Mockito.verify(service).selectModel("chosen");
+  }
+
 
   /** 共通の実行基盤で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
