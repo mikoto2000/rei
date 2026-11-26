@@ -655,7 +655,8 @@ public class ApprovalContinuationStore {
         pending,
         references,
         d.protocolHistory(),
-        d.connection());
+        d.connection(),
+        d.inference() != null);
   }
 
   private static boolean backendNative(Message message) {

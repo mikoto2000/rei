@@ -695,7 +695,7 @@ public class ChatExecutionService implements ChatRunAdmission {
           tracker -> tracker.recordUserActivity(java.time.Instant.now(clock)));
       if (resumed == null) appendConversationLog(context, execution, "user", promptText);
       if (!structuredCommand
-          && (resumed == null || resumed.pendingTools() == null)
+          && (resumed == null || resumed.pendingTools() == null && !resumed.inferencePending())
           && !budget.tryConsumeLlmCall()) {
         log.warn("Chat skipped: LLM call budget exhausted before initial prompt");
         return ChatExecutionResult.failed(

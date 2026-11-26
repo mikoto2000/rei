@@ -126,10 +126,47 @@ public interface RunContinuation {
       dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.History protocolHistory,
       @com.fasterxml.jackson.annotation.JsonInclude(
               com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
-          dev.mikoto2000.rei.llm.RunLlmConnection connection) {
+          dev.mikoto2000.rei.llm.RunLlmConnection connection,
+      @com.fasterxml.jackson.annotation.JsonInclude(
+              com.fasterxml.jackson.annotation.JsonInclude.Include.NON_DEFAULT)
+          boolean inferencePending) {
     public Saved {
+      if (inferencePending
+          && (pendingTools != null
+              || budget == null
+              || budget.llmCalls() < 1
+              || connection == null
+              || !connection.named()
+              || messages == null
+              || messages.isEmpty()
+              || replayReferences == null
+              || replayReferences.isEmpty()
+              || protocolHistory == null
+              || protocolHistory.input() == null
+              || protocolHistory.input().entries().isEmpty()))
+        throw new IllegalArgumentException("Invalid reserved inference continuation");
       messages = messages == null ? null : Collections.unmodifiableList(new ArrayList<>(messages));
       replayReferences = replayReferences == null ? null : List.copyOf(replayReferences);
+    }
+
+    public Saved(
+        String request,
+        List<Message> messages,
+        OutputLimitRunBudget.Snapshot budget,
+        PendingTools pendingTools,
+        List<dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ReplayReference>
+            replayReferences,
+        dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.History protocolHistory,
+        dev.mikoto2000.rei.llm.RunLlmConnection connection) {
+      this(
+          request,
+          messages,
+          budget,
+          pendingTools,
+          replayReferences,
+          protocolHistory,
+          connection,
+          false);
     }
 
     public Saved(
