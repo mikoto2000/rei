@@ -106,6 +106,12 @@ class ContextHistoryAdvisorTest {
     "COMPLETED,false,ok",
     "COMPLETED,false,completedTool",
     "FAILED,false,completedTool",
+    "COMPLETED,false,completedToolName",
+    "COMPLETED,false,completedToolId",
+    "COMPLETED,false,completedToolPartial",
+    "COMPLETED,false,completedToolBytes",
+    "COMPLETED,false,completedToolMissingReference",
+    "COMPLETED,false,completedToolCount",
     "FAILED,true,ok",
     "CANCELLED,true,ok",
     "RUNNING,true,ok",
@@ -158,7 +164,7 @@ class ContextHistoryAdvisorTest {
                     "rei.llm.replay-origin-endpoint",
                     "endpoint-a"))
             .build();
-    if (scenario.equals("completedTool"))
+    if (scenario.startsWith("completedTool"))
       original =
           original
               .mutate()
@@ -174,6 +180,19 @@ class ContextHistoryAdvisorTest {
                                       "{\"target\":\"fixture\"}"))))
                       .toList())
               .build();
+    if (scenario.equals("completedToolPartial"))
+      original =
+          AssistantMessage.builder()
+              .parts(
+                  java.util.stream.Stream.concat(
+                          original.getParts().stream(),
+                          java.util.stream.Stream.of(
+                              org.springframework.ai.chat.messages.part.ToolCallPart.of(
+                                  new AssistantMessage.ToolCall(
+                                      "unresolved-call", "function", "fixtureOperation", "{}"))))
+                      .toList())
+              .properties(original.getMetadata())
+              .build();
     var userRef = previousExchange.withKey("input").reference(new UserMessage("old actual input"));
     var assistantRef = previousExchange.withKey("answer").reference(original);
     var protocolEntries =
@@ -185,13 +204,19 @@ class ContextHistoryAdvisorTest {
     protocolEntries.add(
         new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.History.Entry(
             "answer", assistantRef));
-    if (scenario.equals("completedTool")) {
+    if (scenario.startsWith("completedTool")) {
       var result =
           org.springframework.ai.chat.messages.ToolResponseMessage.builder()
               .responses(
                   java.util.List.of(
                       new org.springframework.ai.chat.messages.ToolResponseMessage.ToolResponse(
-                          "successful-call", "fixtureOperation", "SUCCESSFUL_OPERATION_RESULT")))
+                          scenario.equals("completedToolId") ? "other-call" : "successful-call",
+                          scenario.equals("completedToolName")
+                              ? "otherOperation"
+                              : "fixtureOperation",
+                          scenario.equals("completedToolBytes")
+                              ? "PRIVATE_RESULT".repeat(12000)
+                              : "SUCCESSFUL_OPERATION_RESULT")))
               .build();
       protocolEntries.add(
           new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.History.Entry(
@@ -220,6 +245,19 @@ class ContextHistoryAdvisorTest {
         new java.util.HashMap<>(logs.appendProtocolHistory("chat", old.runId(), pointers));
     manifest.put("rei.modelMessage.endpoint", "endpoint-a");
     turns.recordMetadata(old, manifest);
+    if (scenario.equals("completedToolCount"))
+      turns.recordMetadata(
+          old, Map.of(dev.mikoto2000.rei.conversation.ConversationLogStore.PROTOCOL_COUNT, "4"));
+    if (scenario.equals("completedToolMissingReference")) {
+      var pointer = pointers.get(2);
+      payloads.release(
+          previousExchange.scope(),
+          new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Ref(
+              pointer.get(dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.HISTORY_ID),
+              pointer.get(dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.HISTORY_HASH)),
+          dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ReferenceKind.HISTORY,
+          "turn:old");
+    }
     if (status != ConversationTurnStore.Status.RUNNING)
       turns.finish(old, status, "old display answer");
     logs.append(
@@ -351,6 +389,15 @@ class ContextHistoryAdvisorTest {
       org.assertj.core.api.Assertions.assertThatThrownBy(() -> advisor.before(request, null))
           .isInstanceOf(IllegalStateException.class)
           .hasMessage("Model message persistence rejected");
+      return;
+    }
+    if (scenario.startsWith("completedTool") && !scenario.equals("completedTool")) {
+      org.assertj.core.api.Assertions.assertThatThrownBy(() -> advisor.before(request, null))
+          .isInstanceOf(IllegalStateException.class)
+          .hasMessageNotContaining("PRIVATE_RESULT")
+          .hasMessageNotContaining("opaque-native-history");
+      assertThat(payloads.restoreHistory(previousExchange.scope(), pointers.get(1)).orElseThrow())
+          .isEqualTo(original);
       return;
     }
     var projected = advisor.before(request, null).prompt();
