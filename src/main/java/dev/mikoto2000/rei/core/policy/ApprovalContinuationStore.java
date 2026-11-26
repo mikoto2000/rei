@@ -199,7 +199,40 @@ public class ApprovalContinuationStore {
       ModelMessagePayloadStore.History protocolHistory,
       dev.mikoto2000.rei.llm.RunLlmConnection connection,
       InferenceInput inference) {
-    throw new UnsupportedOperationException("Inference approval continuation is not implemented");
+    if (inference == null
+        || budget == null
+        || connection == null
+        || !connection.named()
+        || protocolHistory == null
+        || protocolHistory.input() == null
+        || protocolHistory.input().entries().isEmpty()
+        || protocolHistory.input().preparationFingerprint() == null)
+      throw new IllegalArgumentException(
+          "Complete inference input and accepted connection required");
+    var scope = ModelMessagePayloadStore.Scope.forOwner(owner);
+    if (!owner.runId().equals(protocolHistory.run())
+        || !new ModelMessagePayloadStore.Exchange(
+                payloads.obtain(), scope, owner.runId(), "approval")
+            .ownerKey()
+            .equals(protocolHistory.origin().owner())
+        || !connection.fingerprint().equals(protocolHistory.origin().endpoint()))
+      throw new IllegalStateException("Inference continuation ownership mismatch");
+    String encoded =
+        encode(
+            new Document(
+                owner,
+                request,
+                List.of(),
+                null,
+                budget,
+                managed,
+                protocolHistory,
+                connection,
+                inference));
+    if (encoded.getBytes(java.nio.charset.StandardCharsets.UTF_8).length > 1048576)
+      throw new IllegalArgumentException("Inference approval continuation capacity exceeded");
+    payloads.obtain().protectContinuation(scope, protocolHistory, id);
+    insert(id, owner, encoded);
   }
 
   /**
@@ -392,6 +425,10 @@ public class ApprovalContinuationStore {
         || messages.size() > 256
         || pending.calls().size() > 32)
       throw new IllegalArgumentException("Approval continuation capacity exceeded");
+    insert(id, owner, encoded);
+  }
+
+  private void insert(String id, AgentRunContext owner, String encoded) {
     if (db.sql(
                 "INSERT OR IGNORE INTO approval_continuations(approval,run,state,document) VALUES(?,?,'WAITING_APPROVAL',?)")
             .params(id, owner.runId(), encoded)
@@ -742,7 +779,8 @@ public class ApprovalContinuationStore {
                     d.budget(),
                     d.managedParent(),
                     history,
-                    d.connection()));
+                    d.connection(),
+                    d.inference()));
         // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
         if (encoded.getBytes(java.nio.charset.StandardCharsets.UTF_8).length > 1048576
             || messages.size() > 256)
