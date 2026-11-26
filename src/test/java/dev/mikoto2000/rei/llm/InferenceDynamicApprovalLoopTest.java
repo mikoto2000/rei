@@ -78,6 +78,49 @@ class InferenceDynamicApprovalLoopTest {
   }
 
   @ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(booleans = {false, true})
+  void cancellingAnInferenceWaitPreventsLaterApprovalAndAnyHttp(boolean plan) throws Exception {
+    try (var fixture = new ResponsesLoopFixture(plan)) {
+      var clock = Clock.systemUTC();
+      var owner =
+          new AgentRunContext(
+              "cancel-run",
+              "session",
+              directory,
+              UUID.randomUUID().toString(),
+              AgentRunContext.RequestSource.SHELL,
+              AgentRunContext.Mode.CONVERSATION);
+      var data = new org.sqlite.SQLiteDataSource();
+      data.setUrl("jdbc:sqlite:" + directory.resolve("cancel.db"));
+      var consent = consent(data, owner, clock);
+      var execution =
+          context(data, owner, fixture, consent, List.of(), new AgentEventFactory(clock), false);
+      var model =
+          ResponsesAdapter.createForRun(
+              fixture.pin,
+              (org.springframework.ai.openai.responses.OpenAiResponsesChatOptions)
+                  execution.modelOptions(),
+              fixture.client);
+      var loop = new StagnationChatModel(model);
+      assertThatThrownBy(() ->
+              loop.stream(new Prompt("request", execution.modelOptions()))
+                  .blockLast(Duration.ofSeconds(10)))
+          .isInstanceOf(RunWaitingException.class);
+      var approval = consent.requests.list(owner.projectId()).getFirst();
+      execution.cancel();
+      assertThat(consent.registry.transition(owner.runId(), RunStatus.CANCELLED, null)).isTrue();
+      assertThatThrownBy(
+              () -> consent.continuations.decide(owner.projectId(), approval.id(), true, true))
+          .isInstanceOf(IllegalStateException.class);
+      consent.continuations.pump();
+      assertThat(fixture.requests).isEmpty();
+      assertThat(execution.budgetSnapshot().llmCalls()).isEqualTo(1);
+      assertThat(execution.budgetSnapshot().totalTokens()).isZero();
+      assertThat(consent.store.find(approval.id()).orElseThrow().state()).isEqualTo("CANCELLED");
+    }
+  }
+
+  @ParameterizedTest
   @MethodSource("interruptedRoutes")
   void interruptedApprovedResponseNeverRepeatsTheCompletedBusinessEffect(
       boolean plan, String ending) throws Exception {
