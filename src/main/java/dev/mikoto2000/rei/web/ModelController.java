@@ -18,7 +18,7 @@ import org.springframework.web.bind.annotation.RestController;
 /**
  * モデルをWeb APIの操作として受け付ける。
  *
- * <p>Named model controls using the same holder as the existing Shell.
+ * <p>Model controls use the same process-wide connection selection as Shell.
  */
 @RestController
 @ConditionalOnProperty(name = "rei.web.enabled", havingValue = "true")
@@ -42,9 +42,14 @@ public class ModelController {
 
   @org.springframework.beans.factory.annotation.Autowired
   public ModelController(dev.mikoto2000.rei.modeloptions.ChatModelSelection selection) {
-    this.modelCatalog = () -> new Models(List.of(), "unimplemented");
-    this.selectedModel = () -> "unimplemented";
-    this.selectModel = model -> {};
+    java.util.Objects.requireNonNull(selection);
+    this.modelCatalog =
+        () -> {
+          var snapshot = selection.models();
+          return new Models(snapshot.models(), snapshot.selection().model());
+        };
+    this.selectedModel = () -> selection.selection().model();
+    this.selectModel = selection::selectModel;
   }
 
   /**

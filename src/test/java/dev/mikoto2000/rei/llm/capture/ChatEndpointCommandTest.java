@@ -51,7 +51,7 @@ class ChatEndpointCommandTest {
   @Test
   void interactiveCancellationNeverChangesSelection() {
     var fixture = new Fixture();
-    fixture.command.setEndpointMenu(entries -> java.util.Optional.empty());
+    fixture.command.setEndpointMenu((ids, labels) -> java.util.Optional.empty());
     assertThat(fixture.cli.execute("chat", "use")).isZero();
     assertThat(fixture.output.toString()).contains("cancel");
     verify(fixture.service).endpoints();
@@ -61,8 +61,7 @@ class ChatEndpointCommandTest {
   @Test
   void interactiveConfirmationSelectsOnlyReturnedRegisteredId() {
     var fixture = new Fixture();
-    fixture.command.setEndpointMenu(
-        entries -> java.util.Optional.of(entries.getFirst().profile().id()));
+    fixture.command.setEndpointMenu((ids, labels) -> java.util.Optional.of(ids.getFirst()));
     assertThat(fixture.cli.execute("chat", "use")).isZero();
     verify(fixture.service).select("local");
   }

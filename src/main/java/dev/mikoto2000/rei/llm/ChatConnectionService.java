@@ -90,7 +90,10 @@ public final class ChatConnectionService
 
   /** Nonsecret current selection; observing it never dispatches inference. */
   public Selection selection() {
-    var selected = connections.selection();
+    return selection(connections.selection());
+  }
+
+  private Selection selection(ChatRunConnections.Selection selected) {
     var model = selected.models().get(selected.endpoint());
     if (model == null) {
       model =
@@ -156,6 +159,8 @@ public final class ChatConnectionService
                   configured.generation(),
                   configured.usagePath(),
                   capabilities);
+          if (!catalog.hasNamedProfiles())
+            return legacyEndpoint(profile, profile.id().equals(selected.endpoint()));
           var source = catalog.connection(profile.id());
           var applied = new java.util.LinkedHashMap<String, Object>();
           var unapplied = new java.util.LinkedHashMap<String, String>();
@@ -190,14 +195,7 @@ public final class ChatConnectionService
                   ? ReasoningReplayMode.NONE
                   : source.getReasoningReplay();
           if (replay == null) reasons.add("reasoning-replay must be configured for Responses");
-          var authenticationState =
-              switch (profile.authentication()) {
-                case NONE -> "not-required";
-                case API_KEY -> "configured";
-                case CHATGPT_OAUTH -> "unverified";
-                case UNCONFIGURED -> "unconfigured";
-                case LEGACY -> "legacy";
-              };
+          var authenticationState = authenticationState(profile.authentication());
           if (profile.authentication() == LlmAuthentication.UNCONFIGURED)
             reasons.add("Authentication is not configured");
           if (profile.provider() == LlmProvider.CHATGPT_PLAN)
@@ -219,7 +217,56 @@ public final class ChatConnectionService
 
   @Override
   public dev.mikoto2000.rei.modeloptions.ChatModelSelection.Models models() {
-    throw new IllegalStateException("Selected model discovery is not implemented");
+    var selected = selection(connections.selection());
+    var connection = factory.discovery(selected.endpoint(), selected.model());
+    return new dev.mikoto2000.rei.modeloptions.ChatModelSelection.Models(
+        selected, modelCache.models(connection));
+  }
+
+  private Endpoint legacyEndpoint(ChatEndpointCatalog.Profile profile, boolean active) {
+    try {
+      var connection = factory.capture(profile.id(), profile.model());
+      var resolved =
+          new ChatEndpointCatalog.Profile(
+              profile.id(),
+              connection.endpoint().model(),
+              profile.provider(),
+              connection.endpoint().apiType(),
+              connection.authentication(),
+              profile.accountRef(),
+              profile.generation(),
+              profile.usagePath(),
+              profile.capabilities());
+      return new Endpoint(
+          resolved,
+          active,
+          connection.endpoint().capabilities().reasoningReplay(),
+          authenticationState(connection.authentication()),
+          null,
+          connection.generation(),
+          java.util.Map.of(),
+          catalog.diagnostics());
+    } catch (RuntimeException unavailable) {
+      return new Endpoint(
+          profile,
+          active,
+          profile.api() == LlmApiType.CHAT_COMPLETIONS ? ReasoningReplayMode.NONE : null,
+          authenticationState(profile.authentication()),
+          "Effective legacy settings are unavailable",
+          java.util.Map.of(),
+          java.util.Map.of(),
+          catalog.diagnostics());
+    }
+  }
+
+  private static String authenticationState(LlmAuthentication authentication) {
+    return switch (authentication) {
+      case NONE -> "not-required";
+      case API_KEY -> "configured";
+      case CHATGPT_OAUTH -> "unverified";
+      case UNCONFIGURED -> "unconfigured";
+      case LEGACY -> "legacy";
+    };
   }
 
   public RunLlmConnection accept(AgentRunContext owner) {

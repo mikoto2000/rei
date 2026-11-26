@@ -13,7 +13,13 @@ import picocli.CommandLine.Command;
 public class ModelsCommand implements Runnable {
 
   @org.springframework.beans.factory.annotation.Autowired(required = false)
-  public void setChatConnections(dev.mikoto2000.rei.modeloptions.ChatModelSelection connections) {}
+  public void setChatConnections(dev.mikoto2000.rei.modeloptions.ChatModelSelection connections) {
+    java.util.Objects.requireNonNull(connections);
+    modelCatalog = connections::models;
+  }
+
+  private java.util.function.Supplier<dev.mikoto2000.rei.modeloptions.ChatModelSelection.Models>
+      modelCatalog;
 
   /** モデル一覧サービス。 */
   private final OpenAiCompatibleModelsService modelsService;
@@ -24,9 +30,11 @@ public class ModelsCommand implements Runnable {
   /** OpenAI 互換 API で利用可能なモデル一覧を表示しますを行う。 */
   @Override
   public void run() {
-    String currentModel = modelHolderService.get();
-
-    for (String model : modelsService.listModels()) {
+    var snapshot = modelCatalog == null ? null : modelCatalog.get();
+    String currentModel =
+        snapshot == null ? modelHolderService.get() : snapshot.selection().model();
+    var models = snapshot == null ? modelsService.listModels() : snapshot.models();
+    for (String model : models) {
       if (model.equals(currentModel)) {
         IO.println("* " + model);
       } else {

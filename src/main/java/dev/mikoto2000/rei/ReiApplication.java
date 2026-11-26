@@ -339,13 +339,8 @@ public class ReiApplication {
     if (llm != null
         && llm.getCommand() instanceof dev.mikoto2000.rei.llm.capture.LlmCaptureCommand capture) {
       if (isInteractiveTerminal(terminal))
-        capture.setEndpointMenu(entries ->
-            dev.mikoto2000.rei.core.completion.MeetingSelectionMenu.chooseOne(
-                reader,
-                entries.stream().map(entry -> entry.profile().id()).toList(),
-                entries.stream()
-                    .map(dev.mikoto2000.rei.llm.capture.LlmCaptureCommand::endpointLabel)
-                    .toList()));
+        capture.setEndpointMenu((ids, labels) ->
+            dev.mikoto2000.rei.core.completion.MeetingSelectionMenu.chooseOne(reader, ids, labels));
       capture.setConfirmation(prompt -> {
         try {
           var answer = reader.readLine(prompt);

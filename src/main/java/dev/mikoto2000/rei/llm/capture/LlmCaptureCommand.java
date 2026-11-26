@@ -38,10 +38,9 @@ public final class LlmCaptureCommand implements Runnable {
       name -> {
         throw new IllegalStateException("Chat connections are unavailable");
       };
-  private java.util.function.Function<
-          java.util.List<dev.mikoto2000.rei.llm.ChatConnectionService.Endpoint>,
-          java.util.Optional<String>>
-      endpointMenu = entries -> java.util.Optional.empty();
+  private java.util.function.BiFunction<
+          java.util.List<String>, java.util.List<String>, java.util.Optional<String>>
+      endpointMenu = (ids, labels) -> java.util.Optional.empty();
 
   @org.springframework.beans.factory.annotation.Autowired(required = false)
   public void setChatConnections(dev.mikoto2000.rei.llm.ChatConnectionService connections) {
@@ -51,9 +50,8 @@ public final class LlmCaptureCommand implements Runnable {
   }
 
   public void setEndpointMenu(
-      java.util.function.Function<
-              java.util.List<dev.mikoto2000.rei.llm.ChatConnectionService.Endpoint>,
-              java.util.Optional<String>>
+      java.util.function.BiFunction<
+              java.util.List<String>, java.util.List<String>, java.util.Optional<String>>
           menu) {
     endpointMenu = Objects.requireNonNull(menu);
   }
@@ -304,7 +302,14 @@ public final class LlmCaptureCommand implements Runnable {
         output.println("unapplied: " + entry.unappliedSettings());
         entry.diagnostics().forEach(output::println);
       } else {
-        var choice = endpoint == null ? endpointMenu.apply(entries).orElse(null) : endpoint;
+        var choice =
+            endpoint == null
+                ? endpointMenu
+                    .apply(
+                        entries.stream().map(entry -> entry.profile().id()).toList(),
+                        entries.stream().map(LlmCaptureCommand::endpointLabel).toList())
+                    .orElse(null)
+                : endpoint;
         if (choice == null) {
           output.println("Selection cancelled. Noninteractive: /llm chat use <endpoint-name>");
           return 0;
