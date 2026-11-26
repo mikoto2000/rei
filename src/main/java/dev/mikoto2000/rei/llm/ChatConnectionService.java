@@ -78,6 +78,13 @@ public final class ChatConnectionService implements AutoCloseable {
     this.routed = new RunLlmConnectionModel(modelCache::model, factory::verifyBinding);
   }
 
+  /** Nonsecret current selection; observing it never dispatches inference. */
+  public record Selection(String endpoint, String model) {}
+
+  public Selection selection() {
+    return null;
+  }
+
   public RunLlmConnection accept(AgentRunContext owner) {
     return connections.accept(owner);
   }
