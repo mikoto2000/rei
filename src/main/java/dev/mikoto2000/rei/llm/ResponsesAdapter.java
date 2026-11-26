@@ -465,10 +465,11 @@ final class ResponsesAdapter implements LlmProtocolAdapter, ChatModel {
   @Override
   public ChatResponse call(Prompt prompt) {
     if (acceptedConnection != null && acceptedConnection.provider() == LlmProvider.CHATGPT_PLAN) {
+      var validated = stream(prompt);
       var result = new java.util.concurrent.atomic.AtomicReference<ChatResponse>();
       try {
         new org.springframework.ai.chat.model.MessageAggregator()
-            .aggregate(stream(prompt), result::set)
+            .aggregate(validated, result::set)
             .blockLast();
         if (result.get() == null)
           throw new ResponsesTransportException(

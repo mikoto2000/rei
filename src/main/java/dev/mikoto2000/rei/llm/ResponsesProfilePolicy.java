@@ -61,6 +61,12 @@ final class ResponsesProfilePolicy {
           "Responses capability is unsupported or unconfirmed: " + capability);
   }
 
+  private static void rejectUnsupported(Object value, String field) {
+    if (value != null)
+      throw new IllegalArgumentException(
+          "Responses setting is unsupported for this profile: " + field);
+  }
+
   static void requireRequest(RunLlmConnection connection, OpenAiResponsesChatOptions options) {
     var context = options.getToolContext();
     if (context == null
@@ -69,13 +75,14 @@ final class ResponsesProfilePolicy {
             context.get(dev.mikoto2000.rei.modeloptions.ModelOptions.RUN_CONNECTION_CONTEXT_KEY)))
       throw new IllegalArgumentException(
           "Responses request must retain the accepted Run connection");
-    if (connection.provider() == LlmProvider.CHATGPT_PLAN
-        && (options.getMaxOutputTokens() != null
-            || options.getTemperature() != null
-            || options.getTopP() != null
-            || options.getMaxToolCalls() != null
-            || options.getTruncation() != null))
-      throw new IllegalArgumentException("ChatGPT Responses request contains an unsupported field");
+    if (connection.provider() == LlmProvider.CHATGPT_PLAN) {
+      rejectUnsupported(options.getMaxOutputTokens(), "max_output_tokens");
+      rejectUnsupported(options.getTemperature(), "temperature");
+      rejectUnsupported(options.getTopP(), "top_p");
+      rejectUnsupported(options.getMaxToolCalls(), "max_tool_calls");
+      rejectUnsupported(options.getTruncation(), "truncation");
+      rejectUnsupported(options.getMetadata(), "metadata");
+    }
     if (options.getMaxOutputTokens() != null)
       requireCapability(connection, LlmEndpointCapabilities.Capability.MAX_OUTPUT_TOKENS);
     var include = options.getInclude();
@@ -84,12 +91,11 @@ final class ResponsesProfilePolicy {
         && (connection.endpoint().capabilities().reasoningReplay() != ReasoningReplayMode.ENCRYPTED
             || !include.equals(List.of("reasoning.encrypted_content"))))
       throw new IllegalArgumentException("Responses include is incompatible with the replay mode");
-    if (options.getServiceTier() != null
-        || options.getPromptCacheKey() != null
-        || options.getSafetyIdentifier() != null
-        || options.getMetadata() != null && !options.getMetadata().isEmpty())
-      throw new IllegalArgumentException(
-          "Responses platform setting requires a supported profile contract");
+    rejectUnsupported(options.getServiceTier(), "service_tier");
+    rejectUnsupported(options.getPromptCacheKey(), "prompt_cache_key");
+    rejectUnsupported(options.getSafetyIdentifier(), "safety_identifier");
+    if (options.getMetadata() != null && !options.getMetadata().isEmpty())
+      rejectUnsupported(options.getMetadata(), "metadata");
     var tools = options.getToolCallbacks();
     if (tools != null && !tools.isEmpty()) {
       if (connection.provider() == LlmProvider.CHATGPT_PLAN)
