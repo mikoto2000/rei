@@ -284,4 +284,39 @@ class InferenceApprovalStoreTest {
         .isInstanceOf(IllegalArgumentException.class)
         .hasMessageContaining("content");
   }
+
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(
+      strings = {"pending", "history", "connection", "input", "owner", "budget"})
+  void preInferenceDocumentCannotAlsoDescribeAToolWaitOrLoseItsRequiredBinding(String changed) {
+    var fixture = fixture();
+    var pending =
+        changed.equals("pending")
+            ? new dev.mikoto2000.rei.core.chat.RunContinuation.PendingTools(
+                "fixture",
+                List.of(
+                    new org.springframework.ai.chat.messages.AssistantMessage.ToolCall(
+                        "call_fixture", "function", "fixture", "{}")),
+                List.of())
+            : null;
+    var history =
+        changed.equals("history")
+            ? List.of(
+                new ApprovalContinuationStore.StoredMessage(
+                    "USER", "unbound fixture", List.of(), List.of()))
+            : List.<ApprovalContinuationStore.StoredMessage>of();
+    assertThatThrownBy(() ->
+            new ApprovalContinuationStore.Document(
+                changed.equals("owner") ? null : fixture.owner(),
+                "fixture user",
+                history,
+                pending,
+                changed.equals("budget") ? null : budget(),
+                false,
+                changed.equals("input") ? null : fixture.history(),
+                changed.equals("connection") ? null : fixture.connection(),
+                fixture.input()))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("inference");
+  }
 }
