@@ -5,7 +5,8 @@ package dev.mikoto2000.rei.chatgpt;
  *
  * <p>Diagnostics carry only app-defined codes, never remote bodies, URLs or exception causes.
  */
-public final class ChatGptException extends RuntimeException {
+public final class ChatGptException extends RuntimeException
+    implements dev.mikoto2000.rei.toolcontract.ExternalReadFailure {
   @java.io.Serial private static final long serialVersionUID = -190890705976300918L;
 
   /** ChatGPTとの連携におけるコードの選択肢。 */
@@ -249,6 +250,18 @@ public final class ChatGptException extends RuntimeException {
   /** ChatGPTとの連携で用いるコードを返す。 */
   public Code code() {
     return code;
+  }
+
+  /** 共通の診断経路でもアカウント失敗の種類を保持する。 */
+  @Override
+  public String diagnosticCode() {
+    return "chatgpt_" + code.name().toLowerCase(java.util.Locale.ROOT);
+  }
+
+  /** リモートの本文や認証情報を含まない既存の案内を返す。 */
+  @Override
+  public String diagnosticMessage() {
+    return getMessage();
   }
 
   /** ChatGPTとの連携で受け渡す情報を、指定された内容から作成する。 */
