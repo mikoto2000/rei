@@ -1,71 +1,56 @@
-# 共通チャット接続基盤 Phase 6 実装記録
+# 共通チャット接続 Phase 6 実装・検証報告
 
-Phase 6 は進行中。外部送信同意の実装と統合検証が完了するまで、通常チャットの ChatGPT Plan transport capability は未確認のままとする。以下の fixture は実サービスとの互換性確認ではない。
+## 実装
 
-## 既存基盤の再利用
+OpenAI API、ChatGPT Plan、ローカル LLM の名前付き接続に、共通の保護入力と推論送信承認を適用する。Rei が既存の通常ループ、動的ツール検索、ツール権限、保存、続行キューを所有する。通常チャットを app-server のエージェントへ委譲しない。
 
-- Spring AI / 同梱 SDK の型付き namespace API を使い、公開されたローカル関数だけを `rei` に格納する。完成した HTTP JSON の interceptor 書き換えは行わない。
-- namespace の検証とネイティブ呼び出しの照合は要求ごとに閉じる。呼び出し・結果の再送は既存のモデルメッセージ保存形式と所有者・接続先の照合を使う。
-- 通常チャットの `StagnationChatModel` と既存ツール権限ガードを維持する。3 モードの正常応答・未完了応答、およびローカル callback 前の要求枠解放は SDK-intercept fixture で検証した。
-- 推論送信同意はツール権限と別に扱う。送信内容の固定には既存 `ModelMessageCodec` を使い、ツール定義・確認属性・配信ポリシーを保持する。承認待ちの保存・キュー・再開は既存処理への明示的な拡張として実装する。
+- ChatGPT Plan は公式 SDK 4.101 の型付き namespace `rei` に既存 function 定義を格納する。要求ごとに公開名を固定し、call/result の namespace・名前・ID・引数・所有者・接続を照合する。名前の prefix 除去や別名解決は行わない。
+- native function call の未確認フィールド、別 namespace、未公開ツール、不正 ID、不完全な引数を拒否する。部分応答を実行・確定保存しない。Plan の個別関数指定 `tool_choice` は契約未確認のため送信前に拒否し、`auto` / `none` / `required` を保持する。
+- 既存 ToolDiscovery のローカル `searchTools` と要求ごとの公開スナップショットを使う。Plan と無認証ローカル Responses で、検索後の要求から専門ツールを公開し、実行結果を含む継続推論を検証した。ローカルへ Plan namespace を送らず、資格情報を取得せず、認証ヘッダーも送らない。
+- CONVERSATION はツールを送信しない。READ_ONLY / EXCLUSIVE の既存 ToolPermissionGuard は維持する。親の Plan 要求枠はツールの実行前に解放する。
+- 名前付き Chat Completions / Responses の入力を同じ Run 所有者と受理済み接続へ結び付ける。旧フラット設定と静的 helper の経路は維持する。
+- Chat Completions の既知の SDK metadata は、型を確認した、サイズ・深さに上限がある JSON 文字列として既存 codec に渡す。保存形式で任意の SDK オブジェクトの直列化を許可しない。
 
-## 個別依存レビュー（内容固定処理）
+## 推論送信とツール実行の権限
 
-対象は次の 1 ペアに限定する。
+推論送信は、既存ポリシーの NETWORK_WRITE と EXTERNAL_SIDE_EFFECT を用いて判定する。管理者の拒否を承認済み grant より優先し、音声と明示 full-auto の既存規則を適用する。ツール名の再分類で推論送信権限を変えない。送信の許可は callback の実行許可を与えない。
 
-`dev.mikoto2000.rei.core.policy.InferenceExportRequest -> dev.mikoto2000.rei.core.contextbudget.DeliveryToolRegistration`
+承認が必要な場合は、送信前に既存の WAITING_APPROVAL へ移り、HTTP・要求枠・資格情報取得へ進まない。内容の固定には system、会話履歴、media、tool 定義、tool 結果を含める。Run 所有者・接続・モデル・アカウント登録世代・実際の内容 digest と目的 `inferenceExport` を既存 SQL 承認に結び付け、一度だけ消費する。
 
-推論送信の内容を固定する際、callback の定義だけをコピーすると `Registered` の配信種別・レビュー属性を失う。これらは既存のファイル読み取り・配信制御に必要であり、属性を失った wrapper を使って検査を通すことはしない。既存の `preservePolicy` を再利用し、callback の実行先と ToolContext をそのまま委譲する。`StableToolDefinitions` などにも同じ保存処理への依存が既にある。
+待機には架空の tool call を作らず、既存の保護メッセージ参照を使う。保存前と復元時に内容 digest を再計算する。承認受付前に本文を検証し、短い承認 transaction 内で文書が検証済みのものと完全一致することを再確認する。復元・キュー投入にも同じ目的と所有者の照合を適用する。既存ペイロード保存の transaction 規則は変更しない。
 
-この依存を回避するための独立したツール登録機構、reflection による marker の複製、権限属性の削除は導入しない。承認のための短命な入力固定処理から既存の配信属性保持への、直接かつ限定された型依存として扱う。作業の承認範囲は、依頼された Phase 6 の Function Calling・動的ツール選択・送信権限の分離であり、このペアを Phase 6 PR のレビュー対象として明示する。
+`/approval show` と project-scoped `GET /api/v1/projects/{projectId}/approvals/{id}/inference` で、実際の保護済み本文・parts・公開ツール定義・送信先・digest を確認できる。表示は権限を付与・消費せず、一覧には本文を展開しない。
 
-`docs/architecture/README.md` の個別レビュー手順に沿って、検査で報告されたこの 1 ペアのみを C-business に手入力する。C-business は 2912 → 2913。A / B / C-wiring / D / E、分類と検査ルールは変更しない。生成レポート全体のコピーや予算の自動拡大は行わない。通常検査を再実行し、この追加以外に差分がないことを確認する。
+承認待ち前の推論予約は Saved.inferencePending で区別する。実 ChatExecutionService の 3 モードで、未承認時 HTTP 0 回、選択変更後の明示承認でも元の接続に HTTP 1 回、予約推論回数 1 のままとなることを確認した。通常の tool 続行と Checkpoint の既存予算規則は維持する。ContextAssembler 有効・無効 × 両 API × 3 モードの送信前待機も確認した。
 
-## 現時点の制約
+## 能力と制約
 
-- Plan の個別関数名を強制する `tool_choice` は namespace と組み合わせた契約が未確認のため送信前に拒否する。`auto` / `none` / `required` は保持する。API キー・ローカル経路の既存の個別関数選択は変更しない。
-- 実アカウントでの推論、実ローカル LLM、実 app-server は利用していない。
-- Phase 6 全体の完了、全回帰・静的解析・クライアント検証、PR・マージ・マージ後 CI の成功はまだ主張しない。
+Plan の実装側で対応済みとする能力は、契約試験済みの RESPONSES / STREAMING / FUNCTION_CALLING / TOOL_NAMESPACE / REASONING_REPLAY の 5 つだけである。サーバー・モデルの独立した宣言と交差して利用可否を決める。未確認のサーバーやモデルを対応済みにはしない。
 
-## 個別依存レビュー（推論送信の所有者確認）
+Plan の固定公開送信先、OAuth、stream=true、store=false、encrypted replay と既存の禁止パラメーター・Hosted tool 制約を維持する。旧 ResponsesProductionPolicy の閉じた本番条件は変更しない。無認証ローカル Responses は Plan の登録・認証に依存しない。
 
-追加対象は `dev.mikoto2000.rei.core.policy.InferenceExportGuard -> dev.mikoto2000.rei.core.chat.AgentRunContext` の 1 ペアだけである。
+実アカウント、実ローカル LLM、実 app-server の推論は行っていない。SDK の DNS 前 interceptor と所有する loopback fixture による契約検証であり、実モデルとの互換性の確認ではない。承認・Checkpoint・再起動・障害復旧の拡張は Phase 7、API 間の会話引き継ぎと media / metadata の追加互換性検証は Phase 8、GUI は Phase 9、実サーバー互換性マトリクスは Phase 10 で続ける。
 
-承認判定は既存の `ToolApprovalRepository.request/consume` と、その API が受け取る実際の Run 所有者を再利用する。Project・root・Session・Run・mode・source・voice を承認に結び付け、単に同じ接続先を選んだ別の Run が承認を使えないようにする。既存の承認保存やツール権限ガードも `AgentRunContext` を受け取る。別の所有者台帳や推論用の独立した承認ストアを作らず、この型依存を必要な境界として扱う。依頼された Phase 6 の送信権限分離の範囲で、PR の個別レビュー対象に含める。
+## 検証記録
 
-最初の検査で報告された Mode・RequestSource・ResponseStyle の 3 型への依存は実装で解消した。mode/source は既存の中立な文字列取得メソッドを使用する。ResponseStyle は既存定義上、表示だけに関わり実行権限を変更しないため、権限の識別条件に使用しない。実際に送信するシステム指示や本文が変わる場合は内容ハッシュが変わる。
+| 対象 | 結果 |
+| --- | --- |
+| namespace の未確認フィールド | Red: 26 件中 5 assertion failure、0 error → Green: 関連 38 件成功 |
+| 実 ToolDiscovery と既存 replay | 212 件成功、既存 replay 169 件を含む |
+| Plan 能力、両 Responses、組み立て済み入力の待機 | 137 件成功 |
+| 静的解析修正後の関連検証 | 141 件すべて成功。不要な補助型への新規依存も実装で除去し、全 6 依存集合が既存予算と一致 |
+| 全回帰 | 9047 件中 9035 件成功、既定スキップ 12 件、失敗・エラー 0。1440 suite の全 XML が今回の実行で更新され、9047 testcase とスキップの全 ID・理由を既存許可リストへ照合済み。初回は静的解析修正のため中断し、成功扱いにしていない |
+| 静的解析 | 初回 SpotBugs 12 件を実装修正し、最新の補助型整理後も Checkstyle 0 / SpotBugs 0 / 解析エラー 0、Spotless 3300 ファイルで成功 |
+| 軽量 CLI | 全 205 件と配布物生成が成功。初回は変更のない DetachedBackendTest の作成直後 PID ファイルの空読み取りで 1 error、再検証で成功 |
+| PR / CI / マージ / 後片付け | 本報告はローカル検証時点。最新 head の必須 CI・レビュー・ルール確認後、通常マージ・実マージ SHA の push CI・専用 worktree の通常削除まで追跡する |
 
-最新の通常コンパイルと full プロファイルの検査で、追加が所有者型への 1 辺だけ、解消済み辺は 0、他の予算の変更は 0 と確認した。この 1 ペアのみを手入力し C-business を 2913 → 2914 とする。Phase 6 のここまでの追加は、内容固定の配信属性保持と、この所有者確認の計 2 ペアである。列挙型への不要な依存、分類・検査ルール・抑制の追加は受け入れない。
+静的解析の抑制、分類・ルール変更、スキップ追加、検査対象の縮小は行っていない。共有サービスは既存と同様に操作を関数へ委譲し、null 確認は一度取得した値に対して行う。
 
+## 個別依存レビュー
 
-## 共通入力と承認内容の整合性（統合は継続中）
+`docs/architecture/README.md` の個別レビュー手順に従い、次の 2 ペアだけを C-business に手入力する。
 
-名前付き Chat Completions と Responses の両方で、同一の Run 所有者と受理済み接続の fingerprint に保護入力を結び付ける。フラットな旧 Chat Completions と静的 helper は既存経路を維持する。接続・モデル・イベントの関連 78 テストとアーキテクチャ検証を通過した。
+- `dev.mikoto2000.rei.core.policy.InferenceExportRequest -> dev.mikoto2000.rei.core.contextbudget.DeliveryToolRegistration`：定義と確認属性を固定する際も、既存 callback の配信権限属性を保持するために必要。別の callback 権限機構を作らない。
+- `dev.mikoto2000.rei.core.policy.InferenceExportGuard -> dev.mikoto2000.rei.core.chat.AgentRunContext`：既存 SQL 承認と同一の Project / root / Session / Run / mode / source / voice 所有者を使い、別 Run への承認流用を防ぐために必要。mode/source の不要な列挙型依存は追加しない。
 
-同梱 SDK の Chat Completions 応答は、終了理由の列挙型や注釈などをメッセージ metadata に含むため、そのままでは厳密な保存形式に書けなかった。この失敗を実際の `PinnedChatModels` と所有する loopback HTTP fixture で再現し、名前付き経路の SDK 境界で型を確認してポータブルな JSON snapshot に変換する。本文・parts・既知の metadata は保持し、任意の SDK オブジェクトの直列化は認めない。共通 codec が受け取る追加項目は文字列 `rei.llm.chat-native` のみである。blocking / streaming と通常チャット 3 モードの保存を含む関連 93 テストが成功した。この検証は実モデルの互換性・注釈や追加プロパティの全種類を確認したものではない。
-
-推論待ちには既存の保護メッセージ参照を使い、架空の assistant tool call や tool result を作らない。`InferenceExportRequest` は内容 digest に各メッセージ、公開ツールの名前・説明・JSON schema・returnDirect・確認属性を含める。保存前は Run が公開した参照から、復元時は承認待ちが保護した参照から本文を再構築し、内容 digest を再計算する。本文・定義・digest の差し替え、保存後の digest 不一致を拒否する関連 44 テストが成功した。
-
-承認の結び付き確認には既存 `tool_approvals` の scoped digest を使う。承認 ID・project・Session・Run・目的 `inferenceExport`・受理済み接続・内容が一致することを、権限の付与や消費を行わずに照合する。別ツールの承認 ID、別 Run、別接続、別内容を拒否する関連 45 テストが成功した。これらの変更ではアーキテクチャのペア追加はない。
-
-ここまでの内容保護・照合の成功は、通常実行への送信同意統合完了を意味しない。実際の本文の確認、明示的な承認待ち、通常実行の呼び出し直前の制御、再開時の予算と所有者の継続、動的ツール選択との統合を完了するまで、Plan の通常経路は閉じたままである。
-
-
-通常チャットへの送信前待機の接続では、`RunContinuation` の既存所有者・保存・キューを使う。推論同意のない名前付き入力は `StagnationChatModel` の実際の呼び出しより前で待機へ移し、呼び出し済みフラグ・利用量不明・要求枠・資格情報取得に進めない。両 API × 3 モードでモデル fixture が一度も呼ばれないこと、予算 snapshot を変えないこと、本文参照と受理済み接続を承認待ちに保存することを確認した。関連 74 テスト（従来のループ 13、アーキテクチャ 6 を含む）が成功した。
-
-待機を通知するための `ApprovalContinuationService -> RunWaitingException` 依存は追加せず、保存済み待機を Optional の空値で返し、既存の実行制御側が停止シグナルへ変換する。アーキテクチャの全 6 ペア集合は既存予算と一致し、ここまでの明示的な追加は前述の 2 ペアだけである。承認後の実送信・再開時の予約予算・ContextAssembler 有効経路と各種 fixture の承認設定は別途統合検証を完了する必要がある。
-
-
-## 承認する本文の確認と続行受付
-
-既存 `/approval show` と project-scoped `GET /api/v1/projects/{projectId}/approvals/{id}/inference` で、保護済みの system/user/history・parts・公開ツール定義と送信先を確認できる。表示は権限を付与・消費せず、一覧には本文を展開しない。内容と承認の目的・所有者・接続の照合が済んだデータだけを返す。保存用 JSON mapper のノード型を Web API に渡さず、通常の JSON データへ投影する。表示用の接続情報には中立な `AcceptedRunOptions` を使う。この範囲の関連 59 テストと全 6 アーキテクチャ集合の一致を確認した。
-
-承認受付・復元・キュー投入時にも目的と内容を確認する。承認更新の短い SQL transaction に、独自の `BEGIN IMMEDIATE` を使う既存ペイロード読み取りを重ねない。本文は先に保護参照から検証し、権限を付与する transaction 内で文書が検証済みのものと完全一致することを再確認する。検証後にツール説明を変更する競合を注入し、承認が付与されず元の PENDING が維持されることを確認した。既存の保存ストア全体の transaction 規則は変更していない。目的・内容の変更を各境界で拒否するテスト、従来の再起動テストを含む関連 69 テストが成功し、アーキテクチャの追加・削除はなかった。
-
-## 送信ポリシーと実際の承認後継続
-
-推論送信は既存ポリシーの NETWORK_WRITE と EXTERNAL_SIDE_EFFECT を使って判定する。ツール名の再分類で送信権限を変えず、管理者の拒否を承認済み grant より優先する。AUTO_APPROVE、音声入力、明示的 full-auto の既存規則を適用し、ToolPermissionGuard は変更しない。関連 102 テストが成功した。通常ループの synthetic fixture には送信を明示的に許可する実ポリシーと保護ストアを設定し、以前の期待値を維持した関連 58 テストが成功した。実サービス向け設定は変更していない。
-
-実際の ChatExecutionService と SQL 承認保存を使い、3 モードで「未承認なら HTTP 0 回 → 接続選択変更 → 明示承認 → 元の接続で HTTP 1 回」を確認した。承認待ちに入る前に予約した推論回数を続行時に二重計上する不具合を Red で再現し、保護された inference 待機だけを表す Saved.inferencePending で修正した。通常の tool 続行と Checkpoint の予算規則を変えず、関連 69 テスト（従来の再開とアーキテクチャを含む）が成功した。
-
-未確認の native function call フィールドが黙って失われるケースは、completed と added イベントの双方を含む 6 ケースで検査した。26 テスト中 5 件の assertion failure、0 error を確認した。この記録時点では、型付き SDK 境界での拒否を追加した修正の回帰検証を実行中である。
+依頼された Phase 6 の送信権限分離と Function Calling の範囲で、両ペアを PR のレビュー対象に明示する。C-business は 2912 → 2914、C-wiring 799 / D 402 / E 1077 / A 0 / B 0 は維持する。生成レポート全体のコピーや予算の自動拡大は行わない。静的解析の修正時に検出された補助型から所有者への余分な依存は、予算を増やさず実装で除いた。
