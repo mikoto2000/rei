@@ -45,16 +45,19 @@ class PlanDynamicToolLoopTest {
     return java.util.Arrays.stream(AgentRunContext.Mode.values())
         .flatMap(mode ->
             mode == AgentRunContext.Mode.CONVERSATION
-                ? Stream.of(Arguments.of(mode, false))
-                : Stream.of(Arguments.of(mode, false), Arguments.of(mode, true)));
+                ? Stream.of(Arguments.of(mode, false, true), Arguments.of(mode, false, false))
+                : Stream.of(
+                    Arguments.of(mode, false, true),
+                    Arguments.of(mode, true, true),
+                    Arguments.of(mode, false, false)));
   }
 
   @ParameterizedTest
   @MethodSource("cases")
   void searchesLocallyAndPublishesOnlyForTheNextRequest(
-      AgentRunContext.Mode mode, boolean unpublished) throws Exception {
-    try (var fixture = new PlanResponsesRequestTest.Fixture()) {
-      var pin = PlanNamespaceRequestTest.pin(fixture);
+      AgentRunContext.Mode mode, boolean unpublished, boolean plan) throws Exception {
+    try (var fixture = new Fixture(plan)) {
+      var pin = fixture.pin;
       var owner =
           new AgentRunContext(
               "run", "session", directory, "project", AgentRunContext.RequestSource.SHELL, mode);
@@ -131,6 +134,7 @@ class PlanDynamicToolLoopTest {
           turn -> {
             if (mode == AgentRunContext.Mode.CONVERSATION || turn > 2) return done;
             return completedCall(
+                plan,
                 turn,
                 turn == 1 && !unpublished ? "searchTools" : SPECIALIST,
                 turn == 1 && !unpublished
@@ -162,17 +166,140 @@ class PlanDynamicToolLoopTest {
         assertThat(names(fixture.requests.get(1))).contains("searchTools", SPECIALIST);
         assertThat(names(fixture.requests.get(0))).doesNotContain(SPECIALIST);
         assertThat(fixture.requests.get(1).path("input").toString())
-            .contains("searchTools", "function_call_output", "\"namespace\":\"rei\"");
+            .contains("searchTools", "function_call_output");
         assertThat(fixture.requests.get(2).path("input").toString())
-            .contains(SPECIALIST, "SYNTHETIC_CALENDAR_RESULT", "\"namespace\":\"rei\"");
+            .contains(SPECIALIST, "SYNTHETIC_CALENDAR_RESULT");
+        if (plan) {
+          assertThat(fixture.requests.get(1).path("input").toString())
+              .contains("\"namespace\":\"rei\"");
+          assertThat(fixture.requests.get(2).path("input").toString())
+              .contains("\"namespace\":\"rei\"");
+        } else {
+          assertThat(fixture.requests.get(1).toString()).doesNotContain("\"namespace\"");
+          assertThat(fixture.requests.get(2).toString()).doesNotContain("\"namespace\"");
+        }
         assertThat(execution.progressSnapshot().protocolHistory()).isNotNull();
       }
       for (var request : fixture.requests) {
         for (var tool : request.path("tools")) {
-          assertThat(tool.path("type").asText()).isEqualTo("namespace");
-          assertThat(tool.path("name").asText()).isEqualTo("rei");
+          assertThat(tool.path("type").asText()).isEqualTo(plan ? "namespace" : "function");
+          if (plan) assertThat(tool.path("name").asText()).isEqualTo("rei");
         }
       }
+    }
+  }
+
+  /** Production clients intercepted before DNS; the no-auth route must never read credentials. */
+  private static final class Fixture implements AutoCloseable {
+    final RunLlmConnection pin;
+    final com.openai.client.OpenAIClient client;
+    final okhttp3.OkHttpClient transport =
+        new okhttp3.OkHttpClient.Builder()
+            .followRedirects(false)
+            .followSslRedirects(false)
+            .retryOnConnectionFailure(false)
+            .build();
+    final List<JsonNode> requests = new java.util.concurrent.CopyOnWriteArrayList<>();
+    java.util.function.IntFunction<String> replies;
+    final String reply =
+        PlanResponsesRequestTest.Fixture.event(
+            "response.completed",
+            "\"response\":"
+                + """
+                {"id":"resp_done","object":"response","created_at":0,"status":"completed",
+                 "model":"fixture-model","output":[{"type":"message","id":"msg_done",
+                 "role":"assistant","status":"completed","content":[{"type":"output_text",
+                 "text":"done","annotations":[]}]}],"usage":{"input_tokens":3,"output_tokens":2,"total_tokens":5}}
+                """);
+
+    Fixture(boolean plan) {
+      String base = plan ? "https://api.openai.com/v1" : "http://127.0.0.1:1/v1";
+      var support = LlmEndpointCapabilities.Support.SUPPORTED;
+      var unsupported = LlmEndpointCapabilities.Support.UNSUPPORTED;
+      pin =
+          new RunLlmConnection(
+              "fixture",
+              true,
+              plan ? LlmProvider.CHATGPT_PLAN : LlmProvider.OPENAI_COMPATIBLE,
+              plan ? LlmAuthentication.CHATGPT_OAUTH : LlmAuthentication.NONE,
+              plan ? "personal" : null,
+              plan ? "fixture-registration" : null,
+              new ResolvedLlmEndpoint(
+                  "fixture",
+                  1,
+                  LlmApiType.RESPONSES,
+                  base,
+                  "chat-endpoint:fixture",
+                  "fixture-model",
+                  new LlmCapabilities(
+                      plan ? ReasoningReplayMode.ENCRYPTED : ReasoningReplayMode.NONE,
+                      36,
+                      Set.of()),
+                  plan ? null : 64,
+                  null,
+                  Duration.ofSeconds(5)),
+              Map.of(
+                  LlmEndpointCapabilities.Capability.RESPONSES,
+                  support,
+                  LlmEndpointCapabilities.Capability.STREAMING,
+                  support,
+                  LlmEndpointCapabilities.Capability.FUNCTION_CALLING,
+                  support,
+                  LlmEndpointCapabilities.Capability.TOOL_NAMESPACE,
+                  plan ? support : unsupported,
+                  LlmEndpointCapabilities.Capability.REASONING_REPLAY,
+                  plan ? support : unsupported,
+                  LlmEndpointCapabilities.Capability.MAX_OUTPUT_TOKENS,
+                  plan ? unsupported : support),
+              plan ? Map.of() : Map.of("max_output_tokens", 64));
+      client =
+          PinnedOpenAiClients.open(
+              pin,
+              () -> {
+                if (!plan) throw new AssertionError("No-auth route accessed credentials");
+                return "fixture-plan-access";
+              },
+              transport,
+              List.of(chain -> {
+                assertThat(chain.request().url().toString()).isEqualTo(base + "/responses");
+                if (plan)
+                  assertThat(chain.request().header("Authorization"))
+                      .isEqualTo("Bearer fixture-plan-access");
+                else
+                  assertThat(chain.request().headers().names())
+                      .noneMatch(name ->
+                          Set.of("authorization", "api-key", "x-api-key", "cookie")
+                              .contains(name.toLowerCase(java.util.Locale.ROOT)));
+                var buffer = new okio.Buffer();
+                chain.request().body().writeTo(buffer);
+                requests.add(
+                    new com.fasterxml.jackson.databind.ObjectMapper()
+                        .readTree(buffer.readByteArray()));
+                return new okhttp3.Response.Builder()
+                    .request(chain.request())
+                    .protocol(okhttp3.Protocol.HTTP_1_1)
+                    .code(200)
+                    .message("fixture")
+                    .body(
+                        okhttp3.ResponseBody.create(
+                            replies.apply(requests.size()),
+                            okhttp3.MediaType.get("text/event-stream")))
+                    .build();
+              }),
+              () -> {});
+    }
+
+    OpenAiResponsesChatOptions options() {
+      return ((OpenAiResponsesChatOptions) RunNativeOptions.options(pin))
+          .mutate()
+          .toolContext(Map.of(ResponsesReasoningReplay.OWNER_CONTEXT_KEY, "fixture-owner"))
+          .build();
+    }
+
+    public void close() {
+      client.close();
+      transport.connectionPool().evictAll();
+      transport.dispatcher().executorService().shutdown();
     }
   }
 
@@ -180,15 +307,23 @@ class PlanDynamicToolLoopTest {
     var result = new java.util.ArrayList<String>();
     request
         .path("tools")
-        .forEach(namespace ->
-            namespace
-                .path("tools")
-                .forEach(function -> result.add(function.path("name").asText())));
+        .forEach(tool -> {
+          if (tool.path("type").asText().equals("function")) result.add(tool.path("name").asText());
+          else tool.path("tools").forEach(function -> result.add(function.path("name").asText()));
+        });
     return result;
   }
 
-  private static String completedCall(int turn, String name, String arguments) {
+  private static String completedCall(boolean plan, int turn, String name, String arguments) {
     try {
+      var call = new java.util.LinkedHashMap<String, Object>();
+      call.put("type", "function_call");
+      call.put("id", "fc_" + turn);
+      call.put("call_id", "call_" + turn);
+      call.put("name", name);
+      call.put("arguments", arguments);
+      call.put("status", "completed");
+      if (plan) call.put("namespace", "rei");
       return PlanResponsesRequestTest.Fixture.event(
           "response.completed",
           "\"response\":"
@@ -206,22 +341,7 @@ class PlanDynamicToolLoopTest {
                           "model",
                           "fixture-model",
                           "output",
-                          List.of(
-                              Map.of(
-                                  "type",
-                                  "function_call",
-                                  "id",
-                                  "fc_" + turn,
-                                  "call_id",
-                                  "call_" + turn,
-                                  "namespace",
-                                  "rei",
-                                  "name",
-                                  name,
-                                  "arguments",
-                                  arguments,
-                                  "status",
-                                  "completed")),
+                          List.of(call),
                           "usage",
                           Map.of("input_tokens", 3, "output_tokens", 2, "total_tokens", 5))));
     } catch (java.io.IOException failure) {
