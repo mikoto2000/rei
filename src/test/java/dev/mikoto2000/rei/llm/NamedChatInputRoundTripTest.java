@@ -31,6 +31,43 @@ class NamedChatInputRoundTripTest {
 
   @ParameterizedTest
   @ValueSource(booleans = {false, true})
+  void nativeReasoningIsRetainedInStorageButNoneReplayStillAllowsTheNextRequest(boolean streaming)
+      throws Exception {
+    try (var fixture = new Fixture(streaming, true)) {
+      var first = new Prompt("fixture", fixture.options);
+      ChatResponse response;
+      if (streaming) {
+        var aggregate = new AtomicReference<ChatResponse>();
+        new MessageAggregator()
+            .aggregate(fixture.model.stream(first), aggregate::set)
+            .blockLast(Duration.ofSeconds(5));
+        response = aggregate.get();
+      } else response = fixture.model.call(first);
+      var codec = new ModelMessageCodec();
+      var stored = codec.encode(response.getResult().getOutput());
+      assertThat(new String(stored, java.nio.charset.StandardCharsets.UTF_8))
+          .contains("PRIVATE_NATIVE_REASONING");
+      var restored = codec.decode(stored);
+      assertThat(restored).isEqualTo(response.getResult().getOutput());
+      var next =
+          new Prompt(
+              java.util.List.of(
+                  new org.springframework.ai.chat.messages.UserMessage("fixture"),
+                  restored,
+                  new org.springframework.ai.chat.messages.UserMessage("next question")),
+              fixture.options);
+      if (streaming) fixture.model.stream(next).blockLast(Duration.ofSeconds(5));
+      else fixture.model.call(next);
+      assertThat(fixture.requests).hasValue(2);
+      assertThat(fixture.bodies.get(1).path("messages").toString())
+          .contains("done", "next question")
+          .doesNotContain("PRIVATE_NATIVE_REASONING", "reasoning_content", "reasoningContent");
+      assertThat(codec.encode(restored)).isEqualTo(stored);
+    }
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
   void nativeAssistantCanBecomeTheNextApprovedInputWithoutLosingItsParts(boolean streaming)
       throws Exception {
     try (var fixture = new Fixture(streaming)) {
@@ -98,19 +135,27 @@ class NamedChatInputRoundTripTest {
   private static final class Fixture implements AutoCloseable {
     final com.sun.net.httpserver.HttpServer server;
     final AtomicInteger requests = new AtomicInteger();
+    final java.util.List<com.fasterxml.jackson.databind.JsonNode> bodies =
+        new java.util.concurrent.CopyOnWriteArrayList<>();
     final RunLlmConnection pin;
     final OpenAiChatOptions options;
     final PinnedChatModels models;
     final org.springframework.ai.chat.model.ChatModel model;
 
     Fixture(boolean streaming) throws Exception {
+      this(streaming, false);
+    }
+
+    Fixture(boolean streaming, boolean reasoning) throws Exception {
       server =
           com.sun.net.httpserver.HttpServer.create(
               new java.net.InetSocketAddress("127.0.0.1", 0), 0);
       server.createContext(
           "/v1/chat/completions",
           exchange -> {
-            exchange.getRequestBody().readAllBytes();
+            bodies.add(
+                new com.fasterxml.jackson.databind.ObjectMapper()
+                    .readTree(exchange.getRequestBody().readAllBytes()));
             requests.incrementAndGet();
             String reply =
                 streaming
@@ -125,6 +170,11 @@ class NamedChatInputRoundTripTest {
                     : """
                     {"id":"fixture","object":"chat.completion","created":0,"model":"fixture-model","choices":[{"index":0,"message":{"role":"assistant","content":"done"},"finish_reason":"stop"}]}
                     """;
+            if (reasoning)
+              reply =
+                  reply.replace(
+                      "\"content\":\"done\"",
+                      "\"reasoning_content\":\"PRIVATE_NATIVE_REASONING\",\"content\":\"done\"");
             var bytes = reply.getBytes(java.nio.charset.StandardCharsets.UTF_8);
             exchange
                 .getResponseHeaders()
@@ -158,7 +208,14 @@ class NamedChatInputRoundTripTest {
                   Duration.ofSeconds(5)),
               Map.of(),
               Map.of());
-      options = (OpenAiChatOptions) RunNativeOptions.options(pin);
+      var nativeOptions = (OpenAiChatOptions) RunNativeOptions.options(pin);
+      options =
+          reasoning
+              ? nativeOptions
+                  .mutate()
+                  .toolContext(Map.of(ResponsesReasoningReplay.OWNER_CONTEXT_KEY, "fixture-owner"))
+                  .build()
+              : nativeOptions;
       models =
           new PinnedChatModels(
               connection -> {
