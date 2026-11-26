@@ -47,7 +47,7 @@ final class ChatStreamTimeoutInterceptor implements Interceptor {
       return chain.proceed(chain.request());
     }
     // Spring AI supplies a per-request timeout that overrides the client defaults.
-    // Clear the active call deadline after that override, retaining connect/write limits.
+    // Legacy callers clear the whole-call deadline; accepted named profiles retain it.
     if (!preserveRequestDeadline) {
       var timeout = chain.call().timeout();
       // OkHttp enters its AsyncTimeout before application interceptors run.

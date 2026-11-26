@@ -21,6 +21,7 @@ public final class ChatEndpointCatalog {
     features.forEach((feature, server) -> {
       if (server != null) {
         var field = PREFIX + feature;
+        requireNamedTransportControls(server, field);
         if (server.getAuthentication() != null)
           throw invalid(field + ".authentication", "is only supported for named chat profiles");
         if (provider(server, field) == LlmProvider.OPENAI_API) {
@@ -144,6 +145,19 @@ public final class ChatEndpointCatalog {
     });
     result.add(CHAT + ".active: auxiliary inference retains static feature/default configuration");
     return List.copyOf(result);
+  }
+
+  private static void requireNamedTransportControls(LlmProperties.Server server, String field) {
+    if (server.getRequestLimitBytes() != null)
+      throw invalid(field + ".request-limit-bytes", "requires a named chat endpoint");
+    if (server.getResponseLimitBytes() != null)
+      throw invalid(field + ".response-limit-bytes", "requires a named chat endpoint");
+    if (server.getConnectTimeout() != null)
+      throw invalid(field + ".connect-timeout", "requires a named chat endpoint");
+    if (server.getReadTimeout() != null)
+      throw invalid(field + ".read-timeout", "requires a named chat endpoint");
+    if (server.getRequestTimeout() != null)
+      throw invalid(field + ".request-timeout", "requires a named chat endpoint");
   }
 
   private static void validate(String field, LlmProperties.Server server) {
