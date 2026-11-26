@@ -187,7 +187,9 @@ final class ResponsesTransportException extends IllegalStateException
     for (Throwable cause = error; cause != null; cause = cause.getCause())
       if (cause instanceof java.util.concurrent.TimeoutException
           || cause instanceof java.net.SocketTimeoutException
-          || cause instanceof java.net.http.HttpTimeoutException)
+          || cause instanceof java.net.http.HttpTimeoutException
+          || cause instanceof java.io.InterruptedIOException
+              && "timeout".equals(cause.getMessage()))
         return new ResponsesTransportException(Category.TIMEOUT);
     if (error instanceof com.openai.errors.OpenAIIoException)
       return new ResponsesTransportException(Category.TRANSIENT);
