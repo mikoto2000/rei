@@ -249,6 +249,18 @@ public final class PlanOAuth {
     });
   }
 
+  /** Returns a local authorization incarnation without refreshing or exposing credentials. */
+  public String registration(String account) {
+    return store.locked(s -> {
+      var saved = s.load(account);
+      return saved != null
+              && saved.accessToken() != null
+              && saved.scopes().contains("chatgpt.tokens.use.direct")
+          ? saved.registrationId()
+          : null;
+    });
+  }
+
   /** ChatGPTとの連携で用いるアクセスを返す。 */
   public TokenSet access(String account) {
     return store.locked(s -> {

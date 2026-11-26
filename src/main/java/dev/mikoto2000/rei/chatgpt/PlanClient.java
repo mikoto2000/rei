@@ -98,10 +98,16 @@ public final class PlanClient implements PlanInference {
    *
    * @param clientId クライアントの識別子
    * @param subject 対象
+   * @param registrationId 登録識別子
    * @param expires 有効期限
    * @param models モデル一覧
    */
-  private record Catalog(String clientId, String subject, Instant expires, List<Model> models) {}
+  private record Catalog(
+      String clientId,
+      String subject,
+      String registrationId,
+      Instant expires,
+      List<Model> models) {}
 
   /** OAuth認証。 */
   private final PlanOAuth oauth;
@@ -138,6 +144,7 @@ public final class PlanClient implements PlanInference {
         && saved != null
         && saved.clientId().equals(tokens.clientId())
         && saved.subject().equals(tokens.subject())
+        && saved.registrationId().equals(tokens.registrationId())
         && clock.instant().isBefore(saved.expires())) return saved.models();
     try (var response =
         transport.send(
@@ -186,7 +193,11 @@ public final class PlanClient implements PlanInference {
       catalog.put(
           account,
           new Catalog(
-              tokens.clientId(), tokens.subject(), clock.instant().plusSeconds(60), result));
+              tokens.clientId(),
+              tokens.subject(),
+              tokens.registrationId(),
+              clock.instant().plusSeconds(60),
+              result));
       return result;
     } catch (ChatGptException e) {
       throw e;
@@ -228,13 +239,27 @@ public final class PlanClient implements PlanInference {
     var generation =
         generations.computeIfAbsent(account, a -> new java.util.concurrent.atomic.AtomicInteger());
     int initial = generation.get();
+    String registration = oauth.registration(account);
+    if (registration == null) throw ChatGptException.of(AUTH_REQUIRED);
     if (models(account, false).stream().noneMatch(m -> m.id().equals(model)))
       throw ChatGptException.of(MODEL_UNAVAILABLE);
     var tokens = oauth.access(account);
+    if (!registration.equals(tokens.registrationId())) throw ChatGptException.of(AUTH_REQUIRED);
     BooleanSupplier valid =
-        () -> generation.get() == initial && clock.instant().getEpochSecond() < tokens.expiresAt();
+        () ->
+            generation.get() == initial
+                && clock.instant().getEpochSecond() < tokens.expiresAt()
+                && registrationMatches(account, registration);
     if (!valid.getAsBoolean()) throw ChatGptException.of(AUTH_REQUIRED);
     return new Lease(tokens, valid);
+  }
+
+  private boolean registrationMatches(String account, String expected) {
+    try {
+      return expected.equals(oauth.registration(account));
+    } catch (ChatGptException unavailable) {
+      return false;
+    }
   }
 
   /** ChatGPTとの連携で用いる推定を返す。 */
