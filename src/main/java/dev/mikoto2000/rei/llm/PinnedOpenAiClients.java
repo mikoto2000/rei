@@ -8,6 +8,11 @@ import java.util.function.Supplier;
 final class PinnedOpenAiClients {
   private PinnedOpenAiClients() {}
 
+  static OpenAIClient openModels(RunLlmConnection connection, Supplier<String> credential,
+      okhttp3.OkHttpClient transport, List<okhttp3.Interceptor> interceptors, Runnable verify) {
+    return open(connection, credential, transport, interceptors, verify);
+  }
+
   static OpenAIClient open(
       RunLlmConnection connection,
       Supplier<String> credential,

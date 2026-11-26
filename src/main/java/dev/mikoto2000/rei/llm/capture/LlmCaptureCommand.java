@@ -232,8 +232,29 @@ public final class LlmCaptureCommand implements Runnable {
     }
 
     @Command(name = "use", description = "接続先を選択します（省略時は対話選択）")
-    public int use(@Parameters(arity = "0..1", paramLabel = "ENDPOINT") String endpoint) {
+    public int use(@Parameters(arity = "0..1", paramLabel = "ENDPOINT", completionCandidates = EndpointCandidates.class) String endpoint) {
       return parent.chatAction("use", endpoint);
+    }
+  }
+
+  @Component
+  public static final class EndpointCandidates implements dev.mikoto2000.rei.core.completion.CompletionMetadata {
+    private final Supplier<java.util.List<dev.mikoto2000.rei.llm.ChatConnectionService.Endpoint>> endpoints;
+
+    public EndpointCandidates() { this(null); }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public EndpointCandidates(dev.mikoto2000.rei.llm.ChatConnectionService connections) {
+      endpoints = connections == null ? java.util.List::of : connections::endpoints;
+    }
+
+    @Override public java.util.Set<String> types(dev.mikoto2000.rei.core.completion.CompletionContext context) {
+      return java.util.Set.of("choices");
+    }
+
+    @Override public java.util.List<dev.mikoto2000.rei.core.completion.CompletionCandidate> choices(
+        dev.mikoto2000.rei.core.completion.CompletionContext context) {
+      return java.util.List.of();
     }
   }
 
