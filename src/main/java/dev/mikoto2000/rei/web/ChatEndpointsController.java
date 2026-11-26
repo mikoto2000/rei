@@ -33,11 +33,15 @@ public final class ChatEndpointsController {
   }
 
   @GetMapping
-  public List<ChatConnectionService.Endpoint> list() { return endpoints.get(); }
+  public List<ChatConnectionService.Endpoint> list() {
+    return endpoints.get();
+  }
 
   @GetMapping("/current")
   public ChatConnectionService.Endpoint current() {
-    return list().stream().filter(ChatConnectionService.Endpoint::active).findFirst()
+    return list().stream()
+        .filter(ChatConnectionService.Endpoint::active)
+        .findFirst()
         .orElseThrow(() -> new IllegalStateException("Current chat endpoint is unavailable"));
   }
 

@@ -13,7 +13,11 @@ import org.springframework.beans.factory.ObjectProvider;
 
 /** Host-owned common connection selection, Run snapshots and inference resources. */
 @org.springframework.stereotype.Component
-public final class ChatConnectionService implements AutoCloseable, dev.mikoto2000.rei.modeloptions.ChatModelSelection {
+public final class ChatConnectionService
+    implements AutoCloseable, dev.mikoto2000.rei.modeloptions.ChatModelSelection {
+  public static final String SELECTION_SCOPE =
+      "Selection scope: process-wide; next Run only; resets on restart. Inference not verified.";
+
   private final ChatEndpointCatalog catalog;
   private final int defaultOutputTokens;
   private final java.util.function.BiFunction<
@@ -122,6 +126,11 @@ public final class ChatConnectionService implements AutoCloseable, dev.mikoto200
     public java.util.Map<String, Object> generationSettings() {
       return java.util.Collections.unmodifiableMap(
           new java.util.LinkedHashMap<>(generationSettings));
+    }
+
+    @com.fasterxml.jackson.annotation.JsonProperty("selectionScope")
+    public String selectionScope() {
+      return SELECTION_SCOPE;
     }
   }
 

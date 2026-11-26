@@ -53,10 +53,25 @@ class ChatEndpointCandidatesTest {
   }
 
   private ChatConnectionService.Endpoint endpoint() {
-    var profile = new ChatEndpointCatalog.Profile("local", "fixture-model", LlmProvider.OPENAI_COMPATIBLE,
-        LlmApiType.CHAT_COMPLETIONS, LlmAuthentication.NONE, null, 1, LlmUsagePath.LOCAL_LLM,
-        new LlmEndpointCapabilities(Map.of(), Map.of(), Map.of(), 10));
-    return new ChatConnectionService.Endpoint(profile, true, ReasoningReplayMode.NONE,
-        "not-required", null, Map.of(), Map.of(), List.of());
+    var profile =
+        new ChatEndpointCatalog.Profile(
+            "local",
+            "fixture-model",
+            LlmProvider.OPENAI_COMPATIBLE,
+            LlmApiType.CHAT_COMPLETIONS,
+            LlmAuthentication.NONE,
+            null,
+            1,
+            LlmUsagePath.LOCAL_LLM,
+            new LlmEndpointCapabilities(Map.of(), Map.of(), Map.of(), 10));
+    return new ChatConnectionService.Endpoint(
+        profile,
+        true,
+        ReasoningReplayMode.NONE,
+        "not-required",
+        null,
+        Map.of(),
+        Map.of(),
+        List.of());
   }
 }

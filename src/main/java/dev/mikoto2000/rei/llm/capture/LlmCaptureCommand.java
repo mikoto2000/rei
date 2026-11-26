@@ -232,34 +232,61 @@ public final class LlmCaptureCommand implements Runnable {
     }
 
     @Command(name = "use", description = "接続先を選択します（省略時は対話選択）")
-    public int use(@Parameters(arity = "0..1", paramLabel = "ENDPOINT", completionCandidates = EndpointCandidates.class) String endpoint) {
+    public int use(
+        @Parameters(
+                arity = "0..1",
+                paramLabel = "ENDPOINT",
+                completionCandidates = EndpointCandidates.class)
+            String endpoint) {
       return parent.chatAction("use", endpoint);
     }
   }
 
   @Component
-  public static final class EndpointCandidates implements dev.mikoto2000.rei.core.completion.CompletionMetadata {
-    private final Supplier<java.util.List<dev.mikoto2000.rei.llm.ChatConnectionService.Endpoint>> endpoints;
+  public static final class EndpointCandidates
+      implements dev.mikoto2000.rei.core.completion.CompletionMetadata {
+    private final Supplier<java.util.List<dev.mikoto2000.rei.llm.ChatConnectionService.Endpoint>>
+        endpoints;
 
-    public EndpointCandidates() { this(null); }
+    public EndpointCandidates() {
+      this(null);
+    }
 
     @org.springframework.beans.factory.annotation.Autowired
     public EndpointCandidates(dev.mikoto2000.rei.llm.ChatConnectionService connections) {
       endpoints = connections == null ? java.util.List::of : connections::endpoints;
     }
 
-    @Override public java.util.Set<String> types(dev.mikoto2000.rei.core.completion.CompletionContext context) {
+    @Override
+    public java.util.Set<String> types(
+        dev.mikoto2000.rei.core.completion.CompletionContext context) {
       return java.util.Set.of("choices");
     }
 
-    @Override public java.util.List<dev.mikoto2000.rei.core.completion.CompletionCandidate> choices(
+    @Override
+    public java.util.List<dev.mikoto2000.rei.core.completion.CompletionCandidate> choices(
         dev.mikoto2000.rei.core.completion.CompletionContext context) {
-      return java.util.List.of();
+      return endpoints.get().stream()
+          .map(entry ->
+              new dev.mikoto2000.rei.core.completion.CompletionCandidate(
+                  entry.profile().id(),
+                  entry.profile().id(),
+                  endpointLabel(entry),
+                  "chat-endpoint",
+                  true))
+          .toList();
+    }
+
+    @Override
+    public java.util.Iterator<String> iterator() {
+      return choices(null).stream()
+          .map(dev.mikoto2000.rei.core.completion.CompletionCandidate::value)
+          .iterator();
     }
   }
 
   private static final String SELECTION_SCOPE =
-      "Selection scope: process-wide; next Run only; resets on restart. Inference not verified.";
+      dev.mikoto2000.rei.llm.ChatConnectionService.SELECTION_SCOPE;
 
   private int chatAction(String action, String endpoint) {
     var output = out();

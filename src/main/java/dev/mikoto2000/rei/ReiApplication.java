@@ -337,7 +337,15 @@ public class ReiApplication {
       command.setReader(reader);
     var llm = cmd.getSubcommands().get("llm");
     if (llm != null
-        && llm.getCommand() instanceof dev.mikoto2000.rei.llm.capture.LlmCaptureCommand capture)
+        && llm.getCommand() instanceof dev.mikoto2000.rei.llm.capture.LlmCaptureCommand capture) {
+      if (isInteractiveTerminal(terminal))
+        capture.setEndpointMenu(entries ->
+            dev.mikoto2000.rei.core.completion.MeetingSelectionMenu.chooseOne(
+                reader,
+                entries.stream().map(entry -> entry.profile().id()).toList(),
+                entries.stream()
+                    .map(dev.mikoto2000.rei.llm.capture.LlmCaptureCommand::endpointLabel)
+                    .toList()));
       capture.setConfirmation(prompt -> {
         try {
           var answer = reader.readLine(prompt);
@@ -347,6 +355,7 @@ public class ReiApplication {
           return false;
         }
       });
+    }
     configureMultilineKeyBinding(reader);
     var eventOutput = new JLineShellEventOutput(reader);
     var approvalMenu =

@@ -14,8 +14,10 @@ class ModelCommandTest {
   void readsSelectedProfileModelInsteadOfStaticHelperModel() {
     var holder = new ModelHolderService("helper-default");
     var service = org.mockito.Mockito.mock(dev.mikoto2000.rei.llm.ChatConnectionService.class);
-    org.mockito.Mockito.when(service.selection()).thenReturn(
-        new dev.mikoto2000.rei.modeloptions.ChatModelSelection.Selection("local", "named-model"));
+    org.mockito.Mockito.when(service.selection())
+        .thenReturn(
+            new dev.mikoto2000.rei.modeloptions.ChatModelSelection.Selection(
+                "local", "named-model"));
     var output = new ByteArrayOutputStream();
     var original = System.out;
     System.setOut(new PrintStream(output));
@@ -24,7 +26,9 @@ class ModelCommandTest {
       command.setChatConnections(service);
       command.modelName = Optional.empty();
       command.run();
-    } finally { System.setOut(original); }
+    } finally {
+      System.setOut(original);
+    }
     assertEquals("named-model", output.toString().trim());
     assertEquals("helper-default", holder.get());
   }
@@ -33,8 +37,9 @@ class ModelCommandTest {
   void selectsThroughCommonConnectionServiceWithoutChangingHelperModel() {
     var holder = new ModelHolderService("helper-default");
     var service = org.mockito.Mockito.mock(dev.mikoto2000.rei.llm.ChatConnectionService.class);
-    org.mockito.Mockito.when(service.selection()).thenReturn(
-        new dev.mikoto2000.rei.modeloptions.ChatModelSelection.Selection("local", "chosen"));
+    org.mockito.Mockito.when(service.selection())
+        .thenReturn(
+            new dev.mikoto2000.rei.modeloptions.ChatModelSelection.Selection("local", "chosen"));
     var command = new ModelCommand(holder);
     command.setChatConnections(service);
     command.modelName = Optional.of("chosen");
@@ -42,7 +47,6 @@ class ModelCommandTest {
     assertEquals("helper-default", holder.get());
     org.mockito.Mockito.verify(service).selectModel("chosen");
   }
-
 
   /** 共通の実行基盤で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
