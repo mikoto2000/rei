@@ -18,12 +18,14 @@ class ChatEndpointsControllerTest {
     var entry = mock(ChatConnectionService.Endpoint.class);
     when(entry.active()).thenReturn(true);
     when(service.endpoints()).thenReturn(List.of(entry));
+    when(service.currentEndpoint()).thenAnswer(invocation -> service.endpoints().getFirst());
     var controller = new ChatEndpointsController(service);
-    assertThat(controller.list()).containsExactly(entry);
+    assertThat(controller.list()).isEqualTo(List.of(entry));
     assertThat(controller.current()).isSameAs(entry);
     assertThat(controller.select(new ChatEndpointsController.Selection("local"))).isSameAs(entry);
     verify(service).select("local");
     verify(service, org.mockito.Mockito.times(3)).endpoints();
+    verify(service, org.mockito.Mockito.times(2)).currentEndpoint();
     verifyNoMoreInteractions(service);
   }
 

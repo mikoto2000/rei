@@ -14,7 +14,9 @@ import org.springframework.beans.factory.ObjectProvider;
 /** Host-owned common connection selection, Run snapshots and inference resources. */
 @org.springframework.stereotype.Component
 public final class ChatConnectionService
-    implements AutoCloseable, dev.mikoto2000.rei.modeloptions.ChatModelSelection {
+    implements AutoCloseable,
+        dev.mikoto2000.rei.modeloptions.ChatModelSelection,
+        dev.mikoto2000.rei.modeloptions.ChatEndpointSelection<ChatConnectionService.Endpoint> {
   public static final String SELECTION_SCOPE =
       "Selection scope: process-wide; next Run only; resets on restart. Inference not verified.";
 
@@ -135,6 +137,14 @@ public final class ChatConnectionService
     public String selectionScope() {
       return SELECTION_SCOPE;
     }
+  }
+
+  @Override
+  public Endpoint currentEndpoint() {
+    return endpoints().stream()
+        .filter(Endpoint::active)
+        .findFirst()
+        .orElseThrow(() -> new IllegalStateException("Current chat endpoint is unavailable"));
   }
 
   public java.util.List<Endpoint> endpoints() {

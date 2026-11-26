@@ -1,6 +1,6 @@
 package dev.mikoto2000.rei.web;
 
-import dev.mikoto2000.rei.llm.ChatConnectionService;
+import dev.mikoto2000.rei.modeloptions.ChatEndpointSelection;
 import java.util.List;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
@@ -16,12 +16,14 @@ import org.springframework.web.bind.annotation.RestController;
 @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
 @RequestMapping("/api/v1/llm/chat")
 public final class ChatEndpointsController {
-  private final java.util.function.Supplier<List<ChatConnectionService.Endpoint>> endpoints;
+  private final java.util.function.Supplier<List<?>> endpoints;
+  private final java.util.function.Supplier<Object> currentEndpoint;
   private final java.util.function.Consumer<String> selectEndpoint;
 
-  public ChatEndpointsController(ChatConnectionService connections) {
+  public ChatEndpointsController(ChatEndpointSelection<?> connections) {
     java.util.Objects.requireNonNull(connections);
     endpoints = connections::endpoints;
+    currentEndpoint = connections::currentEndpoint;
     selectEndpoint = connections::select;
   }
 
@@ -33,20 +35,17 @@ public final class ChatEndpointsController {
   }
 
   @GetMapping
-  public List<ChatConnectionService.Endpoint> list() {
+  public List<?> list() {
     return endpoints.get();
   }
 
   @GetMapping("/current")
-  public ChatConnectionService.Endpoint current() {
-    return list().stream()
-        .filter(ChatConnectionService.Endpoint::active)
-        .findFirst()
-        .orElseThrow(() -> new IllegalStateException("Current chat endpoint is unavailable"));
+  public Object current() {
+    return currentEndpoint.get();
   }
 
   @PutMapping("/current")
-  public ChatConnectionService.Endpoint select(@RequestBody Selection selection) {
+  public Object select(@RequestBody Selection selection) {
     if (selection == null) throw new IllegalArgumentException("Endpoint selection required");
     selectEndpoint.accept(selection.endpoint());
     return current();

@@ -42,6 +42,7 @@ class ChatConnectionServiceTest {
       var owner = owner("first", mode);
       var pin = service.accept(owner);
       service.select("second");
+      assertThat(service.currentEndpoint().profile().id()).isEqualTo("second");
       assertThat(service.accept(owner)).isSameAs(pin);
       assertThat(service.options(owner).getModel()).isEqualTo("first-model");
       assertThat(service.options(owner).getToolContext())
