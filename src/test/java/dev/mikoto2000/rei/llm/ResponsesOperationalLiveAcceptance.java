@@ -430,6 +430,15 @@ public final class ResponsesOperationalLiveAcceptance implements AutoCloseable {
         public ChatClient parallelChatClient(AgentRunContext.Mode mode) {
           return ownedClient();
         }
+
+        @Override
+        public ChatClient runChatClient(
+            AgentRunContext.Mode mode, LlmApiType api, ChatModel routedModel) {
+          if (api != LlmApiType.RESPONSES)
+            throw new IllegalArgumentException("Owned acceptance requires Responses");
+          // This explicit fixed-client test composition owns its transport, callbacks and quota.
+          return ownedClient();
+        }
       };
     }
   }

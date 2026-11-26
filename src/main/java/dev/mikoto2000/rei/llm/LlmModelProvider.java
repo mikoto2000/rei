@@ -256,6 +256,20 @@ public class LlmModelProvider implements dev.mikoto2000.rei.secretary.SecretaryP
   }
 
   /** 用途に応じたモデル利用で用いる応答生成に使うモデルを返す。 */
+  ChatModel decorateRunChatModel(ChatModel model) {
+    return eventFactory == null || eventPublisher == null
+        ? model
+        : new AgentEventChatModel(
+            LlmFeature.CHAT,
+            model,
+            eventFactory,
+            eventPublisher,
+            timing,
+            runCancellation,
+            new ModelOutageGuard(java.time.Clock.systemUTC(), outageCooldown));
+  }
+
+  /** 用途に応じたモデル利用で用いる応答生成に使うモデルを返す。 */
   public ChatModel chatModel(String feature) {
     requireAvailableProtocol(feature);
     return cache.computeIfAbsent(feature, this::createFeatureModel);
@@ -487,7 +501,7 @@ public class LlmModelProvider implements dev.mikoto2000.rei.secretary.SecretaryP
     return bindRunOptions(requestOptions(feature, selected, streamUsage), owner);
   }
 
-  private org.springframework.ai.model.tool.ToolCallingChatOptions bindRunOptions(
+  org.springframework.ai.model.tool.ToolCallingChatOptions bindRunOptions(
       org.springframework.ai.model.tool.ToolCallingChatOptions options,
       dev.mikoto2000.rei.tooldelivery.ReadingRun owner) {
     if (!(options instanceof org.springframework.ai.openai.responses.OpenAiResponsesChatOptions))
@@ -513,7 +527,7 @@ public class LlmModelProvider implements dev.mikoto2000.rei.secretary.SecretaryP
     context.put(
         dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ORIGIN_CONTEXT_KEY,
         new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Origin(
-            exchange.ownerKey(), endpoint.fingerprint()));
+            exchange.ownerKey(), ResponsesReasoningReplay.identity(options, endpoint)));
     context.put(
         dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.EXCHANGE_CONTEXT_KEY, exchange);
     return options.mutate().toolContext(null).toolContext(context).build();

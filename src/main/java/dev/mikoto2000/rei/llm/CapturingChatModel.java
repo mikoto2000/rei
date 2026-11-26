@@ -37,6 +37,9 @@ final class CapturingChatModel implements ChatModel {
   /** 実行状況の計測値を記録する窓口。 */
   private final io.micrometer.core.instrument.MeterRegistry meters;
 
+  private final java.util.function.Function<okhttp3.Interceptor, com.openai.client.OpenAIClient>
+      scopedClients;
+
   /** 指定された値や利用先を使って、CapturingChatModelを初期化する。 */
   CapturingChatModel(
       OpenAiChatModel delegate,
@@ -44,11 +47,36 @@ final class CapturingChatModel implements ChatModel {
       List<OpenAiHttpClientBuilderCustomizer> customizers,
       io.micrometer.observation.ObservationRegistry observations,
       io.micrometer.core.instrument.MeterRegistry meters) {
+    this(delegate, store, customizers, observations, meters, null);
+  }
+
+  CapturingChatModel(
+      OpenAiChatModel delegate,
+      CaptureStore store,
+      List<OpenAiHttpClientBuilderCustomizer> customizers,
+      io.micrometer.observation.ObservationRegistry observations,
+      io.micrometer.core.instrument.MeterRegistry meters,
+      java.util.function.Function<okhttp3.Interceptor, com.openai.client.OpenAIClient>
+          scopedClients) {
     this.delegate = delegate;
     this.store = store;
     this.customizers = List.copyOf(customizers);
     this.observations = observations;
     this.meters = meters;
+    this.scopedClients = scopedClients;
+  }
+
+  CapturingChatModel(
+      OpenAiChatModel delegate,
+      CaptureStore store,
+      java.util.function.Function<okhttp3.Interceptor, com.openai.client.OpenAIClient> clients) {
+    this(
+        delegate,
+        store,
+        List.of(),
+        io.micrometer.observation.ObservationRegistry.NOOP,
+        null,
+        Objects.requireNonNull(clients));
   }
 
   /** 用途に応じたモデル利用で参照する選択可能な設定を返す。 */
@@ -68,8 +96,11 @@ final class CapturingChatModel implements ChatModel {
       owner = execution.runContext();
     if (owner == null
         && context.get(AgentRunContext.class.getName()) instanceof AgentRunContext run) owner = run;
-    // Store contains only Root Runs atomically admitted by the keyboard submission boundary.
-    return owner != null && owner.requestSource() == AgentRunContext.RequestSource.SHELL
+    // Store contains only Root Runs explicitly admitted by the local or remote CLI capture
+    // boundary.
+    return owner != null
+            && (owner.requestSource() == AgentRunContext.RequestSource.SHELL
+                || owner.requestSource() == AgentRunContext.RequestSource.WEB)
         ? store.logicalCall(owner.runId(), null)
         : null;
   }
@@ -97,23 +128,25 @@ final class CapturingChatModel implements ChatModel {
     var configured = new ArrayList<>(customizers);
     configured.add(builder -> builder.interceptor(new CaptureInterceptor(store, logical)));
     var client =
-        OpenAiSetup.setupSyncClient(
-            o.getBaseUrl(),
-            o.getApiKey(),
-            o.getCredential(),
-            o.getMicrosoftDeploymentName(),
-            o.getMicrosoftFoundryServiceVersion(),
-            o.getOrganizationId(),
-            o.isMicrosoftFoundry(),
-            o.isGitHubModels(),
-            o.getModel(),
-            Objects.requireNonNullElse(o.getTimeout(), AbstractOpenAiOptions.DEFAULT_TIMEOUT),
-            o.getMaxRetries(),
-            o.getProxy(),
-            o.getCustomHeaders(),
-            observations,
-            meters,
-            configured);
+        scopedClients != null
+            ? Objects.requireNonNull(scopedClients.apply(new CaptureInterceptor(store, logical)))
+            : OpenAiSetup.setupSyncClient(
+                o.getBaseUrl(),
+                o.getApiKey(),
+                o.getCredential(),
+                o.getMicrosoftDeploymentName(),
+                o.getMicrosoftFoundryServiceVersion(),
+                o.getOrganizationId(),
+                o.isMicrosoftFoundry(),
+                o.isGitHubModels(),
+                o.getModel(),
+                Objects.requireNonNullElse(o.getTimeout(), AbstractOpenAiOptions.DEFAULT_TIMEOUT),
+                o.getMaxRetries(),
+                o.getProxy(),
+                o.getCustomHeaders(),
+                observations,
+                meters,
+                configured);
     boolean handedOff = false;
     try {
       var builder =

@@ -115,6 +115,19 @@
 				</exclusion>
 			</exclusions>
 		</dependency>
+		<!-- Matches the openai-java-core version managed by Spring AI 2.1. -->
+		<dependency>
+			<groupId>com.openai</groupId>
+			<artifactId>openai-java-client-okhttp</artifactId>
+			<version>4.101.0</version>
+			<exclusions>
+				<!-- Retain Spring AI's Jackson 3 schema module, rather than SDK's Jackson 2 module. -->
+				<exclusion>
+					<groupId>com.github.victools</groupId>
+					<artifactId>jsonschema-module-jackson</artifactId>
+				</exclusion>
+			</exclusions>
+		</dependency>
 		<dependency>
 			<groupId>org.springframework.ai</groupId>
 			<artifactId>spring-ai-starter-mcp-client</artifactId>

@@ -458,6 +458,12 @@ business: dev.mikoto2000.rei.llm.BudgetedEmbeddingModel -> dev.mikoto2000.rei.co
 business: dev.mikoto2000.rei.llm.CapturingChatModel -> dev.mikoto2000.rei.core.chat.AgentRunContext
 business: dev.mikoto2000.rei.llm.CapturingChatModel -> dev.mikoto2000.rei.core.chat.AgentRunContext$RequestSource
 business: dev.mikoto2000.rei.llm.CapturingChatModel -> dev.mikoto2000.rei.core.stagnation.RunExecutionContext
+business: dev.mikoto2000.rei.llm.ChatConnectionService -> dev.mikoto2000.rei.core.chat.AgentRunContext
+business: dev.mikoto2000.rei.llm.ChatConnectionService -> dev.mikoto2000.rei.core.chat.AgentRunContext$Mode
+business: dev.mikoto2000.rei.llm.ChatConnectionService -> dev.mikoto2000.rei.core.service.ModelHolderService
+business: dev.mikoto2000.rei.llm.ChatConnectionService$ClientKey -> dev.mikoto2000.rei.core.chat.AgentRunContext$Mode
+business: dev.mikoto2000.rei.llm.ChatRunConnections -> dev.mikoto2000.rei.core.chat.AgentRunContext
+business: dev.mikoto2000.rei.llm.ChatRunConnections$Accepted -> dev.mikoto2000.rei.core.chat.AgentRunContext
 business: dev.mikoto2000.rei.llm.ConversationIds -> dev.mikoto2000.rei.core.chat.AgentRunContext
 business: dev.mikoto2000.rei.llm.ConversationIds -> dev.mikoto2000.rei.core.chat.AgentRunScope
 business: dev.mikoto2000.rei.llm.ConversationIds -> dev.mikoto2000.rei.core.execution.ActiveExecution
@@ -490,6 +496,7 @@ business: dev.mikoto2000.rei.llm.OutputLimitReplanner -> dev.mikoto2000.rei.core
 business: dev.mikoto2000.rei.llm.OutputLimitReplanner -> dev.mikoto2000.rei.core.chat.ToolLoopSupport
 business: dev.mikoto2000.rei.llm.OutputLimitReplanner -> dev.mikoto2000.rei.core.service.ModelHolderService
 business: dev.mikoto2000.rei.llm.RunAwareToolCallingAdvisor -> dev.mikoto2000.rei.core.stagnation.RunExecutionContext
+business: dev.mikoto2000.rei.llm.RunLlmConnectionModel -> dev.mikoto2000.rei.core.stagnation.RunExecutionContext
 business: dev.mikoto2000.rei.llm.StableToolDefinitions -> dev.mikoto2000.rei.core.contextbudget.DeliveryToolRegistration
 business: dev.mikoto2000.rei.llm.capture.LlmCaptureCommand -> dev.mikoto2000.rei.core.project.ProjectService
 business: dev.mikoto2000.rei.llm.capture.LlmCaptureCommand$ActionCandidates -> dev.mikoto2000.rei.core.completion.FirstArgumentCandidates
@@ -608,6 +615,7 @@ business: dev.mikoto2000.rei.slack.SlackAgentService -> dev.mikoto2000.rei.core.
 business: dev.mikoto2000.rei.slack.SlackAgentService -> dev.mikoto2000.rei.core.dependency.PersistentDependencyRepository
 business: dev.mikoto2000.rei.slack.SlackAgentService -> dev.mikoto2000.rei.core.dependency.PersistentDependencyRepository$Entry
 business: dev.mikoto2000.rei.slack.SlackAgentService -> dev.mikoto2000.rei.core.stagnation.RunExecutionContext
+business: dev.mikoto2000.rei.slack.SlackAgentService -> dev.mikoto2000.rei.core.stagnation.RunExecutionContext$ProgressState
 business: dev.mikoto2000.rei.slack.SlackAgentService$Managed -> dev.mikoto2000.rei.core.chat.ChatExecutionResult
 business: dev.mikoto2000.rei.slack.SlackAgentTools -> dev.mikoto2000.rei.core.chat.AgentRunContext
 business: dev.mikoto2000.rei.slack.SlackAgentTools -> dev.mikoto2000.rei.core.policy.ToolPermissionGuard

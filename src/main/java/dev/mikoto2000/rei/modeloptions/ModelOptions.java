@@ -8,6 +8,7 @@ import org.springframework.ai.openai.responses.OpenAiResponsesChatOptions;
 /** Native request option transformations; no execution, storage or connection resolution. */
 public final class ModelOptions {
   public static final String ENDPOINT_CONTEXT_KEY = "rei.llm.resolved-endpoint";
+  public static final String RUN_CONNECTION_CONTEXT_KEY = "rei.llm.run-connection";
   public static final String MAX_TOOLS_CONTEXT_KEY = "rei.llm.max-tools";
   public static final String PREPARATION_CONTEXT_KEY = "rei.modelOptions.preparation-fingerprint";
   public static final String SINGLE_REQUEST_CONTEXT_KEY = "rei.modelOptions.single-request";
@@ -35,6 +36,13 @@ public final class ModelOptions {
     java.util.function.Consumer<Object> add =
         value -> values.add(value == null ? null : value.toString());
     add.accept(options.getClass().getName());
+    var acceptedContext = options.getToolContext();
+    if (acceptedContext != null && acceptedContext.containsKey(RUN_CONNECTION_CONTEXT_KEY)) {
+      if (!(acceptedContext.get(RUN_CONNECTION_CONTEXT_KEY)
+          instanceof AcceptedRunOptions connection))
+        throw new IllegalArgumentException("Invalid accepted Run connection");
+      add.accept(connection.fingerprint());
+    }
     add.accept(options.getModel());
     add.accept(options.getTemperature());
     add.accept(options.getTopP());
@@ -110,6 +118,13 @@ public final class ModelOptions {
    * Opaque digest for approval invalidation; connection credentials must never leave this method.
    */
   public static String connectionFingerprint(ToolCallingChatOptions options) {
+    var acceptedContext = options.getToolContext();
+    if (acceptedContext != null && acceptedContext.containsKey(RUN_CONNECTION_CONTEXT_KEY)) {
+      if (!(acceptedContext.get(RUN_CONNECTION_CONTEXT_KEY)
+          instanceof AcceptedRunOptions connection))
+        throw new IllegalArgumentException("Invalid accepted Run connection");
+      return connection.fingerprint();
+    }
     String baseUrl, apiKey;
     if (options instanceof OpenAiResponsesChatOptions responses) {
       baseUrl = responses.getBaseUrl();
@@ -148,12 +163,16 @@ public final class ModelOptions {
 
   public static ToolCallingChatOptions singleRequest(
       ToolCallingChatOptions options, java.util.Map<String, Object> callerContext) {
+    var suppliedContext = options.getToolContext();
+    if (suppliedContext != null && suppliedContext.containsKey(RUN_CONNECTION_CONTEXT_KEY))
+      throw new IllegalArgumentException("Run connection cannot become a feature request");
     var clean = withoutTools(options);
     var context = new java.util.HashMap<String, Object>(callerContext);
     for (String key :
         List.of(
             "rei.llm.replay-owner",
             ENDPOINT_CONTEXT_KEY,
+            RUN_CONNECTION_CONTEXT_KEY,
             MAX_TOOLS_CONTEXT_KEY,
             PREPARATION_CONTEXT_KEY,
             SINGLE_REQUEST_CONTEXT_KEY,
@@ -183,6 +202,14 @@ public final class ModelOptions {
   /** Preserve the selected API's output-token parameter family. */
   public static ToolCallingChatOptions withOutputLimit(ToolCallingChatOptions options, int tokens) {
     if (tokens < 1) throw new IllegalArgumentException("Output limit must be positive");
+    var context = options.getToolContext();
+    if (context != null
+        && context.get(RUN_CONNECTION_CONTEXT_KEY) instanceof AcceptedRunOptions connection
+        && connection.named()) {
+      if (!connection.supportsOutputLimit()) return options;
+      var acceptedLimit = connection.maxOutputTokens();
+      if (acceptedLimit != null) tokens = Math.min(tokens, acceptedLimit);
+    }
     if (options instanceof OpenAiResponsesChatOptions responses) {
       var configured = responses.getMaxOutputTokens();
       var builder = responses.mutate();

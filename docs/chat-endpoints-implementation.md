@@ -10,7 +10,8 @@ ChatGPT 利用枠が利用可能になったという意味ではない。実ア
 2026-11-26: 全体方針を [共通 LLM 接続基盤](llm-connection-foundation-design.md)として整理した。
 OpenAI API、ChatGPT Plan、local の責務を同じプロファイルで表し、Provider、API、認証、
 Capability、Replay を分離する。以下の Phase 0 の記録は調査時点の状態を表す。
-Phase 1 は作業中であり、通常チャットへの接続先選択はまだ提供していない。
+Phase 1 の接続先カタログはマージ済み。Phase 2 では Run の接続固定と通常チャットへの統合を実装中。
+利用者向けの切り替えコマンドは Phase 3、名前付き Responses の本番利用条件は Phase 4 で扱う。
 
 コードを正本として、以下を照合した。
 
@@ -140,7 +141,7 @@ worktree 外の作業記録で最終照合する。
 
 ## Phase と公開の条件
 
-### Phase 1 の共通基盤（作業中）
+### Phase 1 の共通基盤（完了）
 
 `ChatEndpointCatalog` は名前付き接続先を起動時に検証・固定し、公開メタデータから
 URL / API key を分離する。`LlmProperties.Server` は既存 flat 設定と併存する。
@@ -174,7 +175,11 @@ Capability は Rei adapter の制約、`server-capabilities`、`model-capabiliti
 
 Phase 1 の関連回帰608件は failure / error / skip 0。Responses の再送169件と通信134件、
 アーキテクチャ検査、実際の Spring アプリ起動を含む。Spotless 3,198ファイルが clean、
-Checkstyle 違反0、SpotBugs 指摘0・解析エラー0。全回帰と最新 head の CI は別に確認する。
+Checkstyle 違反0、SpotBugs 指摘0・解析エラー0。
+全バックエンド回帰8,449件は8,437件成功、既存の予定済み skip 12件、failure / error 0。
+[PR #641](https://github.com/mikoto2000/rei/pull/641) の最新 head の8チェックを確認して通常 merge。
+merge SHA `ad0d810ae1d61fbd0bee0d3e0dea65e38d06dc80` の Java、静的解析、クライアント CI も成功し、
+専用 worktree とブランチの後片付けを完了した。
 
 認証方式が安全な表示値 `api-key` を持つようになったため、旧 JSON メタデータ試験の
 「文字列 api-key が一切ない」という検証は、秘密値の canary と JSON フィールド名
@@ -189,8 +194,9 @@ Run / Checkpoint 統合、認証なしの実 HTTP、Plan の namespace 往復は
 | Phase | 状態 | 完了に必要な証拠 |
 | --- | --- | --- |
 | 0 | [PR #640](https://github.com/mikoto2000/rei/pull/640) を通常 merge。merge SHA `7afd50192bca1b5b4cf3eeb77ab02e2accf55fe7` の CI 成功・後片付け済み | 追加要件の policy 分類は共通基盤設計に反映。local の実互換試験は未実施 |
-| 1 | 共通プロファイルの構成・検証を TDD で作業中 | 認証 / server / model 能力の分離、最新変更の回帰・品質ゲート、PR と CI / merge / 後片付け |
-| 2–3 | 未着手 | Run 固定、CLI と model 統合 |
+| 1 | [PR #641](https://github.com/mikoto2000/rei/pull/641) を通常 merge。merge SHA `ad0d810ae1d61fbd0bee0d3e0dea65e38d06dc80` の CI 成功・後片付け済み | 共通プロファイル、認証 / server / model 能力の分離、回帰・品質ゲートを検証済み |
+| 2 | Run 固定を TDD で作業中 | 受付・モデル / クライアントとの統合、保存・復元、回帰・品質ゲート、PR と CI / merge / 後片付け |
+| 3 | 未着手 | CLI と model 統合 |
 | 4–8 | 未着手 | 認証参照、namespace の完全な往復、権限分離、復旧、履歴・機能 |
 | 9 | 未着手 | 共通サービスを使った GUI とキーボード操作 |
 | 10 | 未着手 | 全回帰・解析・全 Phase のマージ実績と利用者向け手順 |
@@ -216,3 +222,59 @@ Run / Checkpoint 統合、認証なしの実 HTTP、Plan の namespace 往復は
 理由を表示し、他の課金先へ退避しないことを確認する。
 この確認は既存の単発経路に限る。通常チャットの namespace、ツール権限、動的切り替え、
 履歴継続の実サービス受入を代替しない。本作業では未実施。
+
+
+## Phase 2: Run の接続固定と共通モデル基盤（実装・検証中）
+
+通常チャットの EXCLUSIVE / READ_ONLY / CONVERSATION は同じ接続サービスを使う。
+受付時にプロファイル、モデル、API、認証種別、Capability、Replay、生成設定、
+タイムアウトと非秘密のアカウント属性を不変値として確保する。キーや OAuth token、
+SDK options は保存しない。資格情報は HTTP 送信時に同じ接続先への束縛を再確認して取得する。
+
+Web / MCP の新規受付では、重複要求を確認した後、永続受付が公開される前に固定する。
+重複要求は元の Run を返し、選択中の接続先を参照し直さない。キュー待ち中の変更も
+既存 Run に影響しない。承認、Checkpoint、Slack 待機には同じ固定情報を保存する。
+各推論の直前にも固定情報と消費済み予算を Checkpoint に保存する。
+接続固定の根拠がない旧継続データや、設定削除・接続先変更・所有者不一致は明示的に停止する。
+
+モデルキャッシュは固定値をキーに上限32件、通常チャットのクライアントは3モード×2 APIを
+上限として共有する。HTTP 接続プールを共有しつつ、資格情報、ヘッダー、受信先を分離する。
+None 認証はルート設定や環境変数のキーを参照せず、認証ヘッダーを送らない。
+SDK / HTTP の暗黙再送とリダイレクトを禁止する。localhost fixture で両 API の
+503 Retry-After: 0 が二重送信を起こすことを再現し、本文を変更せず再送不可にした。
+
+従来の flat Chat Completions と、閉じた本番利用条件を満たす flat Responses を維持する。
+名前付き Chat Completions を共通基盤に接続する一方、名前付き Responses と ChatGPT Plan は
+後続フェーズの条件検証・認証が完成するまで本番推論を有効にしない。制限の一括解除は行わない。
+補助機能は従来の機能別接続を使う。
+
+ここまでの HTTP 検証は所有する一時 localhost fixture、保存・再開の検証は一時 SQLite と
+モックを用いる。実サーバー、実アカウント、実 Slack での検証は実施していない。
+全回帰・静的解析・PR / CI / マージは、この節の追記時点では未完了。
+
+### Phase 2 の依存関係レビュー
+
+Run 接続の統合時、`ModelOptions` から LLM の具象型へ依存したことで、従来の補助機能まで
+新たな循環へ入ることを既存ゲートが検出した。この依存は `AcceptedRunOptions` という
+読み取り専用契約に置き換えた。受付も `runadmission.RunAdmission<C>` を介し、
+Web / MCP の受付層から会話実装のインターフェースへの追加依存を解消した。
+これらは新しい接続先解決や資格情報アクセスを持たない。
+
+その上で、依頼された Phase 2 の保存・再開と通常チャット統合に必要な型の依存を、
+[既存の個別レビュー手順](architecture/README.md#ciのゲートとベースライン)に従って確認した。
+アーキテクチャ検査の実装、初期作成・拡大モードの禁止、A / B / C-wiring / D の予算は変更しない。
+C-business の21組と、そこに含まれる E の8組だけを個別に列挙した。
+生成レポートを予算へコピーせず、以下の役割とコードを照合している。
+
+| Phase 2 で必要な連携 | C の組数 | 根拠 |
+| --- | ---: | --- |
+| 接続 DTO の利用・保存 | 8 | 通常チャット、承認保存、進捗、Slack 保存が同じ不変値を保持する |
+| 接続サービス、所有者、推論直前の保存 | 8 | 既存 Run 所有者を照合し、受付済み接続だけで推論する。従来の `/model` の互換性も維持する |
+| 既存進捗 DTO の読み取り | 3 | 受付・承認・Slack 待機で、選択状態ではなく保存された接続を取得する |
+| timing の引き継ぎ | 2 | プロトコル別の既定オプションを公開するモデルでも、既存の計測契約を維持する |
+
+21組すべての機能間の方向は、変更前の C-business 予算に既に存在することを確認した。
+新しい機能間の循環は導入していない。E の8組は接続サービスの Run / mode / 従来モデル、
+接続登録の所有者、推論直前の進捗保存、Slack 待機時の進捗取得に限定する。
+完全なクラス名の組は PR の `config/architecture` の差分で個別に確認できる。
+この範囲以外の新しい依存は、従来どおりゲートで拒否する。

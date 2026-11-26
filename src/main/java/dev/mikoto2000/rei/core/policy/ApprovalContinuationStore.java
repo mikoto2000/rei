@@ -106,9 +106,23 @@ public class ApprovalContinuationStore {
       boolean managedParent,
       @com.fasterxml.jackson.annotation.JsonInclude(
               com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
-          ModelMessagePayloadStore.History protocolHistory) {
+          ModelMessagePayloadStore.History protocolHistory,
+      @com.fasterxml.jackson.annotation.JsonInclude(
+              com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+          dev.mikoto2000.rei.llm.RunLlmConnection connection) {
     public Document {
       history = history == null ? null : Collections.unmodifiableList(new ArrayList<>(history));
+    }
+
+    public Document(
+        AgentRunContext owner,
+        String request,
+        List<StoredMessage> history,
+        RunContinuation.PendingTools pending,
+        OutputLimitRunBudget.Snapshot budget,
+        boolean managedParent,
+        ModelMessagePayloadStore.History protocolHistory) {
+      this(owner, request, history, pending, budget, managedParent, protocolHistory, null);
     }
 
     public Document(
@@ -169,7 +183,6 @@ public class ApprovalContinuationStore {
     save(id, owner, request, history, pending, budget, managed, null);
   }
 
-  /** 後から参照できるよう、指定された情報を保存する。 */
   public void save(
       String id,
       AgentRunContext owner,
@@ -179,6 +192,19 @@ public class ApprovalContinuationStore {
       OutputLimitRunBudget.Snapshot budget,
       boolean managed,
       ModelMessagePayloadStore.History protocolHistory) {
+    save(id, owner, request, history, pending, budget, managed, protocolHistory, null);
+  }
+
+  public void save(
+      String id,
+      AgentRunContext owner,
+      String request,
+      List<Message> history,
+      RunContinuation.PendingTools pending,
+      OutputLimitRunBudget.Snapshot budget,
+      boolean managed,
+      ModelMessagePayloadStore.History protocolHistory,
+      dev.mikoto2000.rei.llm.RunLlmConnection connection) {
     if (pending == null
         || pending.calls().isEmpty()
         || pending.completed().size() >= pending.calls().size())
@@ -288,7 +314,14 @@ public class ApprovalContinuationStore {
     String encoded =
         encode(
             new Document(
-                owner, request, messages, storedPending, budget, managed, protocolHistory));
+                owner,
+                request,
+                messages,
+                storedPending,
+                budget,
+                managed,
+                protocolHistory,
+                connection));
     if (encoded.getBytes(java.nio.charset.StandardCharsets.UTF_8).length > 1048576
         || messages.size() > 256
         || pending.calls().size() > 32)
@@ -491,7 +524,13 @@ public class ApprovalContinuationStore {
       references = nativeReferences.stream().distinct().toList();
     }
     return new RunContinuation.Saved(
-        d.request(), messages, d.budget(), pending, references, d.protocolHistory());
+        d.request(),
+        messages,
+        d.budget(),
+        pending,
+        references,
+        d.protocolHistory(),
+        d.connection());
   }
 
   private static boolean backendNative(Message message) {
@@ -636,7 +675,8 @@ public class ApprovalContinuationStore {
                     d.pending(),
                     d.budget(),
                     d.managedParent(),
-                    history));
+                    history,
+                    d.connection()));
         // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
         if (encoded.getBytes(java.nio.charset.StandardCharsets.UTF_8).length > 1048576
             || messages.size() > 256)

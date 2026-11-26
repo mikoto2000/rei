@@ -704,6 +704,7 @@ dev.mikoto2000.rei.core.chat.ChatExecutionService -> dev.mikoto2000.rei.core.sta
 dev.mikoto2000.rei.core.chat.ChatExecutionService -> dev.mikoto2000.rei.core.stagnation.ExecutionStoppedException$Reason
 dev.mikoto2000.rei.core.chat.ChatExecutionService -> dev.mikoto2000.rei.core.stagnation.ProgressEvaluator
 dev.mikoto2000.rei.core.chat.ChatExecutionService -> dev.mikoto2000.rei.core.stagnation.RunExecutionContext
+dev.mikoto2000.rei.core.chat.ChatExecutionService -> dev.mikoto2000.rei.core.stagnation.RunExecutionContext$ProgressState
 dev.mikoto2000.rei.core.chat.ChatExecutionService -> dev.mikoto2000.rei.core.working.WorkingSet
 dev.mikoto2000.rei.core.chat.ChatExecutionService -> dev.mikoto2000.rei.doctor.DoctorActiveService
 dev.mikoto2000.rei.core.chat.ChatExecutionService -> dev.mikoto2000.rei.doctor.DoctorRequest
@@ -714,6 +715,7 @@ dev.mikoto2000.rei.core.chat.ChatExecutionService -> dev.mikoto2000.rei.event.Er
 dev.mikoto2000.rei.core.chat.ChatExecutionService -> dev.mikoto2000.rei.event.InMemoryAgentEventBus
 dev.mikoto2000.rei.core.chat.ChatExecutionService -> dev.mikoto2000.rei.externalagent.BeginnerReviewRequest
 dev.mikoto2000.rei.core.chat.ChatExecutionService -> dev.mikoto2000.rei.externalagent.BeginnerReviewService
+dev.mikoto2000.rei.core.chat.ChatExecutionService -> dev.mikoto2000.rei.llm.ChatConnectionService
 dev.mikoto2000.rei.core.chat.ChatExecutionService -> dev.mikoto2000.rei.llm.ConversationIds
 dev.mikoto2000.rei.core.chat.ChatExecutionService -> dev.mikoto2000.rei.llm.FixedLlmChatClientProvider
 dev.mikoto2000.rei.core.chat.ChatExecutionService -> dev.mikoto2000.rei.llm.FixedLlmModelProvider
@@ -728,6 +730,7 @@ dev.mikoto2000.rei.core.chat.ChatExecutionService -> dev.mikoto2000.rei.llm.Outp
 dev.mikoto2000.rei.core.chat.ChatExecutionService -> dev.mikoto2000.rei.llm.OutputLimitReplanner
 dev.mikoto2000.rei.core.chat.ChatExecutionService -> dev.mikoto2000.rei.llm.OutputLimitRunBudget
 dev.mikoto2000.rei.core.chat.ChatExecutionService -> dev.mikoto2000.rei.llm.OutputLimitRunBudget$LlmCallReservation
+dev.mikoto2000.rei.core.chat.ChatExecutionService -> dev.mikoto2000.rei.llm.RunLlmConnection
 dev.mikoto2000.rei.core.chat.ChatExecutionService -> dev.mikoto2000.rei.llm.capture.CaptureStore
 dev.mikoto2000.rei.core.chat.ChatExecutionService -> dev.mikoto2000.rei.memory.service.AutoSleepService
 dev.mikoto2000.rei.core.chat.ChatExecutionService -> dev.mikoto2000.rei.memory.service.MemoryConsolidatorService
@@ -759,6 +762,7 @@ dev.mikoto2000.rei.core.chat.RunCancellation -> dev.mikoto2000.rei.core.stagnati
 dev.mikoto2000.rei.core.chat.RunContinuation -> dev.mikoto2000.rei.core.stagnation.RunExecutionContext
 dev.mikoto2000.rei.core.chat.RunContinuation -> dev.mikoto2000.rei.llm.OutputLimitRunBudget$LlmCallReservation
 dev.mikoto2000.rei.core.chat.RunContinuation$Saved -> dev.mikoto2000.rei.llm.OutputLimitRunBudget$Snapshot
+dev.mikoto2000.rei.core.chat.RunContinuation$Saved -> dev.mikoto2000.rei.llm.RunLlmConnection
 dev.mikoto2000.rei.core.chat.RunScopedAdvisor -> dev.mikoto2000.rei.core.service.CommandCancellationService
 dev.mikoto2000.rei.core.chat.RunScopedAdvisor -> dev.mikoto2000.rei.core.service.CommandCancellationService$ChildLease
 dev.mikoto2000.rei.core.chat.ToolLoopSupport -> dev.mikoto2000.rei.chatgpt.ChatGptException
@@ -1028,6 +1032,7 @@ dev.mikoto2000.rei.core.policy.ApprovalContinuationService -> dev.mikoto2000.rei
 dev.mikoto2000.rei.core.policy.ApprovalContinuationService -> dev.mikoto2000.rei.core.project.ProjectContext
 dev.mikoto2000.rei.core.policy.ApprovalContinuationService -> dev.mikoto2000.rei.core.project.ProjectRegistry
 dev.mikoto2000.rei.core.policy.ApprovalContinuationService -> dev.mikoto2000.rei.core.stagnation.RunExecutionContext
+dev.mikoto2000.rei.core.policy.ApprovalContinuationService -> dev.mikoto2000.rei.core.stagnation.RunExecutionContext$ProgressState
 dev.mikoto2000.rei.core.policy.ApprovalContinuationService -> dev.mikoto2000.rei.llm.OutputLimitRunBudget$LlmCallReservation
 dev.mikoto2000.rei.core.policy.ApprovalContinuationService -> dev.mikoto2000.rei.slack.SlackAgentService
 dev.mikoto2000.rei.core.policy.ApprovalContinuationService$Managed -> dev.mikoto2000.rei.core.chat.ChatExecutionResult
@@ -1036,9 +1041,11 @@ dev.mikoto2000.rei.core.policy.ApprovalContinuationStore -> dev.mikoto2000.rei.c
 dev.mikoto2000.rei.core.policy.ApprovalContinuationStore -> dev.mikoto2000.rei.core.chat.RunContinuation$PendingTools
 dev.mikoto2000.rei.core.policy.ApprovalContinuationStore -> dev.mikoto2000.rei.core.chat.RunContinuation$Saved
 dev.mikoto2000.rei.core.policy.ApprovalContinuationStore -> dev.mikoto2000.rei.llm.OutputLimitRunBudget$Snapshot
+dev.mikoto2000.rei.core.policy.ApprovalContinuationStore -> dev.mikoto2000.rei.llm.RunLlmConnection
 dev.mikoto2000.rei.core.policy.ApprovalContinuationStore$Document -> dev.mikoto2000.rei.core.chat.AgentRunContext
 dev.mikoto2000.rei.core.policy.ApprovalContinuationStore$Document -> dev.mikoto2000.rei.core.chat.RunContinuation$PendingTools
 dev.mikoto2000.rei.core.policy.ApprovalContinuationStore$Document -> dev.mikoto2000.rei.llm.OutputLimitRunBudget$Snapshot
+dev.mikoto2000.rei.core.policy.ApprovalContinuationStore$Document -> dev.mikoto2000.rei.llm.RunLlmConnection
 dev.mikoto2000.rei.core.policy.ToolApprovalRepository -> dev.mikoto2000.rei.core.chat.AgentRunContext
 dev.mikoto2000.rei.core.policy.ToolApprovalRepository -> dev.mikoto2000.rei.event.CredentialRedactor
 dev.mikoto2000.rei.core.policy.ToolApprovalRepository -> dev.mikoto2000.rei.timing.TimingRecorder
@@ -1138,6 +1145,7 @@ dev.mikoto2000.rei.core.stagnation.RunExecutionContext -> dev.mikoto2000.rei.llm
 dev.mikoto2000.rei.core.stagnation.RunExecutionContext -> dev.mikoto2000.rei.llm.OutputLimitRunBudget
 dev.mikoto2000.rei.core.stagnation.RunExecutionContext -> dev.mikoto2000.rei.llm.OutputLimitRunBudget$LlmCallReservation
 dev.mikoto2000.rei.core.stagnation.RunExecutionContext -> dev.mikoto2000.rei.llm.OutputLimitRunBudget$Snapshot
+dev.mikoto2000.rei.core.stagnation.RunExecutionContext -> dev.mikoto2000.rei.llm.RunLlmConnection
 dev.mikoto2000.rei.core.stagnation.RunExecutionContext -> dev.mikoto2000.rei.llm.discovery.ToolDiscovery$Session
 dev.mikoto2000.rei.core.stagnation.RunExecutionContext -> dev.mikoto2000.rei.websearch.WebSearchProperties
 dev.mikoto2000.rei.core.stagnation.RunExecutionContext$1 -> dev.mikoto2000.rei.llm.OutputLimitRunBudget
@@ -1145,6 +1153,7 @@ dev.mikoto2000.rei.core.stagnation.RunExecutionContext$1 -> dev.mikoto2000.rei.l
 dev.mikoto2000.rei.core.stagnation.RunExecutionContext$2 -> dev.mikoto2000.rei.llm.ModelCallBudget
 dev.mikoto2000.rei.core.stagnation.RunExecutionContext$2 -> dev.mikoto2000.rei.llm.OutputLimitRunBudget
 dev.mikoto2000.rei.core.stagnation.RunExecutionContext$ProgressState -> dev.mikoto2000.rei.llm.OutputLimitRunBudget$Snapshot
+dev.mikoto2000.rei.core.stagnation.RunExecutionContext$ProgressState -> dev.mikoto2000.rei.llm.RunLlmConnection
 dev.mikoto2000.rei.core.stagnation.StagnationChatModel -> dev.mikoto2000.rei.core.chat.AgentRunContext
 dev.mikoto2000.rei.core.stagnation.StagnationChatModel -> dev.mikoto2000.rei.core.chat.AgentRunScope
 dev.mikoto2000.rei.core.stagnation.StagnationChatModel -> dev.mikoto2000.rei.core.chat.RunContinuation$PendingTools
@@ -1704,6 +1713,12 @@ dev.mikoto2000.rei.llm.BudgetedEmbeddingModel -> dev.mikoto2000.rei.core.chat.Ru
 dev.mikoto2000.rei.llm.CapturingChatModel -> dev.mikoto2000.rei.core.chat.AgentRunContext
 dev.mikoto2000.rei.llm.CapturingChatModel -> dev.mikoto2000.rei.core.chat.AgentRunContext$RequestSource
 dev.mikoto2000.rei.llm.CapturingChatModel -> dev.mikoto2000.rei.core.stagnation.RunExecutionContext
+dev.mikoto2000.rei.llm.ChatConnectionService -> dev.mikoto2000.rei.core.chat.AgentRunContext
+dev.mikoto2000.rei.llm.ChatConnectionService -> dev.mikoto2000.rei.core.chat.AgentRunContext$Mode
+dev.mikoto2000.rei.llm.ChatConnectionService -> dev.mikoto2000.rei.core.service.ModelHolderService
+dev.mikoto2000.rei.llm.ChatConnectionService$ClientKey -> dev.mikoto2000.rei.core.chat.AgentRunContext$Mode
+dev.mikoto2000.rei.llm.ChatRunConnections -> dev.mikoto2000.rei.core.chat.AgentRunContext
+dev.mikoto2000.rei.llm.ChatRunConnections$Accepted -> dev.mikoto2000.rei.core.chat.AgentRunContext
 dev.mikoto2000.rei.llm.ConversationIds -> dev.mikoto2000.rei.core.chat.AgentRunContext
 dev.mikoto2000.rei.llm.ConversationIds -> dev.mikoto2000.rei.core.chat.AgentRunScope
 dev.mikoto2000.rei.llm.ConversationIds -> dev.mikoto2000.rei.core.execution.ActiveExecution
@@ -1765,6 +1780,8 @@ dev.mikoto2000.rei.llm.LlmChatClientProvider -> dev.mikoto2000.rei.urlfetch.UrlC
 dev.mikoto2000.rei.llm.LlmChatClientProvider -> dev.mikoto2000.rei.websearch.WebSearchTools
 dev.mikoto2000.rei.llm.LlmChatClientProvider -> dev.mikoto2000.rei.workcontext.WorkContextAdvisor
 dev.mikoto2000.rei.llm.LlmChatClientProvider -> dev.mikoto2000.rei.workcontext.WorkContextTools
+dev.mikoto2000.rei.llm.LlmChatClientProvider$ProtocolDefaultsChatModel -> dev.mikoto2000.rei.timing.TimingAwareModel
+dev.mikoto2000.rei.llm.LlmChatClientProvider$ProtocolDefaultsChatModel -> dev.mikoto2000.rei.timing.TimingExecution
 dev.mikoto2000.rei.llm.LlmModelProvider -> dev.mikoto2000.rei.core.chat.ToolLoopSupport
 dev.mikoto2000.rei.llm.LlmModelProvider -> dev.mikoto2000.rei.event.AgentEventFactory
 dev.mikoto2000.rei.llm.LlmModelProvider -> dev.mikoto2000.rei.event.AgentEventPublisher
@@ -1773,6 +1790,7 @@ dev.mikoto2000.rei.llm.OutputLimitReplanner -> dev.mikoto2000.rei.core.chat.RunC
 dev.mikoto2000.rei.llm.OutputLimitReplanner -> dev.mikoto2000.rei.core.chat.ToolLoopSupport
 dev.mikoto2000.rei.llm.OutputLimitReplanner -> dev.mikoto2000.rei.core.service.ModelHolderService
 dev.mikoto2000.rei.llm.RunAwareToolCallingAdvisor -> dev.mikoto2000.rei.core.stagnation.RunExecutionContext
+dev.mikoto2000.rei.llm.RunLlmConnectionModel -> dev.mikoto2000.rei.core.stagnation.RunExecutionContext
 dev.mikoto2000.rei.llm.ShowUiSdkRequestInterceptor -> dev.mikoto2000.rei.computeruse.ShowUiRequestInterceptor
 dev.mikoto2000.rei.llm.StableToolDefinitions -> dev.mikoto2000.rei.core.contextbudget.DeliveryToolRegistration
 dev.mikoto2000.rei.llm.capture.CaptureLifecycle -> dev.mikoto2000.rei.event.AgentEvent
@@ -2065,7 +2083,9 @@ dev.mikoto2000.rei.skills.command.SkillCommand -> dev.mikoto2000.rei.application
 dev.mikoto2000.rei.slack.SlackAgentContinuationStore -> dev.mikoto2000.rei.core.chat.AgentRunContext
 dev.mikoto2000.rei.slack.SlackAgentContinuationStore -> dev.mikoto2000.rei.core.chat.RunContinuation$Saved
 dev.mikoto2000.rei.slack.SlackAgentContinuationStore -> dev.mikoto2000.rei.llm.OutputLimitRunBudget$Snapshot
+dev.mikoto2000.rei.slack.SlackAgentContinuationStore -> dev.mikoto2000.rei.llm.RunLlmConnection
 dev.mikoto2000.rei.slack.SlackAgentContinuationStore$Document -> dev.mikoto2000.rei.llm.OutputLimitRunBudget$Snapshot
+dev.mikoto2000.rei.slack.SlackAgentContinuationStore$Document -> dev.mikoto2000.rei.llm.RunLlmConnection
 dev.mikoto2000.rei.slack.SlackAgentRepository -> dev.mikoto2000.rei.core.chat.AgentRunContext
 dev.mikoto2000.rei.slack.SlackAgentRepository -> dev.mikoto2000.rei.core.chat.AgentRunContext$Mode
 dev.mikoto2000.rei.slack.SlackAgentService -> dev.mikoto2000.rei.application.run.RunNotFoundException
@@ -2086,6 +2106,7 @@ dev.mikoto2000.rei.slack.SlackAgentService -> dev.mikoto2000.rei.core.dependency
 dev.mikoto2000.rei.slack.SlackAgentService -> dev.mikoto2000.rei.core.dependency.PersistentDependencyRepository
 dev.mikoto2000.rei.slack.SlackAgentService -> dev.mikoto2000.rei.core.dependency.PersistentDependencyRepository$Entry
 dev.mikoto2000.rei.slack.SlackAgentService -> dev.mikoto2000.rei.core.stagnation.RunExecutionContext
+dev.mikoto2000.rei.slack.SlackAgentService -> dev.mikoto2000.rei.core.stagnation.RunExecutionContext$ProgressState
 dev.mikoto2000.rei.slack.SlackAgentService -> dev.mikoto2000.rei.event.AgentEvent
 dev.mikoto2000.rei.slack.SlackAgentService -> dev.mikoto2000.rei.event.AgentEventType
 dev.mikoto2000.rei.slack.SlackAgentService -> dev.mikoto2000.rei.llm.OutputLimitRunBudget$LlmCallReservation

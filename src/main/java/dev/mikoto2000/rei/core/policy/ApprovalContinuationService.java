@@ -200,7 +200,8 @@ public class ApprovalContinuationService implements RunContinuation {
         pending,
         execution.budgetSnapshot(),
         managed.containsKey(owner.runId()) || execution.hasParentReservation(),
-        execution.protocolHistorySnapshot());
+        execution.protocolHistorySnapshot(),
+        execution.progressSnapshot().connection());
     previous.ifPresent(old -> {
       retireContinuationGrant.accept(owner.projectId(), old.approvalId());
       store.state(old.approvalId(), "COMPLETED");

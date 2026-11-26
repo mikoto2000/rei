@@ -123,10 +123,24 @@ public interface RunContinuation {
       PendingTools pendingTools,
       List<dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ReplayReference>
           replayReferences,
-      dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.History protocolHistory) {
+      dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.History protocolHistory,
+      @com.fasterxml.jackson.annotation.JsonInclude(
+              com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+          dev.mikoto2000.rei.llm.RunLlmConnection connection) {
     public Saved {
       messages = messages == null ? null : Collections.unmodifiableList(new ArrayList<>(messages));
       replayReferences = replayReferences == null ? null : List.copyOf(replayReferences);
+    }
+
+    public Saved(
+        String request,
+        List<Message> messages,
+        OutputLimitRunBudget.Snapshot budget,
+        PendingTools pendingTools,
+        List<dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ReplayReference>
+            replayReferences,
+        dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.History protocolHistory) {
+      this(request, messages, budget, pendingTools, replayReferences, protocolHistory, null);
     }
 
     public Saved(

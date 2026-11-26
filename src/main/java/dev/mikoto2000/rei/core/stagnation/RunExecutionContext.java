@@ -34,6 +34,7 @@ import java.util.UUID;
  */
 public class RunExecutionContext {
   private volatile org.springframework.ai.model.tool.ToolCallingChatOptions modelOptions;
+  private volatile dev.mikoto2000.rei.llm.RunLlmConnection acceptedConnection;
   private volatile List<dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ReplayReference>
       resumeReplayReferences = List.of();
   private volatile dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.History
@@ -44,8 +45,19 @@ public class RunExecutionContext {
       org.springframework.ai.model.tool.ToolCallingChatOptions options) {
     if (modelOptions != null || options == null)
       throw new IllegalStateException("Run model options cannot be replaced");
-    modelOptions = options.mutate().build();
-    var suppliedContext = modelOptions.getToolContext();
+    var prepared = options.mutate().build();
+    var suppliedContext = prepared.getToolContext();
+    var connection =
+        suppliedContext == null
+            ? null
+            : suppliedContext.get(
+                dev.mikoto2000.rei.modeloptions.ModelOptions.RUN_CONNECTION_CONTEXT_KEY);
+    if (connection != null && !(connection instanceof dev.mikoto2000.rei.llm.RunLlmConnection))
+      throw new IllegalArgumentException("Invalid accepted Run connection");
+    if (acceptedConnection != null && !acceptedConnection.equals(connection))
+      throw new IllegalStateException("Run connection does not match saved connection");
+    modelOptions = prepared;
+    acceptedConnection = (dev.mikoto2000.rei.llm.RunLlmConnection) connection;
     var boundary =
         suppliedContext == null
             ? null
@@ -452,7 +464,29 @@ public class RunExecutionContext {
       Continuity continuity,
       @com.fasterxml.jackson.annotation.JsonInclude(
               com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
-          dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.History protocolHistory) {
+          dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.History protocolHistory,
+      @com.fasterxml.jackson.annotation.JsonInclude(
+              com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+          dev.mikoto2000.rei.llm.RunLlmConnection connection) {
+    public ProgressState(
+        InformationLedger.State information,
+        OutputLimitRunBudget.Snapshot budget,
+        int acquisitionOnlyIterations,
+        int unknownIterations,
+        int unknownReplanNotices,
+        Continuity continuity,
+        dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.History protocolHistory) {
+      this(
+          information,
+          budget,
+          acquisitionOnlyIterations,
+          unknownIterations,
+          unknownReplanNotices,
+          continuity,
+          protocolHistory,
+          null);
+    }
+
     public ProgressState(
         InformationLedger.State information,
         OutputLimitRunBudget.Snapshot budget,
@@ -506,7 +540,8 @@ public class RunExecutionContext {
             unknownIterations,
             unknownReplanNotices,
             null,
-            protocolHistory);
+            protocolHistory,
+            connection);
       var d = c.detector();
       var batch = c.resumeBatch();
       return new ProgressState(
@@ -542,7 +577,8 @@ public class RunExecutionContext {
                       batch.reviewPageReadArguments(),
                       batch.reviewPageKeys(),
                       false)),
-          protocolHistory);
+          protocolHistory,
+          connection);
     }
 
     /**
@@ -861,13 +897,15 @@ public class RunExecutionContext {
                 resumeReviewPageReadArguments,
                 resumeReviewPageKeys,
                 reconciliationHandoffUsed)),
-        protocolHistory);
+        protocolHistory,
+        acceptedConnection);
   }
 
   /** 保存済みの状態を引き継ぐため、進捗を復元する。 */
   public synchronized void restoreProgress(
       ProgressState saved,
       List<dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ReplayReference> references) {
+    if (saved != null) restoreConnection(saved.connection());
     if (saved == null
         || saved.protocolHistory() == null
         || references == null
@@ -944,6 +982,7 @@ public class RunExecutionContext {
   }
 
   public synchronized void restoreProgress(ProgressState saved) {
+    if (saved != null) restoreConnection(saved.connection());
     finishResumeBatch();
     reviewPageReconciled = false;
     reconciliationHandoffUsed = false;
@@ -1321,6 +1360,7 @@ public class RunExecutionContext {
   /** 保存された状況を引き継いで、中断した作業を再開する。 */
   public synchronized void resume(dev.mikoto2000.rei.core.chat.RunContinuation.Saved saved) {
     if (saved != null) {
+      restoreConnection(saved.connection());
       budget.restore(saved.budget());
       evaluator.restoreInformation(null);
       resumeMessages = List.copyOf(saved.messages());
@@ -1330,6 +1370,14 @@ public class RunExecutionContext {
       resumeProtocolHistory = saved.protocolHistory();
       if (modelOptions != null) restoreReplayAuthority();
     }
+  }
+
+  private void restoreConnection(dev.mikoto2000.rei.llm.RunLlmConnection saved) {
+    if (saved == null) return;
+    if ((acceptedConnection != null && !acceptedConnection.equals(saved))
+        || (modelOptions != null && acceptedConnection == null))
+      throw new IllegalStateException("Saved Run connection does not match accepted connection");
+    acceptedConnection = saved;
   }
 
   /** 実行の停滞への対処で用いる取り出し待機中承認ツール一覧を返す。 */
@@ -1720,6 +1768,14 @@ public class RunExecutionContext {
   public synchronized void setToolResultsCheckpoint(
       java.util.function.Consumer<List<org.springframework.ai.chat.messages.Message>> observer) {
     toolResultsCheckpoint = observer;
+  }
+
+  /** Persist the current connection and reserved call budget before inference leaves the host. */
+  public synchronized void preserveInferenceProgress(
+      dev.mikoto2000.rei.llm.RunLlmConnection expected) {
+    if (!java.util.Objects.equals(acceptedConnection, expected))
+      throw new IllegalStateException("Inference connection differs from accepted execution");
+    toolResultsCheckpoint.accept(List.of());
   }
 
   /** 実行の停滞への対処に関するpreserveツールの結果一覧を処理する。 */

@@ -14,7 +14,23 @@ final class ResponsesReasoningReplay {
 
   private ResponsesReasoningReplay() {}
 
+  static String identity(
+      org.springframework.ai.chat.prompt.ChatOptions options, ResolvedLlmEndpoint endpoint) {
+    if (options instanceof org.springframework.ai.model.tool.ToolCallingChatOptions tools) {
+      var context = tools.getToolContext();
+      var key = dev.mikoto2000.rei.modeloptions.ModelOptions.RUN_CONNECTION_CONTEXT_KEY;
+      if (context != null && context.containsKey(key)) {
+        if (!(context.get(key) instanceof RunLlmConnection connection)
+            || !connection.endpoint().equals(endpoint))
+          throw new IllegalArgumentException("Responses accepted connection mismatch");
+        return connection.fingerprint();
+      }
+    }
+    return endpoint.fingerprint();
+  }
+
   static Prompt prepare(Prompt prompt, ResolvedLlmEndpoint endpoint) {
+    var identity = identity(prompt.getOptions(), endpoint);
     var context =
         prompt.getOptions()
                 instanceof org.springframework.ai.model.tool.ToolCallingChatOptions tools
@@ -25,7 +41,7 @@ final class ResponsesReasoningReplay {
             dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ORIGIN_CONTEXT_KEY)) {
       if (!(context.get(dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ORIGIN_CONTEXT_KEY)
               instanceof dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Origin origin)
-          || !origin.endpoint().equals(endpoint.fingerprint()))
+          || !origin.endpoint().equals(identity))
         throw new IllegalArgumentException("Responses replay endpoint mismatch");
     }
     String requestOwner =
@@ -52,9 +68,9 @@ final class ResponsesReasoningReplay {
                         instanceof
                         dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.HistoryReplayGrant
                             grant
-                    && grant.permits(assistant, requestOwner, endpoint.fingerprint()));
+                    && grant.permits(assistant, requestOwner, identity));
         if (!ownerPermitted) throw new IllegalArgumentException("Responses replay owner mismatch");
-        if (!originEndpoint.equals(endpoint.fingerprint()))
+        if (!originEndpoint.equals(identity))
           throw new IllegalArgumentException("Responses replay endpoint mismatch");
       }
       for (var part : assistant.getParts()) {
@@ -98,7 +114,7 @@ final class ResponsesReasoningReplay {
           throw new IllegalArgumentException("Responses reasoning replay origin is required");
         if (!ownerPermitted)
           throw new IllegalArgumentException("Responses reasoning replay owner mismatch");
-        if (!originEndpoint.equals(endpoint.fingerprint()))
+        if (!originEndpoint.equals(identity))
           throw new IllegalArgumentException("Responses reasoning replay endpoint mismatch");
       }
     }
@@ -158,6 +174,7 @@ final class ResponsesReasoningReplay {
       org.springframework.ai.chat.model.ChatResponse response,
       Prompt prompt,
       ResolvedLlmEndpoint endpoint) {
+    var identity = identity(prompt.getOptions(), endpoint);
     boolean protectedReplay = endpoint.capabilities().reasoningReplay() != ReasoningReplayMode.NONE;
     String requestOwner = protectedReplay ? owner(prompt) : optionalOwner(prompt);
     var usage = ResponsesTransportException.usage(response.getMetadata().getUsage());
@@ -168,7 +185,7 @@ final class ResponsesReasoningReplay {
               var metadata = new java.util.HashMap<String, Object>(output.getMetadata());
               if (requestOwner != null) {
                 metadata.put(ORIGIN_OWNER, requestOwner);
-                metadata.put(ORIGIN_ENDPOINT, endpoint.fingerprint());
+                metadata.put(ORIGIN_ENDPOINT, identity);
               }
               // Spring's MessageAggregator rebuilds Usage from three totals. Its message
               // metadata is retained, so carry only the normalized numeric details here.

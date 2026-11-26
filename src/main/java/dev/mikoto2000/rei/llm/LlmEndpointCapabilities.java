@@ -70,6 +70,15 @@ public record LlmEndpointCapabilities(
     return Map.copyOf(server);
   }
 
+  /** A declaration for one model cannot establish another model's capabilities. */
+  LlmEndpointCapabilities forUnconfirmedModel() {
+    var unconfirmed = new EnumMap<Capability, Support>(Capability.class);
+    unconfirmed.putAll(model);
+    for (var capability : modelSpecific()) unconfirmed.put(capability, Support.UNKNOWN);
+    unconfirmed.put(Capability.MAX_OUTPUT_TOKENS, Support.UNKNOWN);
+    return new LlmEndpointCapabilities(route, server, unconfirmed, maxTools);
+  }
+
   private static EnumMap<Capability, Support> filled(Support value) {
     var values = new EnumMap<Capability, Support>(Capability.class);
     for (var capability : Capability.values()) values.put(capability, value);
@@ -143,22 +152,8 @@ public record LlmEndpointCapabilities(
             Capability.HOSTED_WEB_SEARCH,
             Capability.HOSTED_MCP,
             Capability.HOSTED_TOOL_SEARCH)) transport.put(capability, Support.UNSUPPORTED);
-
     var declared = filled(Support.SUPPORTED);
-    for (var capability :
-        EnumSet.of(
-            Capability.FUNCTION_CALLING,
-            Capability.REASONING_REPLAY,
-            Capability.REASONING_EFFORT,
-            Capability.VISION,
-            Capability.FILE_INPUT,
-            Capability.STRUCTURED_OUTPUT,
-            Capability.TEMPERATURE,
-            Capability.TOP_P,
-            Capability.HOSTED_WEB_SEARCH,
-            Capability.REASONING_SUMMARY,
-            Capability.TEXT_VERBOSITY,
-            Capability.PARALLEL_TOOL_CALLS)) declared.put(capability, Support.UNKNOWN);
+    for (var capability : modelSpecific()) declared.put(capability, Support.UNKNOWN);
     if (server != null) {
       for (var setting : server.getSupportedSettings()) {
         var capability =
@@ -186,6 +181,22 @@ public record LlmEndpointCapabilities(
         declared,
         LlmCapabilities.resolveToolLimit(
             server, provider == LlmProvider.CHATGPT_PLAN ? null : defaultMaxTools));
+  }
+
+  private static EnumSet<Capability> modelSpecific() {
+    return EnumSet.of(
+        Capability.FUNCTION_CALLING,
+        Capability.REASONING_REPLAY,
+        Capability.REASONING_EFFORT,
+        Capability.VISION,
+        Capability.FILE_INPUT,
+        Capability.STRUCTURED_OUTPUT,
+        Capability.TEMPERATURE,
+        Capability.TOP_P,
+        Capability.HOSTED_WEB_SEARCH,
+        Capability.REASONING_SUMMARY,
+        Capability.TEXT_VERBOSITY,
+        Capability.PARALLEL_TOOL_CALLS);
   }
 
   private static void applyDeclarations(
