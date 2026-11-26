@@ -11,18 +11,19 @@ import reactor.core.publisher.Flux;
 final class PlanRequestChatModel implements ChatModel {
   private final ChatModel delegate;
   private final Supplier<ChatPlanAccounts.Request> admission;
+  private final java.util.function.Consumer<Throwable> observeFailure;
 
   PlanRequestChatModel(ChatModel delegate, Supplier<ChatPlanAccounts.Request> admission) {
-    this.delegate = java.util.Objects.requireNonNull(delegate);
-    this.admission = java.util.Objects.requireNonNull(admission);
+    this(delegate, admission, ignored -> {});
   }
 
   PlanRequestChatModel(
       ChatModel delegate,
       Supplier<ChatPlanAccounts.Request> admission,
       java.util.function.Consumer<Throwable> observeFailure) {
-    this(delegate, admission);
-    java.util.Objects.requireNonNull(observeFailure);
+    this.delegate = java.util.Objects.requireNonNull(delegate);
+    this.admission = java.util.Objects.requireNonNull(admission);
+    this.observeFailure = java.util.Objects.requireNonNull(observeFailure);
   }
 
   @Override
@@ -52,7 +53,8 @@ final class PlanRequestChatModel implements ChatModel {
                       invalidated.get() == null
                           ? Flux.empty()
                           : Flux.error(new Invalidated(invalidated.get()))))
-              .onErrorMap(ResponsesTransportException::nonRetryable);
+              .onErrorMap(ResponsesTransportException::nonRetryable)
+              .doOnError(observeFailure);
         },
         ChatPlanAccounts.Request::close,
         true);

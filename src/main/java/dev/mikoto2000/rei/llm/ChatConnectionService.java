@@ -104,7 +104,14 @@ public final class ChatConnectionService
                                     .begin(
                                         connection.accountRef(),
                                         connection.accountRegistration(),
-                                        connection.endpoint().model()))
+                                        connection.endpoint().model()),
+                            failure -> {
+                              if (failure instanceof ResponsesTransportException transport
+                                  && transport.confirmedAppUsageLimit())
+                                requirePlanAccounts()
+                                    .pauseRequests(
+                                        connection.accountRef(), connection.accountRegistration());
+                            })
                         : model));
     this.routed = new RunLlmConnectionModel(modelCache::model, factory::verifyBinding);
   }

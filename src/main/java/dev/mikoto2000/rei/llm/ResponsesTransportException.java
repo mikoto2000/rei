@@ -65,6 +65,7 @@ final class ResponsesTransportException extends IllegalStateException
   private final boolean retryAllowed;
   private final String safeCode;
   private final String safeMessage;
+  private final boolean confirmedAppUsageLimit;
 
   @Override
   public boolean retryAllowed() {
@@ -76,7 +77,7 @@ final class ResponsesTransportException extends IllegalStateException
   }
 
   boolean confirmedAppUsageLimit() {
-    return false;
+    return confirmedAppUsageLimit;
   }
 
   ResponsesTransportException(Category category) {
@@ -98,11 +99,22 @@ final class ResponsesTransportException extends IllegalStateException
       boolean retryAllowed,
       String safeCode,
       String safeMessage) {
+    this(category, usage, retryAllowed, safeCode, safeMessage, false);
+  }
+
+  private ResponsesTransportException(
+      Category category,
+      ModelTokenUsage usage,
+      boolean retryAllowed,
+      String safeCode,
+      String safeMessage,
+      boolean confirmedAppUsageLimit) {
     super("Responses transport failed: " + category);
     this.category = category;
     this.usage = usage;
     this.safeCode = safeCode;
     this.safeMessage = safeMessage;
+    this.confirmedAppUsageLimit = confirmedAppUsageLimit;
     this.retryAllowed =
         retryAllowed
             && (category == Category.TRANSIENT
@@ -184,7 +196,12 @@ final class ResponsesTransportException extends IllegalStateException
     var failure = normalize(error);
     return failure.retryAllowed()
         ? new ResponsesTransportException(
-            failure.category, failure.usage, false, failure.safeCode, failure.safeMessage)
+            failure.category,
+            failure.usage,
+            false,
+            failure.safeCode,
+            failure.safeMessage,
+            failure.confirmedAppUsageLimit)
         : failure;
   }
 
@@ -205,7 +222,8 @@ final class ResponsesTransportException extends IllegalStateException
               usage,
               false,
               "chatgpt_usage_limit",
-              "このアプリでの ChatGPT 呼び出しが利用枠の制限に達しました。ChatGPT 設定の使用量を確認してください。");
+              "このアプリでの ChatGPT 呼び出しが利用枠の制限に達しました。ChatGPT 設定の使用量を確認してください。",
+              true);
       case "subscription_sharing_usage_unavailable" ->
           new ResponsesTransportException(
               Category.TRANSIENT,
