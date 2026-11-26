@@ -294,6 +294,26 @@ public class ToolApprovalRepository implements dev.mikoto2000.rei.secretary.Secr
             () -> new IllegalArgumentException("Approval request not found in this project"));
   }
 
+  /** Read-only integrity check; status and expiry are checked separately before execution. */
+  public boolean matches(String id, String tool, String input, AgentRunContext owner) {
+    validate(owner);
+    Objects.requireNonNull(id);
+    Objects.requireNonNull(tool);
+    Objects.requireNonNull(input);
+    return db.sql(
+                "SELECT COUNT(*) FROM tool_approvals WHERE id=? AND project=? AND session=? AND run=? AND tool=? AND digest=?")
+            .params(
+                id,
+                owner.projectId(),
+                owner.conversationId(),
+                owner.runId(),
+                tool,
+                actionDigest(input, owner))
+            .query(Integer.class)
+            .single()
+        == 1;
+  }
+
   /**
    * ツール利用の権限制御で用いる判断を返す。
    *

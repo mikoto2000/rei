@@ -56,7 +56,13 @@ public final class InferenceExportGuard {
       AgentRunContext owner,
       AcceptedRunOptions connection,
       ApprovalContinuationStore.InferenceInput input) {
-    // API introduced for the next content-bound continuation test; not wired into dispatch.
+    if (owner == null
+        || connection == null
+        || !connection.named()
+        || input == null
+        || !approvals.matches(
+            id, "inferenceExport", canonical(owner, connection, input.contentFingerprint()), owner))
+      throw new IllegalArgumentException("Saved inference approval binding mismatch");
   }
 
   public Decision authorize(AgentRunContext owner, AcceptedRunOptions connection, Prompt prompt) {
@@ -78,7 +84,7 @@ public final class InferenceExportGuard {
         || !connection.fingerprint().matches("[0-9a-f]{64}"))
       throw new IllegalArgumentException("Inference export accepted connection mismatch");
     var prepared = InferenceExportRequest.prepare(prompt);
-    String canonical = canonical(owner, connection, prepared);
+    String canonical = canonical(owner, connection, prepared.fingerprint());
     if (approvals.consume("inferenceExport", canonical, owner))
       return new Decision(prepared.prompt(), null);
     var request = approvals.request("inferenceExport", canonical, owner);
@@ -95,7 +101,7 @@ public final class InferenceExportGuard {
   }
 
   private static String canonical(
-      AgentRunContext owner, AcceptedRunOptions connection, InferenceExportRequest prepared) {
+      AgentRunContext owner, AcceptedRunOptions connection, String contentFingerprint) {
     var destination = new TreeMap<>(connection.inferenceDescription());
     if (!destination.keySet().containsAll(REQUIRED)
         || !DESCRIPTION.containsAll(destination.keySet())
@@ -129,7 +135,7 @@ public final class InferenceExportGuard {
               "destination",
               destination,
               "content",
-              prepared.fingerprint()));
+              contentFingerprint));
     } catch (com.fasterxml.jackson.core.JsonProcessingException invalid) {
       throw new IllegalStateException("Inference export binding could not be encoded");
     }
