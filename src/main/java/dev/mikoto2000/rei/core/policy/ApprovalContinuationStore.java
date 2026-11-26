@@ -109,9 +109,33 @@ public class ApprovalContinuationStore {
           ModelMessagePayloadStore.History protocolHistory,
       @com.fasterxml.jackson.annotation.JsonInclude(
               com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
-          dev.mikoto2000.rei.llm.RunLlmConnection connection) {
+          dev.mikoto2000.rei.llm.RunLlmConnection connection,
+      @com.fasterxml.jackson.annotation.JsonInclude(
+              com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+          InferenceInput inference) {
     public Document {
       history = history == null ? null : Collections.unmodifiableList(new ArrayList<>(history));
+    }
+
+    public Document(
+        AgentRunContext owner,
+        String request,
+        List<StoredMessage> history,
+        RunContinuation.PendingTools pending,
+        OutputLimitRunBudget.Snapshot budget,
+        boolean managedParent,
+        ModelMessagePayloadStore.History protocolHistory,
+        dev.mikoto2000.rei.llm.RunLlmConnection connection) {
+      this(
+          owner,
+          request,
+          history,
+          pending,
+          budget,
+          managedParent,
+          protocolHistory,
+          connection,
+          null);
     }
 
     public Document(
@@ -134,6 +158,48 @@ public class ApprovalContinuationStore {
         boolean managedParent) {
       this(owner, request, history, pending, budget, managedParent, null);
     }
+  }
+
+  /**
+   * Immutable public definitions shown with the exact inference input, without callback objects.
+   */
+  public record InferenceTool(
+      String name,
+      String description,
+      String schema,
+      boolean returnDirect,
+      boolean requiresConfirmation) {
+    public InferenceTool {
+      if (name == null
+          || !name.matches("[A-Za-z0-9_-]{1,64}")
+          || description == null
+          || schema == null)
+        throw new IllegalArgumentException("Invalid inference tool definition snapshot");
+    }
+  }
+
+  /** An explicit pre-inference wait, separate from pending tool execution. */
+  public record InferenceInput(String contentFingerprint, List<InferenceTool> tools) {
+    public InferenceInput {
+      if (contentFingerprint == null || !contentFingerprint.matches("[0-9a-f]{64}"))
+        throw new IllegalArgumentException("Invalid inference content binding");
+      tools = List.copyOf(tools);
+      if (tools.size() > 128
+          || tools.stream().map(InferenceTool::name).distinct().count() != tools.size())
+        throw new IllegalArgumentException("Invalid inference tool definition snapshot");
+    }
+  }
+
+  public void saveInference(
+      String id,
+      AgentRunContext owner,
+      String request,
+      OutputLimitRunBudget.Snapshot budget,
+      boolean managed,
+      ModelMessagePayloadStore.History protocolHistory,
+      dev.mikoto2000.rei.llm.RunLlmConnection connection,
+      InferenceInput inference) {
+    throw new UnsupportedOperationException("Inference approval continuation is not implemented");
   }
 
   /**
