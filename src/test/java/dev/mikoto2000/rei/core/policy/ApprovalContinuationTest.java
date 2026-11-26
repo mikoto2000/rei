@@ -447,8 +447,26 @@ class ApprovalContinuationTest {
           public Flux<ChatResponse> stream(Prompt prompt) {
             calls.incrementAndGet();
             sent.set(prompt);
+            var origin =
+                (dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Origin)
+                    ((ToolCallingChatOptions) prompt.getOptions())
+                        .getToolContext()
+                        .get(
+                            dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore
+                                .ORIGIN_CONTEXT_KEY);
             return Flux.just(
-                new ChatResponse(List.of(new Generation(new AssistantMessage("done")))));
+                new ChatResponse(
+                    List.of(
+                        new Generation(
+                            AssistantMessage.builder()
+                                .content("done")
+                                .properties(
+                                    Map.of(
+                                        "rei.llm.replay-origin-owner",
+                                        origin.owner(),
+                                        "rei.llm.replay-origin-endpoint",
+                                        origin.endpoint()))
+                                .build()))));
           }
         };
     var loop = new StagnationChatModel(model, assembled ? assembler : null);
@@ -480,7 +498,14 @@ class ApprovalContinuationTest {
     org.junit.jupiter.api.Assertions.assertDoesNotThrow(() ->
         loop.stream(new Prompt("PRIVATE REVIEW FIXTURE", resumed.modelOptions())).blockLast());
     assertEquals(1, calls.get());
-    assertEquals(1, approvals.list(owner.projectId()).size());
+    assertEquals(
+        1,
+        org.springframework.jdbc.core.simple.JdbcClient.create(source)
+            .sql("SELECT COUNT(*) FROM tool_approvals WHERE project=?")
+            .param(owner.projectId())
+            .query(Integer.class)
+            .single());
+    assertTrue(approvals.list(owner.projectId()).isEmpty());
     assertEquals("CONSUMED", approvals.get(owner.projectId(), approval.id()).status());
     assertEquals(1, resumed.budgetSnapshot().llmCalls());
     var codec = new dev.mikoto2000.rei.modelmessage.ModelMessageCodec();
