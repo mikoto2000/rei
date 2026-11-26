@@ -35,6 +35,11 @@ public final class InferenceExportGuard {
     this.clock = java.util.Objects.requireNonNull(clock);
   }
 
+  /** Configure the administrator's policy independently of callback execution restrictions. */
+  public void configurePolicy(ToolPermissionPolicy policy) {
+    // Introduced for policy contract tests; not wired into dispatch yet.
+  }
+
   public record Decision(Prompt prompt, String approvalId) {
     public boolean permitted() {
       return approvalId == null;

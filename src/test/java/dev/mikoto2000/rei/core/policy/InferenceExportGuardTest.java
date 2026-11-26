@@ -108,6 +108,170 @@ class InferenceExportGuardTest {
         new DriverManagerDataSource("jdbc:sqlite:" + directory.resolve("approvals.db")), clock);
   }
 
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.EnumSource(AgentRunContext.Mode.class)
+  void configuredInferenceAutoApprovalDoesNotGrantConversationToolExecution(
+      AgentRunContext.Mode mode) {
+    var approvals = approvals();
+    var guard = new InferenceExportGuard(approvals, clock);
+    var policy =
+        new ToolPermissionPolicy(
+            new ToolPermissionProperties(
+                true,
+                java.util.Set.of(
+                    ActionCapability.READ,
+                    ActionCapability.NETWORK_WRITE,
+                    ActionCapability.EXTERNAL_SIDE_EFFECT),
+                java.util.Set.of(),
+                Map.of()));
+    guard.configurePolicy(policy);
+    var owner = owner("run", mode);
+    var connection = connection(true, "a");
+    var supplied = prompt(connection, "PRIVATE AUTO FIXTURE");
+    var result = guard.authorize(owner, connection, supplied);
+    assertThat(result.permitted()).isTrue();
+    assertThat(result.prompt()).isNotSameAs(supplied);
+    assertThat(approvals.list(owner.projectId())).isEmpty();
+    if (mode == AgentRunContext.Mode.CONVERSATION) {
+      var tools =
+          new ToolPermissionGuard(
+              policy, new dev.mikoto2000.rei.event.AgentEventFactory(clock), ignored -> {});
+      assertThatThrownBy(() -> tools.check("searchTools", "{}", owner))
+          .isInstanceOfSatisfying(
+              ToolPermissionException.class,
+              failure -> assertThat(failure.decision()).isEqualTo(PermissionDecision.DENY));
+    }
+  }
+
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.EnumSource(
+      value = ActionCapability.class,
+      names = {"NETWORK_WRITE", "EXTERNAL_SIDE_EFFECT"})
+  void administratorDenialWinsOverAnExistingExactHumanInferenceApproval(ActionCapability denied) {
+    var approvals = approvals();
+    var guard = new InferenceExportGuard(approvals, clock);
+    var owner = owner("run", AgentRunContext.Mode.READ_ONLY);
+    var connection = connection(true, "a");
+    var prompt = prompt(connection, "fixture");
+    var pending = guard.authorize(owner, connection, prompt);
+    approvals.decide(owner.projectId(), pending.approvalId(), true);
+    guard.configurePolicy(
+        new ToolPermissionPolicy(
+            new ToolPermissionProperties(
+                true,
+                java.util.EnumSet.allOf(ActionCapability.class),
+                java.util.Set.of(denied),
+                Map.of())));
+    assertThatThrownBy(() -> guard.authorize(owner, connection, prompt))
+        .isInstanceOf(SecurityException.class);
+    assertThat(approvals.get(owner.projectId(), pending.approvalId()).status())
+        .isEqualTo("APPROVED");
+  }
+
+  @Test
+  void inferenceCannotBeRelabeledAsAReadToBypassTheExternalSendDenyPolicy() {
+    var approvals = approvals();
+    var guard = new InferenceExportGuard(approvals, clock);
+    guard.configurePolicy(
+        new ToolPermissionPolicy(
+            new ToolPermissionProperties(
+                true,
+                java.util.Set.of(ActionCapability.READ),
+                java.util.Set.of(ActionCapability.NETWORK_WRITE),
+                Map.of(
+                    "inferenceExport",
+                    java.util.Set.of(ActionCapability.READ),
+                    "requestChatGptPlanInference",
+                    java.util.Set.of(ActionCapability.READ)))));
+    var connection = connection(true, "a");
+    assertThatThrownBy(() ->
+            guard.authorize(
+                owner("run", AgentRunContext.Mode.CONVERSATION),
+                connection,
+                prompt(connection, "fixture")))
+        .isInstanceOf(SecurityException.class);
+    assertThat(approvals.list("project")).isEmpty();
+  }
+
+  @Test
+  void disabledAdministratorPolicyRetainsItsExistingAutomaticDecisionSemantics() {
+    var approvals = approvals();
+    var guard = new InferenceExportGuard(approvals, clock);
+    guard.configurePolicy(
+        new ToolPermissionPolicy(new ToolPermissionProperties(false, null, null, null)));
+    var connection = connection(true, "a");
+    assertThat(
+            guard
+                .authorize(
+                    owner("run", AgentRunContext.Mode.CONVERSATION),
+                    connection,
+                    prompt(connection, "fixture"))
+                .permitted())
+        .isTrue();
+    assertThat(approvals.list("project")).isEmpty();
+  }
+
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(booleans = {false, true})
+  void explicitFullAutoStillCannotOverrideAdministratorDenial(boolean denied) {
+    var approvals = approvals();
+    var guard = new InferenceExportGuard(approvals, clock);
+    guard.configurePolicy(
+        new ToolPermissionPolicy(
+            new ToolPermissionProperties(
+                true,
+                null,
+                denied ? java.util.Set.of(ActionCapability.NETWORK_WRITE) : java.util.Set.of(),
+                Map.of()),
+            new dev.mikoto2000.rei.computeruse.FullAutoOptions(
+                new org.springframework.boot.DefaultApplicationArguments("--fullauto"))));
+    var owner =
+        new AgentRunContext(
+            "voice-run",
+            "session",
+            directory,
+            "project",
+            AgentRunContext.RequestSource.SHELL,
+            AgentRunContext.Mode.CONVERSATION,
+            true);
+    var connection = connection(true, "a");
+    if (denied)
+      assertThatThrownBy(() -> guard.authorize(owner, connection, prompt(connection, "fixture")))
+          .isInstanceOf(SecurityException.class);
+    else
+      assertThat(guard.authorize(owner, connection, prompt(connection, "fixture")).permitted())
+          .isTrue();
+    assertThat(approvals.list("project")).isEmpty();
+  }
+
+  @Test
+  void configuredAutoApprovalWithoutFullAutoStillRequiresExactVoiceInferenceApproval() {
+    var approvals = approvals();
+    var guard = new InferenceExportGuard(approvals, clock);
+    guard.configurePolicy(
+        new ToolPermissionPolicy(
+            new ToolPermissionProperties(
+                true,
+                java.util.Set.of(
+                    ActionCapability.NETWORK_WRITE, ActionCapability.EXTERNAL_SIDE_EFFECT),
+                java.util.Set.of(),
+                Map.of())));
+    var owner =
+        new AgentRunContext(
+            "voice-run",
+            "session",
+            directory,
+            "project",
+            AgentRunContext.RequestSource.SHELL,
+            AgentRunContext.Mode.CONVERSATION,
+            true);
+    var connection = connection(true, "a");
+    var pending = guard.authorize(owner, connection, prompt(connection, "voice fixture"));
+    assertThat(pending.permitted()).isFalse();
+    assertThat(approvals.get(owner.projectId(), pending.approvalId()).status())
+        .isEqualTo("PENDING");
+  }
+
   @Test
   void savedBindingVerificationNeitherGrantsNorConsumesInferenceAuthority() {
     var approvals = approvals();
