@@ -48,6 +48,16 @@ final class PinnedChatModels implements AutoCloseable {
     return cache.get(connection);
   }
 
+  PinnedChatModels(
+      Function<RunLlmConnection, String> credential,
+      Consumer<RunLlmConnection> verify,
+      dev.mikoto2000.rei.llm.capture.CaptureStore captures,
+      int capacity,
+      java.util.function.BiFunction<RunLlmConnection, ChatModel, ChatModel> decorate) {
+    this(credential, verify, captures, capacity, Function.identity());
+    java.util.Objects.requireNonNull(decorate);
+  }
+
   java.util.List<String> models(RunLlmConnection connection) {
     verify(connection);
     var client =
