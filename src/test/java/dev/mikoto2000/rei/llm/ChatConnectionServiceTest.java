@@ -260,6 +260,12 @@ class ChatConnectionServiceTest {
     var models =
         new LlmModelProvider(
             nativeModel, properties, new AgentEventFactory(Clock.systemUTC()), events::add);
+    var data = new org.sqlite.SQLiteDataSource();
+    data.setUrl("jdbc:sqlite:" + root.resolve("protocol.db"));
+    models.configureModelMessagePayloads(
+        provider(
+            dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.class,
+            new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore(data)));
     var common = new OpenAiCommonProperties();
     common.setBaseUrl("http://actual-global.invalid");
     common.setApiKey("PRIVATE_GLOBAL");
