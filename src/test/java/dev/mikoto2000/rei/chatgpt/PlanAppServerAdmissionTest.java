@@ -85,6 +85,11 @@ class PlanAppServerAdmissionTest {
     var session =
         new PlanAppServerRpcTest.Fake(
             PlanAppServerRpcTest.USAGE, PlanAppServerRpcTest.done("completed"));
+    var frames = new java.util.ArrayList<>(session.incoming);
+    frames.set(
+        2, PlanAppServerRpcTest.THREAD.replace("\"model\":\"model\"", "\"model\":\"allowed\""));
+    session.incoming.clear();
+    session.incoming.addAll(frames);
     var client =
         new PlanAppServerClient(
             accounts,

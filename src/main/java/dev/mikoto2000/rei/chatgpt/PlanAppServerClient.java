@@ -194,65 +194,69 @@ public final class PlanAppServerClient implements PlanInference {
     }
     if (cancelled.getAsBoolean()) throw ChatGptException.of(CANCELLED);
     var lease = accounts.lease(account, model);
-    BooleanSupplier stop = () -> cancelled.getAsBoolean() || !lease.valid().getAsBoolean();
-    if (stop.getAsBoolean()) throw ChatGptException.of(CANCELLED);
-    var remaining = Duration.ofNanos(Math.max(1, deadline - System.nanoTime()));
-    if (System.nanoTime() >= deadline) throw ChatGptException.of(TIMEOUT);
-    var started = launcher.start(lease.tokens(), remaining, stop);
-    var result =
-        new PlanAppServerRpc(launcher.version(), launcher.platform())
-            .execute(
-                started.session(),
-                started.cwd(),
-                model,
-                adjusted,
-                nativeInput,
-                Duration.ofNanos(Math.max(1, deadline - System.nanoTime())),
-                receiveLimit,
-                stop,
-                onDispatch,
-                path -> {
-                  if (stop.getAsBoolean() || !snapshots.containsKey(path) || served.contains(path))
-                    throw ChatGptException.of(PERMISSION_DENIED);
-                  authorizeRead.accept(path, owner);
-                  // Reserve the next inference before replying to a tool; parallel tool replies
-                  // over-reserve conservatively.
-                  if (budget != null
-                      && budget.reservation() != null
-                      && (budget.reservation().tokenExhausted()
-                          || budget.reservation().usageUnknown()
-                          || !budget.reservation().tryReserve()))
-                    throw ChatGptException.of(PERMISSION_DENIED);
-                  served.add(path);
-                  return snapshots.get(path);
-                },
-                budget == null ? 16 : Math.min(16, Math.max(0, budget.maxCalls() - 1)),
-                tokens -> {
-                  if (budget != null && budget.reservation() != null) {
-                    int previous = nativeTokens.get();
-                    int delta = tokens - previous;
-                    if (delta < 0) throw ChatGptException.of(PROTOCOL);
-                    nativeTokens.set(tokens);
-                    if (delta > 0) budget.reservation().recordTotalTokens(delta);
-                    if (budget.reservation().usageUnknown())
+    // Internal HTTP is not observable: admission covers this external session, never a whole Run.
+    try (var request = accounts.begin(account, lease.tokens().registrationId(), model)) {
+      BooleanSupplier stop = () -> cancelled.getAsBoolean() || !lease.valid().getAsBoolean();
+      if (stop.getAsBoolean()) throw ChatGptException.of(CANCELLED);
+      var remaining = Duration.ofNanos(Math.max(1, deadline - System.nanoTime()));
+      if (System.nanoTime() >= deadline) throw ChatGptException.of(TIMEOUT);
+      var started = launcher.start(lease.tokens(), remaining, stop);
+      var result =
+          new PlanAppServerRpc(launcher.version(), launcher.platform())
+              .execute(
+                  started.session(),
+                  started.cwd(),
+                  model,
+                  adjusted,
+                  nativeInput,
+                  Duration.ofNanos(Math.max(1, deadline - System.nanoTime())),
+                  receiveLimit,
+                  stop,
+                  onDispatch,
+                  path -> {
+                    if (stop.getAsBoolean()
+                        || !snapshots.containsKey(path)
+                        || served.contains(path)) throw ChatGptException.of(PERMISSION_DENIED);
+                    authorizeRead.accept(path, owner);
+                    // Reserve the next inference before replying to a tool; parallel tool replies
+                    // over-reserve conservatively.
+                    if (budget != null
+                        && budget.reservation() != null
+                        && (budget.reservation().tokenExhausted()
+                            || budget.reservation().usageUnknown()
+                            || !budget.reservation().tryReserve()))
                       throw ChatGptException.of(PERMISSION_DENIED);
-                  }
-                });
-    var trace = result.trace();
-    for (String value :
-        List.of(Objects.toString(trace.threadId(), ""), Objects.toString(trace.turnId(), "")))
-      if (value.contains(lease.tokens().accessToken())
-          || !CredentialRedactor.redact(value).equals(value)) throw ChatGptException.of(PROTOCOL);
-    traces.set(trace);
-    if (result.result().text().contains(lease.tokens().accessToken())
-        || dev.mikoto2000.rei.subagent.ExternalDelegationContentGuard.hasUnmaskedCredentials(
-            result.result().text()))
-      return new PlanSseAssembler.Result(
-          PlanSseAssembler.State.FAILED,
-          "",
-          result.result().totalTokens(),
-          result.result().responseId(),
-          PERMISSION_DENIED);
-    return result.result();
+                    served.add(path);
+                    return snapshots.get(path);
+                  },
+                  budget == null ? 16 : Math.min(16, Math.max(0, budget.maxCalls() - 1)),
+                  tokens -> {
+                    if (budget != null && budget.reservation() != null) {
+                      int previous = nativeTokens.get();
+                      int delta = tokens - previous;
+                      if (delta < 0) throw ChatGptException.of(PROTOCOL);
+                      nativeTokens.set(tokens);
+                      if (delta > 0) budget.reservation().recordTotalTokens(delta);
+                      if (budget.reservation().usageUnknown())
+                        throw ChatGptException.of(PERMISSION_DENIED);
+                    }
+                  });
+      var trace = result.trace();
+      for (String value :
+          List.of(Objects.toString(trace.threadId(), ""), Objects.toString(trace.turnId(), "")))
+        if (value.contains(lease.tokens().accessToken())
+            || !CredentialRedactor.redact(value).equals(value)) throw ChatGptException.of(PROTOCOL);
+      traces.set(trace);
+      if (result.result().text().contains(lease.tokens().accessToken())
+          || dev.mikoto2000.rei.subagent.ExternalDelegationContentGuard.hasUnmaskedCredentials(
+              result.result().text()))
+        return new PlanSseAssembler.Result(
+            PlanSseAssembler.State.FAILED,
+            "",
+            result.result().totalTokens(),
+            result.result().responseId(),
+            PERMISSION_DENIED);
+      return result.result();
+    }
   }
 }
