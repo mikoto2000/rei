@@ -14,6 +14,7 @@ final class PinnedOpenAiClients {
       okhttp3.OkHttpClient transport,
       List<okhttp3.Interceptor> interceptors,
       Runnable verify) {
+    requireOAuthBinding(connection);
     return open(
         connection.endpoint(),
         connection.authentication(),
@@ -32,6 +33,7 @@ final class PinnedOpenAiClients {
       okhttp3.OkHttpClient transport,
       List<okhttp3.Interceptor> interceptors,
       Runnable verify) {
+    requireOAuthBinding(connection);
     return open(
         connection.endpoint(),
         connection.authentication(),
@@ -50,6 +52,8 @@ final class PinnedOpenAiClients {
       Supplier<String> credential,
       okhttp3.OkHttpClient transport,
       List<okhttp3.Interceptor> interceptors) {
+    if (authentication == LlmAuthentication.CHATGPT_OAUTH)
+      throw new IllegalArgumentException("OAuth requires an accepted ChatGPT account binding");
     return open(
         endpoint,
         authentication,
@@ -60,6 +64,24 @@ final class PinnedOpenAiClients {
         java.util.Map.of(),
         () -> {},
         false);
+  }
+
+  private static void requireOAuthBinding(RunLlmConnection connection) {
+    if (connection.authentication() != LlmAuthentication.CHATGPT_OAUTH) return;
+    if (!connection.named()
+        || connection.provider() != LlmProvider.CHATGPT_PLAN
+        || connection.accountRef() == null
+        || !connection.accountRef().matches("[A-Za-z0-9_-]{1,64}")
+        || connection.accountRegistration() == null
+        || connection.accountRegistration().isBlank()
+        || connection.accountRegistration().length() > 128
+        || connection.accountRegistration().codePoints().anyMatch(Character::isISOControl)
+        || connection.endpoint().apiType() != LlmApiType.RESPONSES
+        || !"https://api.openai.com/v1".equals(connection.endpoint().baseUrl())
+        || !connection.profileId().equals(connection.endpoint().endpointId())
+        || !("chat-endpoint:" + connection.profileId())
+            .equals(connection.endpoint().credentialRef()))
+      throw new IllegalArgumentException("OAuth requires an accepted ChatGPT account binding");
   }
 
   private static OpenAIClient open(
