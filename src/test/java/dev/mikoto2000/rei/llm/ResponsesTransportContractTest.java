@@ -1217,6 +1217,8 @@ class ResponsesTransportContractTest {
           case "INCOMPLETE" -> "response_incomplete";
           case "REFUSAL" -> "model_refusal";
           case "INVALID_RESPONSE" -> "invalid_response";
+          case "REQUEST_LIMIT" -> "request_size_limit";
+          case "RESPONSE_LIMIT" -> "response_size_limit";
           default -> throw new AssertionError(category);
         };
     var failure = new ResponsesTransportException(category);

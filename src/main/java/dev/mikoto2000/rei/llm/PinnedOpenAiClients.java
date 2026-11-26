@@ -141,9 +141,22 @@ final class PinnedOpenAiClients {
       requireAttribute(request, "OpenAI-Beta", attributes.get("api_beta"));
       verify.run();
       var body = request.body();
-      if (body != null)
+      if (body != null) {
+        body =
+            PinnedWireLimits.request(
+                body,
+                RunTransportSettings.byteLimit(
+                    attributes,
+                    "request_limit_bytes",
+                    RunTransportSettings.DEFAULT_REQUEST_LIMIT_BYTES));
         request = request.newBuilder().method(request.method(), nonReplayable(body)).build();
-      return chain.proceed(request);
+      }
+      return PinnedWireLimits.response(
+          chain.proceed(request),
+          RunTransportSettings.byteLimit(
+              attributes,
+              "response_limit_bytes",
+              RunTransportSettings.DEFAULT_RESPONSE_LIMIT_BYTES));
     });
     return builder.build();
   }

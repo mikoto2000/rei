@@ -32,8 +32,7 @@ final class ResponsesProfilePolicy {
           || endpoint.capabilities().reasoningReplay() != ReasoningReplayMode.ENCRYPTED
           || endpoint.maxOutputTokens() != null
           || endpoint.temperature() != null
-          || connection.transport().keySet().stream()
-              .anyMatch(key -> !key.equals("request_timeout")))
+          || !RunTransportSettings.binding(connection.transport()).isEmpty())
         throw new IllegalStateException("ChatGPT Responses account or resource binding is invalid");
       requireCapability(connection, LlmEndpointCapabilities.Capability.STREAMING);
       requireCapability(connection, LlmEndpointCapabilities.Capability.REASONING_REPLAY);
