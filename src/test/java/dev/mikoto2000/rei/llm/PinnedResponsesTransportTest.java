@@ -145,6 +145,72 @@ class PinnedResponsesTransportTest {
     }
   }
 
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  void namedResponsesApiKeysReachOnlyTheSelectedOwnedServer(boolean streaming) throws Exception {
+    try (var fixture = new Fixture(streaming);
+        var models =
+            new PinnedChatModels(ignored -> "owned-fixture-api-key", ignored -> {}, null, 4)) {
+      var source = namedPin(fixture, false, LlmEndpointCapabilities.Support.SUPPORTED);
+      var pin =
+          new RunLlmConnection(
+              source.profileId(),
+              true,
+              source.provider(),
+              LlmAuthentication.API_KEY,
+              null,
+              null,
+              source.endpoint(),
+              source.capabilities(),
+              source.generation());
+      var options = RunNativeOptions.options(pin);
+      var model = models.model(pin);
+      if (streaming)
+        model.stream(new Prompt("fixture", options)).collectList().block(Duration.ofSeconds(5));
+      else model.call(new Prompt("fixture", options));
+      assertThat(fixture.requests).hasSize(1);
+      assertThat(fixture.authorizations).containsExactly("Bearer owned-fixture-api-key");
+      assertThat(fixture.requests.getFirst()).doesNotContain("owned-fixture-api-key");
+    }
+  }
+
+  @Test
+  void unconfirmedStreamingDoesNotBlockExplicitlySupportedNonStreamingResponses() throws Exception {
+    try (var fixture = new Fixture(false);
+        var models =
+            new PinnedChatModels(
+                ignored -> {
+                  throw new AssertionError("No credentials");
+                },
+                ignored -> {},
+                null,
+                4)) {
+      var source = namedPin(fixture, false, LlmEndpointCapabilities.Support.SUPPORTED);
+      var capabilities = new java.util.HashMap<>(source.capabilities());
+      capabilities.put(
+          LlmEndpointCapabilities.Capability.STREAMING, LlmEndpointCapabilities.Support.UNKNOWN);
+      var pin =
+          new RunLlmConnection(
+              source.profileId(),
+              true,
+              source.provider(),
+              source.authentication(),
+              null,
+              null,
+              source.endpoint(),
+              capabilities,
+              source.generation());
+      var options = RunNativeOptions.options(pin);
+      var model = models.model(pin);
+      assertThat(model.call(new Prompt("fixture", options)).getResult().getOutput().getText())
+          .isEqualTo("done");
+      assertThatThrownBy(() -> model.stream(new Prompt("fixture", options)))
+          .isInstanceOf(IllegalStateException.class)
+          .hasMessageContaining("STREAMING");
+      assertThat(fixture.requests).hasSize(1);
+    }
+  }
+
   private static RunLlmConnection namedPin(
       Fixture fixture, boolean omitOutputLimit, LlmEndpointCapabilities.Support responses) {
     var source = fixture.pin();
