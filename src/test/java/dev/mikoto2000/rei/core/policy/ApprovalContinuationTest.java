@@ -432,6 +432,57 @@ class ApprovalContinuationTest {
     assertEquals("WAITING_APPROVAL", service.state(id).orElseThrow());
   }
 
+  static java.util.stream.Stream<org.junit.jupiter.params.provider.Arguments>
+      inferenceBoundaries() {
+    return java.util.stream.Stream.of("approve", "restore", "inspect", "dispatch")
+        .flatMap(stage ->
+            java.util.stream.Stream.of("purpose", "digest")
+                .map(changed -> org.junit.jupiter.params.provider.Arguments.of(stage, changed)));
+  }
+
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.MethodSource("inferenceBoundaries")
+  void changedInferenceBindingCannotBeApprovedRestoredInspectedOrDispatched(
+      String stage, String changed) {
+    String id = pauseInferenceForInspection();
+    if (stage.equals("restore") || stage.equals("dispatch")) {
+      service.decide(owner.projectId(), id, true, true);
+      if (stage.equals("restore")) {
+        assertTrue(store.claim(id));
+        registry.transition(owner.runId(), RunStatus.RUNNING, null);
+      }
+    }
+    var db = org.springframework.jdbc.core.simple.JdbcClient.create(source);
+    if (changed.equals("purpose"))
+      db.sql("UPDATE tool_approvals SET tool=? WHERE id=?").params("writeMultiFile", id).update();
+    else
+      db.sql(
+              "UPDATE approval_continuations SET document=json_set(document,'$.inference.contentFingerprint',?) WHERE approval=?")
+          .params("d".repeat(64), id)
+          .update();
+    if (stage.equals("dispatch")) {
+      service.pump();
+      verify(router, never()).submitContinuation(eq(owner), anyString(), any(), any());
+      assertEquals("UNKNOWN", service.state(id).orElseThrow());
+    } else {
+      assertThrows(
+          IllegalArgumentException.class,
+          () -> {
+            switch (stage) {
+              case "approve" -> service.decide(owner.projectId(), id, true, true);
+              case "restore" -> service.restore(owner);
+              case "inspect" -> service.inference(owner.projectId(), id);
+              default -> throw new AssertionError(stage);
+            }
+          });
+      assertEquals(
+          stage.equals("restore") ? "APPROVED" : "PENDING",
+          approvals.get(owner.projectId(), id).status());
+      if (stage.equals("approve"))
+        assertEquals("WAITING_APPROVAL", service.state(id).orElseThrow());
+    }
+  }
+
   /** 承認続行後も所有者の追加入力が同じ実行キューへ届き、完了後は受け付けない。 */
   @Test
   void continuedRunAcceptsOwnedWebGuidanceWithoutResettingSavedBudget() {
