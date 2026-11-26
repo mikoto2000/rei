@@ -40,6 +40,7 @@ public final class ModelMessageCodec {
 
   private static final Set<String> METADATA =
       Set.of(
+          "rei.llm.chat-native",
           "rei.llm.replay-origin-owner",
           "rei.llm.replay-origin-endpoint",
           "rei.historySequence",
@@ -324,6 +325,7 @@ public final class ModelMessageCodec {
       }
       case "rei.llm.replay-origin-owner",
           "rei.llm.replay-origin-endpoint",
+          "rei.llm.chat-native",
           "rei.resumeRunId",
           "rei.historyGeneration" -> {
         if (!value.isTextual()) throw invalid();

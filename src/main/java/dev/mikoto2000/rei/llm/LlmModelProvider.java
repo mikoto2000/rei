@@ -501,15 +501,23 @@ public class LlmModelProvider implements dev.mikoto2000.rei.secretary.SecretaryP
     return bindRunOptions(requestOptions(feature, selected, streamUsage), owner);
   }
 
+  /** Shared protected input ownership; legacy Chat Completions keeps its existing path. */
   org.springframework.ai.model.tool.ToolCallingChatOptions bindRunOptions(
       org.springframework.ai.model.tool.ToolCallingChatOptions options,
       dev.mikoto2000.rei.tooldelivery.ReadingRun owner) {
-    if (!(options instanceof org.springframework.ai.openai.responses.OpenAiResponsesChatOptions))
-      return options;
     var context = new java.util.HashMap<String, Object>();
     if (options.getToolContext() != null) context.putAll(options.getToolContext());
+    var captured =
+        context.get(dev.mikoto2000.rei.modeloptions.ModelOptions.RUN_CONNECTION_CONTEXT_KEY);
+    if (captured != null && !(captured instanceof RunLlmConnection))
+      throw new IllegalStateException("Accepted Run connection is unavailable");
+    boolean responses =
+        options instanceof org.springframework.ai.openai.responses.OpenAiResponsesChatOptions;
+    var connection = (RunLlmConnection) captured;
+    boolean named = connection != null && connection.named();
+    if (!responses && !named) return options;
     if (!(context.get(ResolvedLlmEndpoint.CONTEXT_KEY) instanceof ResolvedLlmEndpoint endpoint)
-        || endpoint.apiType() != LlmApiType.RESPONSES)
+        || endpoint.apiType() != (responses ? LlmApiType.RESPONSES : LlmApiType.CHAT_COMPLETIONS))
       throw new IllegalStateException("Native Run endpoint snapshot is unavailable");
     for (String key :
         java.util.List.of(

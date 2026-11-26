@@ -82,6 +82,13 @@ final class ResponsesProfilePolicy {
       rejectUnsupported(options.getMaxToolCalls(), "max_tool_calls");
       rejectUnsupported(options.getTruncation(), "truncation");
       rejectUnsupported(metadata, "metadata");
+      var choice = options.getToolChoice();
+      if (choice != null
+          && !(choice instanceof String value
+              && java.util.Set.of("auto", "none", "required").contains(value)))
+        throw new IllegalArgumentException(
+            "ChatGPT Responses tool_choice supports auto, none or required;"
+                + " individual namespaced selection is unconfirmed");
     }
     if (options.getMaxOutputTokens() != null)
       requireCapability(connection, LlmEndpointCapabilities.Capability.MAX_OUTPUT_TOKENS);
@@ -97,10 +104,9 @@ final class ResponsesProfilePolicy {
     if (metadata != null && !metadata.isEmpty()) rejectUnsupported(metadata, "metadata");
     var tools = options.getToolCallbacks();
     if (tools != null && !tools.isEmpty()) {
-      if (connection.provider() == LlmProvider.CHATGPT_PLAN)
-        throw new IllegalArgumentException(
-            "ChatGPT Responses tools require the namespace contract");
       requireCapability(connection, LlmEndpointCapabilities.Capability.FUNCTION_CALLING);
+      if (connection.provider() == LlmProvider.CHATGPT_PLAN)
+        requireCapability(connection, LlmEndpointCapabilities.Capability.TOOL_NAMESPACE);
     }
   }
 }

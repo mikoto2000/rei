@@ -1046,6 +1046,8 @@ dev.mikoto2000.rei.core.policy.ApprovalContinuationStore$Document -> dev.mikoto2
 dev.mikoto2000.rei.core.policy.ApprovalContinuationStore$Document -> dev.mikoto2000.rei.core.chat.RunContinuation$PendingTools
 dev.mikoto2000.rei.core.policy.ApprovalContinuationStore$Document -> dev.mikoto2000.rei.llm.OutputLimitRunBudget$Snapshot
 dev.mikoto2000.rei.core.policy.ApprovalContinuationStore$Document -> dev.mikoto2000.rei.llm.RunLlmConnection
+dev.mikoto2000.rei.core.policy.InferenceExportGuard -> dev.mikoto2000.rei.core.chat.AgentRunContext
+dev.mikoto2000.rei.core.policy.InferenceExportRequest -> dev.mikoto2000.rei.core.contextbudget.DeliveryToolRegistration
 dev.mikoto2000.rei.core.policy.ToolApprovalRepository -> dev.mikoto2000.rei.core.chat.AgentRunContext
 dev.mikoto2000.rei.core.policy.ToolApprovalRepository -> dev.mikoto2000.rei.event.CredentialRedactor
 dev.mikoto2000.rei.core.policy.ToolApprovalRepository -> dev.mikoto2000.rei.timing.TimingRecorder

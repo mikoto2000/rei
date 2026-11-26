@@ -35,6 +35,8 @@ public class ApprovalController {
 
   private Function<DecisionTarget, ToolApprovalRepository.Request> decideContinuation;
   private Function<String, Optional<String>> continuationState = id -> Optional.empty();
+  private BiFunction<String, String, Optional<java.util.Map<String, Object>>> inferenceView =
+      (project, id) -> Optional.empty();
 
   /** Web APIによる操作で使用する継続入力一覧を設定する。 */
   @org.springframework.beans.factory.annotation.Autowired(required = false)
@@ -48,6 +50,8 @@ public class ApprovalController {
                 continuations.decide(
                     decision.project(), decision.id(), decision.approved(), decision.continueRun());
     this.continuationState = continuations == null ? id -> Optional.empty() : continuations::state;
+    this.inferenceView =
+        continuations == null ? (project, id) -> Optional.empty() : continuations::inferenceData;
   }
 
   /** 指定された値や利用先を使って、ApprovalControllerを初期化する。 */
@@ -110,6 +114,18 @@ public class ApprovalController {
   @GetMapping("/{id}")
   public View show(@PathVariable String projectId, @PathVariable String id) {
     return view(findApproval.apply(projectId, id));
+  }
+
+  /** Read the exact protected input before deciding; this never grants or consumes approval. */
+  @GetMapping("/{id}/inference")
+  public java.util.Map<String, Object> inference(
+      @PathVariable String projectId, @PathVariable String id) {
+    findApproval.apply(projectId, id);
+    return inferenceView
+        .apply(projectId, id)
+        .orElseThrow(() ->
+            new org.springframework.web.server.ResponseStatusException(
+                org.springframework.http.HttpStatus.NOT_FOUND, "Inference snapshot unavailable"));
   }
 
   /**

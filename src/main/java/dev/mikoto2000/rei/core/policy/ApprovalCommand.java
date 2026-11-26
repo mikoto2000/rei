@@ -31,6 +31,8 @@ public class ApprovalCommand implements java.util.concurrent.Callable<Integer> {
 
   private Function<DecisionTarget, ToolApprovalRepository.Request> decideContinuation;
   private Function<String, Optional<String>> continuationState = id -> Optional.empty();
+  private BiFunction<String, String, Optional<ApprovalContinuationService.InferenceView>>
+      inferenceView = (project, id) -> Optional.empty();
 
   /** ツール利用の権限制御で使用する継続入力一覧を設定する。 */
   @org.springframework.beans.factory.annotation.Autowired(required = false)
@@ -43,6 +45,7 @@ public class ApprovalCommand implements java.util.concurrent.Callable<Integer> {
                 service.decide(
                     decision.project(), decision.id(), decision.approved(), decision.continueRun());
     this.continuationState = service == null ? id -> Optional.empty() : service::state;
+    this.inferenceView = service == null ? (project, id) -> Optional.empty() : service::inference;
   }
 
   /** continue実行。 */
@@ -147,6 +150,10 @@ public class ApprovalCommand implements java.util.concurrent.Callable<Integer> {
             printRequest(writer, request, true);
       } else if (result instanceof ToolApprovalRepository.Request request) {
         printRequest(writer, request, false);
+        if ("show".equals(action))
+          inferenceView
+              .apply(project, request.id())
+              .ifPresent(view -> printInference(writer, view));
         if (continueRun)
           writer.println(
               "続行受付: "
@@ -219,6 +226,28 @@ public class ApprovalCommand implements java.util.concurrent.Callable<Integer> {
     }
     if (numbered)
       writer.println("詳細: /approval show " + reference + "　拒否: /approval deny " + reference);
+  }
+
+  private void printInference(
+      CommandOutput writer, ApprovalContinuationService.InferenceView view) {
+    writer.println("推論送信先: " + new java.util.TreeMap<>(view.destination()));
+    writer.println("送信内容の確認値: " + view.contentFingerprint());
+    for (var message : view.messages()) {
+      writer.println("[" + message.get("role") + "]");
+      if (message.get("parts") instanceof List<?> parts)
+        for (var part : parts) {
+          if (part instanceof java.util.Map<?, ?> fields && "text".equals(fields.get("type")))
+            writer.println(java.util.Objects.toString(fields.get("text"), ""));
+          else writer.println(java.util.Objects.toString(part));
+        }
+    }
+    writer.println("公開ツール定義:");
+    for (var tool : view.tools()) {
+      writer.println(tool.name() + ": " + tool.description());
+      writer.println(tool.schema());
+      writer.println(
+          "実行時の確認: " + tool.requiresConfirmation() + ", 結果の直接返却: " + tool.returnDirect());
+    }
   }
 
   /** 利用者に結果を伝えるため、再開を出力する。 */

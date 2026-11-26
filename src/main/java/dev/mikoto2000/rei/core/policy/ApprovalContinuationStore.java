@@ -109,9 +109,45 @@ public class ApprovalContinuationStore {
           ModelMessagePayloadStore.History protocolHistory,
       @com.fasterxml.jackson.annotation.JsonInclude(
               com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
-          dev.mikoto2000.rei.llm.RunLlmConnection connection) {
+          dev.mikoto2000.rei.llm.RunLlmConnection connection,
+      @com.fasterxml.jackson.annotation.JsonInclude(
+              com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+          InferenceInput inference) {
     public Document {
+      if (inference != null
+          && (pending != null
+              || history == null
+              || !history.isEmpty()
+              || owner == null
+              || budget == null
+              || connection == null
+              || !connection.named()
+              || protocolHistory == null
+              || protocolHistory.input() == null
+              || protocolHistory.input().entries().isEmpty()))
+        throw new IllegalArgumentException("Invalid pre-inference continuation document");
       history = history == null ? null : Collections.unmodifiableList(new ArrayList<>(history));
+    }
+
+    public Document(
+        AgentRunContext owner,
+        String request,
+        List<StoredMessage> history,
+        RunContinuation.PendingTools pending,
+        OutputLimitRunBudget.Snapshot budget,
+        boolean managedParent,
+        ModelMessagePayloadStore.History protocolHistory,
+        dev.mikoto2000.rei.llm.RunLlmConnection connection) {
+      this(
+          owner,
+          request,
+          history,
+          pending,
+          budget,
+          managedParent,
+          protocolHistory,
+          connection,
+          null);
     }
 
     public Document(
@@ -134,6 +170,90 @@ public class ApprovalContinuationStore {
         boolean managedParent) {
       this(owner, request, history, pending, budget, managedParent, null);
     }
+  }
+
+  /**
+   * Immutable public definitions shown with the exact inference input, without callback objects.
+   */
+  public record InferenceTool(
+      String name,
+      String description,
+      String schema,
+      boolean returnDirect,
+      boolean requiresConfirmation) {
+    public InferenceTool {
+      if (name == null
+          || !name.matches("[A-Za-z0-9_-]{1,64}")
+          || description == null
+          || schema == null)
+        throw new IllegalArgumentException("Invalid inference tool definition snapshot");
+    }
+  }
+
+  /** An explicit pre-inference wait, separate from pending tool execution. */
+  public record InferenceInput(String contentFingerprint, List<InferenceTool> tools) {
+    public InferenceInput {
+      if (contentFingerprint == null || !contentFingerprint.matches("[0-9a-f]{64}"))
+        throw new IllegalArgumentException("Invalid inference content binding");
+      tools = List.copyOf(tools);
+      if (tools.size() > 128
+          || tools.stream().map(InferenceTool::name).distinct().count() != tools.size())
+        throw new IllegalArgumentException("Invalid inference tool definition snapshot");
+    }
+  }
+
+  public void saveInference(
+      String id,
+      AgentRunContext owner,
+      String request,
+      OutputLimitRunBudget.Snapshot budget,
+      boolean managed,
+      ModelMessagePayloadStore.History protocolHistory,
+      dev.mikoto2000.rei.llm.RunLlmConnection connection,
+      InferenceInput inference) {
+    if (inference == null
+        || budget == null
+        || connection == null
+        || !connection.named()
+        || protocolHistory == null
+        || protocolHistory.input() == null
+        || protocolHistory.input().entries().isEmpty()
+        || protocolHistory.input().preparationFingerprint() == null)
+      throw new IllegalArgumentException(
+          "Complete inference input and accepted connection required");
+    var scope = ModelMessagePayloadStore.Scope.forOwner(owner);
+    if (!owner.runId().equals(protocolHistory.run())
+        || !new ModelMessagePayloadStore.Exchange(
+                payloads.obtain(), scope, owner.runId(), "approval")
+            .ownerKey()
+            .equals(protocolHistory.origin().owner())
+        || !connection.fingerprint().equals(protocolHistory.origin().endpoint()))
+      throw new IllegalStateException("Inference continuation ownership mismatch");
+    var messages =
+        protocolHistory.input().entries().stream()
+            .map(pointer ->
+                payloads
+                    .obtain()
+                    .loadEntry(
+                        scope, pointer, ModelMessagePayloadStore.ReferenceKind.RUN, owner.runId()))
+            .toList();
+    verifyInferenceContent(inference, protocolHistory, messages);
+    String encoded =
+        encode(
+            new Document(
+                owner,
+                request,
+                List.of(),
+                null,
+                budget,
+                managed,
+                protocolHistory,
+                connection,
+                inference));
+    if (encoded.getBytes(java.nio.charset.StandardCharsets.UTF_8).length > 1048576)
+      throw new IllegalArgumentException("Inference approval continuation capacity exceeded");
+    payloads.obtain().protectContinuation(scope, protocolHistory, id);
+    insert(id, owner, encoded);
   }
 
   /**
@@ -326,6 +446,10 @@ public class ApprovalContinuationStore {
         || messages.size() > 256
         || pending.calls().size() > 32)
       throw new IllegalArgumentException("Approval continuation capacity exceeded");
+    insert(id, owner, encoded);
+  }
+
+  private void insert(String id, AgentRunContext owner, String encoded) {
     if (db.sql(
                 "INSERT OR IGNORE INTO approval_continuations(approval,run,state,document) VALUES(?,?,'WAITING_APPROVAL',?)")
             .params(id, owner.runId(), encoded)
@@ -491,6 +615,7 @@ public class ApprovalContinuationStore {
               .toList();
     }
     List<ModelMessagePayloadStore.ReplayReference> references = null;
+    if (d.inference() != null) verifyInferenceContent(d.inference(), d.protocolHistory(), messages);
     if (d.protocolHistory() != null
         || backendNative(pendingMessage)
         || messages.stream().anyMatch(ApprovalContinuationStore::backendNative)) {
@@ -530,13 +655,51 @@ public class ApprovalContinuationStore {
         pending,
         references,
         d.protocolHistory(),
-        d.connection());
+        d.connection(),
+        d.inference() != null);
   }
 
   private static boolean backendNative(Message message) {
     return message instanceof AssistantMessage
         && message.getMetadata().get("rei.llm.replay-origin-owner") instanceof String owner
         && owner.matches("[0-9a-fA-F]{64}");
+  }
+
+  /**
+   * Serialize an already scoped human inspection using the same verified canonical message codec.
+   */
+  public List<java.util.Map<String, Object>> inferenceMessages(Entry entry) {
+    if (document(entry).inference() == null)
+      throw new IllegalArgumentException("Inference inspection unavailable");
+    var codec = new dev.mikoto2000.rei.modelmessage.ModelMessageCodec();
+    return saved(entry).messages().stream()
+        .map(message -> {
+          try {
+            var encoded =
+                json.readValue(
+                    codec.encode(message),
+                    new com.fasterxml.jackson.core.type.TypeReference<
+                        java.util.Map<String, Object>>() {});
+            encoded.remove("schemaVersion");
+            return java.util.Map.copyOf(encoded);
+          } catch (java.io.IOException failure) {
+            throw new IllegalStateException("Inference inspection unavailable");
+          }
+        })
+        .toList();
+  }
+
+  private static void verifyInferenceContent(
+      InferenceInput inference, ModelMessagePayloadStore.History history, List<Message> messages) {
+    if (history == null
+        || history.input() == null
+        || messages.isEmpty()
+        || !inference
+            .contentFingerprint()
+            .equals(
+                InferenceExportRequest.fingerprint(
+                    history.input().preparationFingerprint(), inference.tools(), messages)))
+      throw new IllegalArgumentException("Inference approval content mismatch");
   }
 
   /** ツール利用の権限制御において、実行待ちに該当するか判定する。 */
@@ -676,7 +839,8 @@ public class ApprovalContinuationStore {
                     d.budget(),
                     d.managedParent(),
                     history,
-                    d.connection()));
+                    d.connection(),
+                    d.inference()));
         // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
         if (encoded.getBytes(java.nio.charset.StandardCharsets.UTF_8).length > 1048576
             || messages.size() > 256)

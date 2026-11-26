@@ -139,8 +139,15 @@ public record LlmEndpointCapabilities(
                 : replay == ReasoningReplayMode.NONE ? Support.UNSUPPORTED : Support.SUPPORTED);
       }
     } else {
-      // The normal-chat Plan adapter is not implemented yet. Do not advertise its SDK
-      // prototypes as an enabled connection. Hard preview restrictions still apply.
+      // Only the implemented and contract-tested route is established here. Independent
+      // server/model declarations remain required; this does not confirm a live account/model.
+      for (var capability :
+          EnumSet.of(
+              Capability.RESPONSES,
+              Capability.STREAMING,
+              Capability.FUNCTION_CALLING,
+              Capability.TOOL_NAMESPACE,
+              Capability.REASONING_REPLAY)) transport.put(capability, Support.SUPPORTED);
       transport.put(Capability.CHAT_COMPLETIONS, Support.UNSUPPORTED);
       for (var capability :
           EnumSet.of(Capability.TEMPERATURE, Capability.TOP_P, Capability.MAX_OUTPUT_TOKENS))

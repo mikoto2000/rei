@@ -123,14 +123,16 @@ final class PinnedChatModels implements AutoCloseable {
               .openAiClient(client)
               .openAiClientAsync(client.async())
               .build();
-      return decorate.apply(
-          connection,
+      ChatModel captured =
           captures == null
               ? model
               : new CapturingChatModel(
                   model,
                   captures,
-                  interceptor -> client(connection, java.util.List.of(interceptor))));
+                  interceptor -> client(connection, java.util.List.of(interceptor)));
+      return decorate.apply(
+          connection,
+          connection.named() ? new NamedChatMessages(captured, connection.endpoint()) : captured);
     } catch (RuntimeException | Error failed) {
       client.close();
       throw failed;

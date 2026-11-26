@@ -212,6 +212,329 @@ class ApprovalContinuationTest {
     return id;
   }
 
+  static java.util.stream.Stream<org.junit.jupiter.params.provider.Arguments>
+      namedInferenceModes() {
+    return java.util.Arrays.stream(AgentRunContext.Mode.values())
+        .flatMap(mode ->
+            java.util.Arrays.stream(dev.mikoto2000.rei.llm.LlmApiType.values())
+                .flatMap(api ->
+                    java.util.stream.Stream.of(false, true)
+                        .map(assembled ->
+                            org.junit.jupiter.params.provider.Arguments.of(mode, api, assembled))));
+  }
+
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.MethodSource("namedInferenceModes")
+  void normalChatWaitsForInferenceConsentBeforeCallingEitherApi(
+      AgentRunContext.Mode mode, dev.mikoto2000.rei.llm.LlmApiType api, boolean assembled) {
+    owner =
+        new AgentRunContext(
+            "inference-run",
+            owner.conversationId(),
+            directory,
+            owner.projectId(),
+            AgentRunContext.RequestSource.SHELL,
+            mode);
+    registry.register(owner);
+    registry.transition(owner.runId(), RunStatus.RUNNING, null);
+    var pin =
+        new dev.mikoto2000.rei.llm.RunLlmConnection(
+            "local",
+            true,
+            dev.mikoto2000.rei.llm.LlmProvider.OPENAI_COMPATIBLE,
+            dev.mikoto2000.rei.llm.LlmAuthentication.NONE,
+            null,
+            null,
+            new dev.mikoto2000.rei.llm.ResolvedLlmEndpoint(
+                "local",
+                1,
+                api,
+                "http://fixture.invalid/v1",
+                "chat-endpoint:local",
+                "fixture-model",
+                new dev.mikoto2000.rei.llm.LlmCapabilities(
+                    dev.mikoto2000.rei.llm.ReasoningReplayMode.NONE, 8, Set.of()),
+                null,
+                null,
+                Duration.ofSeconds(5)),
+            Map.of(),
+            Map.of());
+    var execution = execution();
+    execution.consumeNextLlmCall();
+    var before = execution.budgetSnapshot();
+    var payloads = new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore(source);
+    var exchange = payloads.newExchange(owner);
+    var context =
+        Map.<String, Object>of(
+            RunExecutionContext.KEY,
+            execution,
+            dev.mikoto2000.rei.modeloptions.ModelOptions.RUN_CONNECTION_CONTEXT_KEY,
+            pin,
+            dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.EXCHANGE_CONTEXT_KEY,
+            exchange,
+            dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ORIGIN_CONTEXT_KEY,
+            new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Origin(
+                exchange.ownerKey(), pin.fingerprint()));
+    ToolCallingChatOptions options =
+        api == dev.mikoto2000.rei.llm.LlmApiType.RESPONSES
+            ? org.springframework.ai.openai.responses.OpenAiResponsesChatOptions.builder()
+                .model("fixture-model")
+                .toolCallbacks(List.of())
+                .toolContext(context)
+                .build()
+            : org.springframework.ai.openai.OpenAiChatOptions.builder()
+                .model("fixture-model")
+                .toolCallbacks(List.of())
+                .toolContext(context)
+                .build();
+    execution.setModelOptions(options);
+    var calls = new AtomicInteger();
+    var model =
+        new ChatModel() {
+          public ChatResponse call(Prompt prompt) {
+            throw new AssertionError("Streaming loop only");
+          }
+
+          public Flux<ChatResponse> stream(Prompt prompt) {
+            calls.incrementAndGet();
+            throw new AssertionError("Inference invoked before export consent");
+          }
+        };
+    var compression = new dev.mikoto2000.rei.core.contextbudget.ContextCompressionProperties();
+    compression.setEnabled(true);
+    var estimator = dev.mikoto2000.rei.core.contextbudget.TokenEstimator.conservative();
+    var assembler =
+        new dev.mikoto2000.rei.core.contextbudget.ContextAssembler(
+            compression,
+            estimator,
+            new dev.mikoto2000.rei.core.contextbudget.ConversationSummaryRepository(directory),
+            new dev.mikoto2000.rei.core.contextbudget.ToolResultCompressor(
+                new dev.mikoto2000.rei.core.contextbudget.RawToolResultStore(directory),
+                estimator,
+                100,
+                70),
+            (previous, messages, limit, request) -> {
+              throw new AssertionError("Short fixture must not invoke a summary model");
+            },
+            new AgentEventFactory(Clock.systemUTC()),
+            ignored -> {});
+    assertThrows(
+        RunWaitingException.class,
+        () ->
+            new StagnationChatModel(model, assembled ? assembler : null)
+                .stream(new Prompt("PRIVATE INFERENCE FIXTURE", execution.modelOptions()))
+                    .blockLast());
+    assertEquals(0, calls.get());
+    assertEquals(before, execution.budgetSnapshot());
+    assertEquals(RunStatus.WAITING_APPROVAL, registry.get(owner.runId()).status());
+    var approval = approvals.list(owner.projectId()).getFirst();
+    assertEquals("inferenceExport", approval.tool());
+    var saved = store.find(approval.id()).orElseThrow();
+    assertEquals("WAITING_APPROVAL", saved.state());
+    assertTrue(store.document(saved).pending() == null);
+    assertTrue(store.document(saved).inference() != null);
+    assertEquals(pin, store.document(saved).connection());
+    assertEquals(before, store.document(saved).budget());
+    assertEquals("PRIVATE INFERENCE FIXTURE", store.saved(saved).messages().getLast().getText());
+    assertEquals("PENDING", approvals.get(owner.projectId(), approval.id()).status());
+  }
+
+  String pauseInferenceForInspection() {
+    var pin =
+        new dev.mikoto2000.rei.llm.RunLlmConnection(
+            "local",
+            true,
+            dev.mikoto2000.rei.llm.LlmProvider.OPENAI_COMPATIBLE,
+            dev.mikoto2000.rei.llm.LlmAuthentication.NONE,
+            null,
+            null,
+            new dev.mikoto2000.rei.llm.ResolvedLlmEndpoint(
+                "local",
+                1,
+                dev.mikoto2000.rei.llm.LlmApiType.RESPONSES,
+                "http://fixture.invalid/v1",
+                "chat-endpoint:local",
+                "fixture-model",
+                new dev.mikoto2000.rei.llm.LlmCapabilities(
+                    dev.mikoto2000.rei.llm.ReasoningReplayMode.NONE, 8, Set.of()),
+                null,
+                null,
+                Duration.ofSeconds(5)),
+            Map.of(),
+            Map.of());
+    var execution = execution();
+    execution.consumeNextLlmCall();
+    var payloads = new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore(source);
+    var exchange = payloads.newExchange(owner);
+    var context =
+        Map.<String, Object>of(
+            RunExecutionContext.KEY,
+            execution,
+            dev.mikoto2000.rei.modeloptions.ModelOptions.RUN_CONNECTION_CONTEXT_KEY,
+            pin,
+            dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.EXCHANGE_CONTEXT_KEY,
+            exchange,
+            dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ORIGIN_CONTEXT_KEY,
+            new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Origin(
+                exchange.ownerKey(), pin.fingerprint()));
+    var options =
+        org.springframework.ai.openai.responses.OpenAiResponsesChatOptions.builder()
+            .model("fixture-model")
+            .toolContext(context)
+            .toolCallbacks(
+                List.of(
+                    callback(
+                        "searchTools",
+                        input -> {
+                          throw new AssertionError("No tools while inspecting inference");
+                        })))
+            .build();
+    execution.setModelOptions(options);
+    var prompt =
+        new Prompt(
+            List.of(
+                new org.springframework.ai.chat.messages.SystemMessage(
+                    "PRIVATE SYSTEM VIEW FIXTURE"),
+                new UserMessage("PRIVATE USER VIEW FIXTURE")),
+            execution.modelOptions());
+    assertTrue(service.prepareInference(execution, prompt).isEmpty());
+    return approvals.list(owner.projectId()).getFirst().id();
+  }
+
+  @Test
+  void humanApiCanInspectTheProtectedInferenceInputWithoutConsumingApproval() throws Exception {
+    String id = pauseInferenceForInspection();
+    var controller = new dev.mikoto2000.rei.web.ApprovalController(approvals);
+    controller.setContinuations(service);
+    var mvc =
+        org.springframework.test.web.servlet.setup.MockMvcBuilders.standaloneSetup(controller)
+            .build();
+    mvc.perform(
+            org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get(
+                "/api/v1/projects/" + owner.projectId() + "/approvals/" + id + "/inference"))
+        .andExpect(
+            org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().isOk())
+        .andExpect(
+            org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath(
+                    "$.messages[0].parts[0].text")
+                .value("PRIVATE SYSTEM VIEW FIXTURE"))
+        .andExpect(
+            org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath(
+                    "$.messages[1].parts[0].text")
+                .value("PRIVATE USER VIEW FIXTURE"))
+        .andExpect(
+            org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath(
+                    "$.destination.endpoint")
+                .value("local"))
+        .andExpect(
+            org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath(
+                    "$.tools[0].name")
+                .value("searchTools"));
+    assertEquals("PENDING", approvals.get(owner.projectId(), id).status());
+    assertEquals("WAITING_APPROVAL", service.state(id).orElseThrow());
+  }
+
+  @Test
+  void humanShellShowsActualInferenceMessagesAndToolDefinitionsBeforeApproval() {
+    String id = pauseInferenceForInspection();
+    var currentProject = mock(dev.mikoto2000.rei.core.project.ProjectService.class);
+    when(currentProject.currentContext())
+        .thenReturn(new ProjectContext(owner.projectId(), "fixture", directory));
+    var command = new ApprovalCommand(approvals, currentProject);
+    command.setContinuations(service);
+    var output = new java.io.StringWriter();
+    var cli = new picocli.CommandLine(command);
+    cli.setOut(new java.io.PrintWriter(output));
+    assertEquals(0, cli.execute("show", id));
+    assertTrue(output.toString().contains("PRIVATE SYSTEM VIEW FIXTURE"));
+    assertTrue(output.toString().contains("PRIVATE USER VIEW FIXTURE"));
+    assertTrue(output.toString().contains("searchTools"));
+    assertEquals("PENDING", approvals.get(owner.projectId(), id).status());
+    assertEquals("WAITING_APPROVAL", service.state(id).orElseThrow());
+  }
+
+  static java.util.stream.Stream<org.junit.jupiter.params.provider.Arguments>
+      inferenceBoundaries() {
+    return java.util.stream.Stream.of("approve", "restore", "inspect", "dispatch")
+        .flatMap(stage ->
+            java.util.stream.Stream.of("purpose", "digest")
+                .map(changed -> org.junit.jupiter.params.provider.Arguments.of(stage, changed)));
+  }
+
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.MethodSource("inferenceBoundaries")
+  void changedInferenceBindingCannotBeApprovedRestoredInspectedOrDispatched(
+      String stage, String changed) {
+    String id = pauseInferenceForInspection();
+    if (stage.equals("restore") || stage.equals("dispatch")) {
+      service.decide(owner.projectId(), id, true, true);
+      if (stage.equals("restore")) {
+        assertTrue(store.claim(id));
+        registry.transition(owner.runId(), RunStatus.RUNNING, null);
+      }
+    }
+    var db = org.springframework.jdbc.core.simple.JdbcClient.create(source);
+    if (changed.equals("purpose"))
+      db.sql("UPDATE tool_approvals SET tool=? WHERE id=?").params("writeMultiFile", id).update();
+    else
+      db.sql(
+              "UPDATE approval_continuations SET document=json_set(document,'$.inference.contentFingerprint',?) WHERE approval=?")
+          .params("d".repeat(64), id)
+          .update();
+    if (stage.equals("dispatch")) {
+      service.pump();
+      verify(router, never()).submitContinuation(eq(owner), anyString(), any(), any());
+      assertEquals("UNKNOWN", service.state(id).orElseThrow());
+    } else {
+      assertThrows(
+          IllegalArgumentException.class,
+          () -> {
+            switch (stage) {
+              case "approve" -> service.decide(owner.projectId(), id, true, true);
+              case "restore" -> service.restore(owner);
+              case "inspect" -> service.inference(owner.projectId(), id);
+              default -> throw new AssertionError(stage);
+            }
+          });
+      assertEquals(
+          stage.equals("restore") ? "APPROVED" : "PENDING",
+          approvals.get(owner.projectId(), id).status());
+      if (stage.equals("approve"))
+        assertEquals("WAITING_APPROVAL", service.state(id).orElseThrow());
+    }
+  }
+
+  @Test
+  void contentCannotChangeBetweenPreflightAndAtomicApprovalDecision() {
+    String id = pauseInferenceForInspection();
+    store = org.mockito.Mockito.spy(store);
+    service = createService(clock);
+    var reads = new AtomicInteger();
+    var changed = new java.util.concurrent.atomic.AtomicBoolean();
+    doAnswer(
+            invocation -> {
+              if (reads.incrementAndGet() == 2) {
+                org.springframework.jdbc.core.simple.JdbcClient.create(source)
+                    .sql(
+                        "UPDATE approval_continuations SET document=json_set(document,'$.inference.tools[0].description',?) WHERE approval=?")
+                    .params("changed after content preflight", id)
+                    .update();
+                changed.set(true);
+              }
+              return invocation.callRealMethod();
+            })
+        .when(store)
+        .find(id);
+    var failure =
+        assertThrows(
+            IllegalArgumentException.class,
+            () -> service.decide(owner.projectId(), id, true, true));
+    assertTrue(failure.getMessage().contains("changed"));
+    assertTrue(changed.get());
+    assertEquals("PENDING", approvals.get(owner.projectId(), id).status());
+    assertEquals("WAITING_APPROVAL", service.state(id).orElseThrow());
+  }
+
   /** 承認続行後も所有者の追加入力が同じ実行キューへ届き、完了後は受け付けない。 */
   @Test
   void continuedRunAcceptsOwnedWebGuidanceWithoutResettingSavedBudget() {
