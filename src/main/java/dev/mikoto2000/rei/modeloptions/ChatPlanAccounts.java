@@ -15,6 +15,15 @@ public interface ChatPlanAccounts {
   /** Account-specific visible model IDs in server order, bound to this registration. */
   java.util.List<String> models(String account, String registration);
 
+  /** Local reasons only; never includes a provider body, credential, or native request. */
+  enum Invalidation {
+    STOPPED,
+    SIGNED_OUT,
+    REGISTRATION_CHANGED,
+    AUTHENTICATION_INVALID,
+    CONSENT_REQUIRED
+  }
+
   /** One inference admission; release it before tools or a child request run. */
   interface Request extends AutoCloseable {
     /** Completes when this admission is invalidated; contains no credential or native options. */
