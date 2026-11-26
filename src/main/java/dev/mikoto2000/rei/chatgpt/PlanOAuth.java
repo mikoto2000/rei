@@ -152,6 +152,17 @@ public final class PlanOAuth {
   /** 使用量。 */
   private final Map<String, Instant> used = new java.util.concurrent.ConcurrentHashMap<>();
 
+  private final java.util.concurrent.ConcurrentMap<String, Integer> activeLogouts =
+      new java.util.concurrent.ConcurrentHashMap<>();
+
+  private boolean loggingOut(String account) {
+    return account != null && activeLogouts.containsKey(account);
+  }
+
+  private void requireNotLoggingOut(String account) {
+    if (loggingOut(account)) throw ChatGptException.of(AUTH_REQUIRED);
+  }
+
   private final java.util.List<java.util.function.Consumer<String>> invalidationListeners =
       new java.util.concurrent.CopyOnWriteArrayList<>();
 
@@ -262,11 +273,14 @@ public final class PlanOAuth {
 
   /** Returns a local authorization incarnation without refreshing or exposing credentials. */
   public String registration(String account) {
+    if (loggingOut(account)) return null;
     return store.locked(s -> {
+      if (loggingOut(account)) return null;
       var saved = s.load(account);
       return saved != null
               && saved.accessToken() != null
               && saved.scopes().contains("chatgpt.tokens.use.direct")
+              && !loggingOut(account)
           ? saved.registrationId()
           : null;
     });
@@ -279,8 +293,11 @@ public final class PlanOAuth {
 
   /** Checks an optional accepted incarnation under the same lock as token rotation. */
   public TokenSet access(String account, String expectedRegistration) {
+    requireNotLoggingOut(account);
     return store.locked(s -> {
+      requireNotLoggingOut(account);
       var saved = s.load(account);
+      requireNotLoggingOut(account);
       if (saved == null
           || saved.accessToken() == null
           || expectedRegistration != null && !expectedRegistration.equals(saved.registrationId()))
@@ -305,6 +322,7 @@ public final class PlanOAuth {
         var replacement =
             tokenSet(grant, saved.clientId(), new Identity(saved.subject(), saved.email()), saved);
         s.save(account, replacement);
+        requireNotLoggingOut(account);
         if (!replacement.scopes().contains("chatgpt.tokens.use.direct"))
           throw ChatGptException.of(CONSENT_REQUIRED);
         return replacement;
@@ -317,11 +335,18 @@ public final class PlanOAuth {
 
   /** ChatGPTとの連携において、ログアウトに該当するか判定する。 */
   public boolean logout(String account) {
-    invalidate(account);
+    if (account != null) activeLogouts.merge(account, 1, Integer::sum);
     try {
+      invalidate(account);
       return revokeAndClear(account);
     } finally {
-      invalidate(account);
+      try {
+        invalidate(account);
+      } finally {
+        if (account != null)
+          activeLogouts.computeIfPresent(
+              account, (ignored, count) -> count == 1 ? null : count - 1);
+      }
     }
   }
 
