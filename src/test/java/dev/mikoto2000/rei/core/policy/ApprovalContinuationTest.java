@@ -212,6 +212,112 @@ class ApprovalContinuationTest {
     return id;
   }
 
+  static java.util.stream.Stream<org.junit.jupiter.params.provider.Arguments>
+      namedInferenceModes() {
+    return java.util.Arrays.stream(AgentRunContext.Mode.values())
+        .flatMap(mode ->
+            java.util.Arrays.stream(dev.mikoto2000.rei.llm.LlmApiType.values())
+                .map(api -> org.junit.jupiter.params.provider.Arguments.of(mode, api)));
+  }
+
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.MethodSource("namedInferenceModes")
+  void normalChatWaitsForInferenceConsentBeforeCallingEitherApi(
+      AgentRunContext.Mode mode, dev.mikoto2000.rei.llm.LlmApiType api) {
+    owner =
+        new AgentRunContext(
+            "inference-run",
+            owner.conversationId(),
+            directory,
+            owner.projectId(),
+            AgentRunContext.RequestSource.SHELL,
+            mode);
+    registry.register(owner);
+    registry.transition(owner.runId(), RunStatus.RUNNING, null);
+    var pin =
+        new dev.mikoto2000.rei.llm.RunLlmConnection(
+            "local",
+            true,
+            dev.mikoto2000.rei.llm.LlmProvider.OPENAI_COMPATIBLE,
+            dev.mikoto2000.rei.llm.LlmAuthentication.NONE,
+            null,
+            null,
+            new dev.mikoto2000.rei.llm.ResolvedLlmEndpoint(
+                "local",
+                1,
+                api,
+                "http://fixture.invalid/v1",
+                "chat-endpoint:local",
+                "fixture-model",
+                new dev.mikoto2000.rei.llm.LlmCapabilities(
+                    dev.mikoto2000.rei.llm.ReasoningReplayMode.NONE, 8, Set.of()),
+                null,
+                null,
+                Duration.ofSeconds(5)),
+            Map.of(),
+            Map.of());
+    var execution = execution();
+    execution.consumeNextLlmCall();
+    var before = execution.budgetSnapshot();
+    var payloads = new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore(source);
+    var exchange = payloads.newExchange(owner);
+    var context =
+        Map.<String, Object>of(
+            RunExecutionContext.KEY,
+            execution,
+            dev.mikoto2000.rei.modeloptions.ModelOptions.RUN_CONNECTION_CONTEXT_KEY,
+            pin,
+            dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.EXCHANGE_CONTEXT_KEY,
+            exchange,
+            dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ORIGIN_CONTEXT_KEY,
+            new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Origin(
+                exchange.ownerKey(), pin.fingerprint()));
+    ToolCallingChatOptions options =
+        api == dev.mikoto2000.rei.llm.LlmApiType.RESPONSES
+            ? org.springframework.ai.openai.responses.OpenAiResponsesChatOptions.builder()
+                .model("fixture-model")
+                .toolCallbacks(List.of())
+                .toolContext(context)
+                .build()
+            : org.springframework.ai.openai.OpenAiChatOptions.builder()
+                .model("fixture-model")
+                .toolCallbacks(List.of())
+                .toolContext(context)
+                .build();
+    execution.setModelOptions(options);
+    var calls = new AtomicInteger();
+    var model =
+        new ChatModel() {
+          public ChatResponse call(Prompt prompt) {
+            throw new AssertionError("Streaming loop only");
+          }
+
+          public Flux<ChatResponse> stream(Prompt prompt) {
+            calls.incrementAndGet();
+            throw new AssertionError("Inference invoked before export consent");
+          }
+        };
+    assertThrows(
+        RunWaitingException.class,
+        () ->
+            new StagnationChatModel(model)
+                .stream(new Prompt("PRIVATE INFERENCE FIXTURE", execution.modelOptions()))
+                    .blockLast());
+    assertEquals(0, calls.get());
+    assertEquals(before, execution.budgetSnapshot());
+    assertEquals(RunStatus.WAITING_APPROVAL, registry.get(owner.runId()).status());
+    var approval = approvals.list(owner.projectId()).getFirst();
+    assertEquals("inferenceExport", approval.tool());
+    var saved = store.find(approval.id()).orElseThrow();
+    assertEquals("WAITING_APPROVAL", saved.state());
+    assertTrue(store.document(saved).pending() == null);
+    assertTrue(store.document(saved).inference() != null);
+    assertEquals(pin, store.document(saved).connection());
+    assertEquals(before, store.document(saved).budget());
+    assertEquals("PRIVATE INFERENCE FIXTURE", store.saved(saved).messages().getLast().getText());
+    assertEquals("PENDING", approvals.get(owner.projectId(), approval.id()).status());
+  }
+
   /** 承認続行後も所有者の追加入力が同じ実行キューへ届き、完了後は受け付けない。 */
   @Test
   void continuedRunAcceptsOwnedWebGuidanceWithoutResettingSavedBudget() {
