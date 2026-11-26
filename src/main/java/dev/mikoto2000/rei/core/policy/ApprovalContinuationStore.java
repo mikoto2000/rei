@@ -114,6 +114,18 @@ public class ApprovalContinuationStore {
               com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
           InferenceInput inference) {
     public Document {
+      if (inference != null
+          && (pending != null
+              || history == null
+              || !history.isEmpty()
+              || owner == null
+              || budget == null
+              || connection == null
+              || !connection.named()
+              || protocolHistory == null
+              || protocolHistory.input() == null
+              || protocolHistory.input().entries().isEmpty()))
+        throw new IllegalArgumentException("Invalid pre-inference continuation document");
       history = history == null ? null : Collections.unmodifiableList(new ArrayList<>(history));
     }
 
