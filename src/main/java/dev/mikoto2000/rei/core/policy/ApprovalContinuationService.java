@@ -575,7 +575,7 @@ public class ApprovalContinuationService implements RunContinuation {
               .warn("Unclaimed inference guidance receipt retained after cleanup failure");
         }
       }
-      throw failed;
+      throw new IllegalStateException("Inference guidance replacement failed", failed);
     }
   }
 
