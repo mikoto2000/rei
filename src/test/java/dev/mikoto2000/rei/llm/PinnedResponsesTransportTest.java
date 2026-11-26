@@ -82,6 +82,103 @@ class PinnedResponsesTransportTest {
     }
   }
 
+  @ParameterizedTest
+  @org.junit.jupiter.params.provider.CsvSource({
+    "false,false",
+    "false,true",
+    "true,false",
+    "true,true"
+  })
+  void declaredNamedResponsesUsesTheCommonModelCache(boolean streaming, boolean omitOutputLimit)
+      throws Exception {
+    try (var fixture = new Fixture(streaming);
+        var models =
+            new PinnedChatModels(
+                ignored -> {
+                  throw new AssertionError("No-auth read credentials");
+                },
+                ignored -> {},
+                null,
+                4)) {
+      var pin = namedPin(fixture, omitOutputLimit, LlmEndpointCapabilities.Support.SUPPORTED);
+      var options = RunNativeOptions.options(pin);
+      var model = models.model(pin);
+      if (streaming)
+        model.stream(new Prompt("fixture", options)).collectList().block(Duration.ofSeconds(5));
+      else
+        assertThat(model.call(new Prompt("fixture", options)).getResult().getOutput().getText())
+            .isEqualTo("done");
+      assertThat(fixture.requests).hasSize(1);
+      assertThat(fixture.authorizations).containsExactly("<none>");
+      var wire =
+          new com.fasterxml.jackson.databind.ObjectMapper().readTree(fixture.requests.getFirst());
+      assertThat(wire.has("max_output_tokens")).isEqualTo(!omitOutputLimit);
+      if (!omitOutputLimit) assertThat(wire.path("max_output_tokens").asInt()).isEqualTo(64);
+      for (var field :
+          List.of("reasoning", "service_tier", "include", "previous_response_id", "max_tokens"))
+        assertThat(wire.has(field)).as(field).isFalse();
+      assertThat(wire.path("store").asBoolean(true)).isFalse();
+      assertThat(wire.path("stream").asBoolean()).isEqualTo(streaming);
+    }
+  }
+
+  @ParameterizedTest
+  @org.junit.jupiter.params.provider.EnumSource(
+      value = LlmEndpointCapabilities.Support.class,
+      names = {"UNKNOWN", "UNSUPPORTED"})
+  void undeclaredResponsesNeverReachesHttp(LlmEndpointCapabilities.Support support)
+      throws Exception {
+    try (var fixture = new Fixture(false);
+        var models =
+            new PinnedChatModels(
+                ignored -> {
+                  throw new AssertionError("No-auth read credentials");
+                },
+                ignored -> {},
+                null,
+                4)) {
+      var pin = namedPin(fixture, false, support);
+      assertThatThrownBy(() -> models.model(pin))
+          .isInstanceOf(IllegalStateException.class)
+          .hasMessageContaining("RESPONSES");
+      assertThat(fixture.requests).isEmpty();
+    }
+  }
+
+  private static RunLlmConnection namedPin(
+      Fixture fixture, boolean omitOutputLimit, LlmEndpointCapabilities.Support responses) {
+    var source = fixture.pin();
+    var endpoint = source.endpoint();
+    return new RunLlmConnection(
+        source.profileId(),
+        true,
+        source.provider(),
+        source.authentication(),
+        null,
+        null,
+        new ResolvedLlmEndpoint(
+            endpoint.endpointId(),
+            endpoint.generation(),
+            endpoint.apiType(),
+            endpoint.baseUrl(),
+            "chat-endpoint:fixture",
+            endpoint.model(),
+            endpoint.capabilities(),
+            omitOutputLimit ? null : 64,
+            null,
+            endpoint.readTimeout()),
+        Map.of(
+            LlmEndpointCapabilities.Capability.RESPONSES,
+            responses,
+            LlmEndpointCapabilities.Capability.STREAMING,
+            LlmEndpointCapabilities.Support.SUPPORTED,
+            LlmEndpointCapabilities.Capability.MAX_OUTPUT_TOKENS,
+            omitOutputLimit
+                ? LlmEndpointCapabilities.Support.UNSUPPORTED
+                : LlmEndpointCapabilities.Support.SUPPORTED),
+        omitOutputLimit ? Map.of() : Map.of("max_output_tokens", 64));
+  }
+
   private static final class Fixture implements AutoCloseable {
     final com.sun.net.httpserver.HttpServer server;
     final okhttp3.OkHttpClient transport =
