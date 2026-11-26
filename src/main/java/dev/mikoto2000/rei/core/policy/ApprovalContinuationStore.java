@@ -664,6 +664,30 @@ public class ApprovalContinuationStore {
         && owner.matches("[0-9a-fA-F]{64}");
   }
 
+  /**
+   * Serialize an already scoped human inspection using the same verified canonical message codec.
+   */
+  public List<java.util.Map<String, Object>> inferenceMessages(Entry entry) {
+    if (document(entry).inference() == null)
+      throw new IllegalArgumentException("Inference inspection unavailable");
+    var codec = new dev.mikoto2000.rei.modelmessage.ModelMessageCodec();
+    return saved(entry).messages().stream()
+        .map(message -> {
+          try {
+            var encoded =
+                json.readValue(
+                    codec.encode(message),
+                    new com.fasterxml.jackson.core.type.TypeReference<
+                        java.util.Map<String, Object>>() {});
+            encoded.remove("schemaVersion");
+            return java.util.Map.copyOf(encoded);
+          } catch (java.io.IOException failure) {
+            throw new IllegalStateException("Inference inspection unavailable");
+          }
+        })
+        .toList();
+  }
+
   private static void verifyInferenceContent(
       InferenceInput inference, ModelMessagePayloadStore.History history, List<Message> messages) {
     if (history == null

@@ -143,6 +143,89 @@ public class ApprovalContinuationService implements RunContinuation {
     return store.find(id).map(ApprovalContinuationStore.Entry::state);
   }
 
+  /** Human-only read view; neither request options nor executable callbacks are exported. */
+  public record InferenceView(
+      String approvalId,
+      Map<String, String> destination,
+      String connectionFingerprint,
+      String contentFingerprint,
+      List<Map<String, Object>> messages,
+      List<ApprovalContinuationStore.InferenceTool> tools) {
+    public InferenceView {
+      destination = Map.copyOf(destination);
+      messages = messages.stream().map(message -> Map.copyOf(message)).toList();
+      tools = List.copyOf(tools);
+    }
+
+    @Override
+    public String toString() {
+      return "InferenceView[approvalId="
+          + approvalId
+          + ", contentFingerprint="
+          + contentFingerprint
+          + "]";
+    }
+  }
+
+  /** Resolve only the owning project's verified, protected pre-inference snapshot. */
+  public Optional<InferenceView> inference(String project, String id) {
+    var request = findApproval.apply(project, id);
+    var found = store.find(id);
+    if (found.isEmpty()) return Optional.empty();
+    var entry = found.get();
+    var document = store.document(entry);
+    if (document.inference() == null) return Optional.empty();
+    var owner = document.owner();
+    if (!project.equals(owner.projectId())
+        || !request.runId().equals(owner.runId())
+        || !request.sessionId().equals(owner.conversationId()))
+      throw new IllegalArgumentException("Inference inspection ownership mismatch");
+    validate(owner);
+    dev.mikoto2000.rei.modeloptions.AcceptedRunOptions connection = document.connection();
+    inferenceGuard.verifySavedApproval(id, owner, connection, document.inference());
+    var messages = store.inferenceMessages(entry);
+    return Optional.of(
+        new InferenceView(
+            id,
+            connection.inferenceDescription(),
+            connection.fingerprint(),
+            document.inference().contentFingerprint(),
+            messages,
+            document.inference().tools()));
+  }
+
+  /** Portable human inspection data, independent of either storage or Web JSON mapper types. */
+  public Optional<Map<String, Object>> inferenceData(String project, String id) {
+    return inference(project, id)
+        .map(view ->
+            Map.<String, Object>of(
+                "approvalId",
+                view.approvalId(),
+                "destination",
+                view.destination(),
+                "connectionFingerprint",
+                view.connectionFingerprint(),
+                "contentFingerprint",
+                view.contentFingerprint(),
+                "messages",
+                view.messages(),
+                "tools",
+                view.tools().stream()
+                    .map(tool ->
+                        Map.<String, Object>of(
+                            "name",
+                            tool.name(),
+                            "description",
+                            tool.description(),
+                            "schema",
+                            tool.schema(),
+                            "returnDirect",
+                            tool.returnDirect(),
+                            "requiresConfirmation",
+                            tool.requiresConfirmation()))
+                    .toList()));
+  }
+
   /** 条件に合う対象を一覧にして、呼び出し元が参照できるようにする。 */
   public List<ToolApprovalRepository.Request> list(String project) {
     var rows = new LinkedHashMap<String, ToolApprovalRepository.Request>();
