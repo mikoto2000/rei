@@ -13,6 +13,36 @@ import org.springframework.boot.context.properties.bind.Binder;
 import org.springframework.boot.context.properties.source.MapConfigurationPropertySource;
 
 class RunLlmConnectionFactoryTest {
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.CsvSource({
+    "chat-completions,reasoning-effort,reasoning-effort",
+    "responses,reasoning-effort,reasoning-effort",
+    "chat-completions,response-format,structured-output",
+    "responses,response-format,structured-output"
+  })
+  void confirmedNamedGenerationIsFrozenAndRebuiltInsteadOfBeingSilentlyIgnored(
+      String api, String option, String capability) {
+    var settings = local();
+    String prefix = "rei.llm.features.chat.endpoints.local.";
+    settings.put(prefix + "api", api);
+    settings.put(prefix + "reasoning-replay", "none");
+    settings.put(prefix + "server-capabilities." + capability, "supported");
+    settings.put(prefix + "model-capabilities." + capability, "supported");
+    Object expected;
+    if (option.equals("reasoning-effort")) {
+      settings.put(prefix + "generation.reasoning-effort", "low");
+      expected = "low";
+    } else {
+      settings.put(prefix + "generation.response-format.type", "json_object");
+      expected = Map.of("type", "json_object");
+    }
+    var snapshot = factory(properties(settings)).capture("local", null);
+    String field = option.replace('-', '_');
+    assertThat(snapshot.generation()).containsEntry(field, expected);
+    assertThat(RunNativeOptions.generation(RunNativeOptions.options(snapshot)))
+        .containsEntry(field, expected);
+  }
+
   @Test
   void modelOverrideDoesNotBorrowCapabilitiesFromTheConfiguredModel() {
     var settings = local();
