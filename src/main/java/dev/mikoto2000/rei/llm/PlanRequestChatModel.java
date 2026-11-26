@@ -17,6 +17,14 @@ final class PlanRequestChatModel implements ChatModel {
     this.admission = java.util.Objects.requireNonNull(admission);
   }
 
+  PlanRequestChatModel(
+      ChatModel delegate,
+      Supplier<ChatPlanAccounts.Request> admission,
+      java.util.function.Consumer<Throwable> observeFailure) {
+    this(delegate, admission);
+    java.util.Objects.requireNonNull(observeFailure);
+  }
+
   @Override
   public ChatResponse call(Prompt prompt) {
     var result = new java.util.concurrent.atomic.AtomicReference<ChatResponse>();

@@ -75,6 +75,10 @@ final class ResponsesTransportException extends IllegalStateException
     return usage;
   }
 
+  boolean confirmedAppUsageLimit() {
+    return false;
+  }
+
   ResponsesTransportException(Category category) {
     this(category, null);
   }

@@ -66,6 +66,7 @@ class PlanUsageFailureWireTest {
                             ? "chatgpt_usage_limit"
                             : "chatgpt_usage_unavailable");
                 assertThat(error.retryAllowed()).isFalse();
+                assertThat(error.confirmedAppUsageLimit()).isEqualTo(code.endsWith("exceeded"));
                 assertThat(error.getCause()).isNull();
                 assertThat(error.getMessage()).doesNotContain("PRIVATE");
                 assertThat(error.diagnosticMessage()).doesNotContain("PRIVATE");
@@ -91,6 +92,7 @@ class PlanUsageFailureWireTest {
                 assertThat(error.diagnosticCode())
                     .isEqualTo(status == 429 ? "rate_limited" : "provider_unavailable");
                 assertThat(error.retryAllowed()).isFalse();
+                assertThat(error.confirmedAppUsageLimit()).isFalse();
                 assertThat(error.getCause()).isNull();
               });
       assertThat(fixture.requests).hasSize(1);

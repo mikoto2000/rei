@@ -181,4 +181,48 @@ class PlanRequestChatModelTest {
         .hasMessageContaining("busy fixture");
     assertThat(calls).hasValue(0);
   }
+
+  @ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(
+      strings = {"confirmed", "unavailable", "generic", "catalog"})
+  void safeFailureObservationPrecedesSlotReleaseAndDoesNotInventAppUsageProof(String kind) {
+    Throwable source =
+        switch (kind) {
+          case "confirmed" ->
+              ResponsesTransportException.planUsageFailure(
+                  "subscription_sharing_usage_limit_exceeded", null);
+          case "unavailable" ->
+              ResponsesTransportException.planUsageFailure(
+                  "subscription_sharing_usage_unavailable", null);
+          case "generic" ->
+              new ResponsesTransportException(ResponsesTransportException.Category.RATE_LIMIT);
+          default ->
+              dev.mikoto2000.rei.chatgpt.ChatGptException.of(
+                  dev.mikoto2000.rei.chatgpt.ChatGptException.Code.USAGE_LIMIT);
+        };
+    when(delegate.stream(any(Prompt.class))).thenReturn(Flux.error(source));
+    var observed = new java.util.concurrent.atomic.AtomicReference<Throwable>();
+    var propagated = new java.util.concurrent.atomic.AtomicReference<Throwable>();
+    var activeWhenObserved = new AtomicInteger(-1);
+    var model =
+        new PlanRequestChatModel(
+            delegate,
+            this::begin,
+            failure -> {
+              activeWhenObserved.set(active.get());
+              observed.set(failure);
+            });
+    model.stream(prompt).subscribe(ignored -> {}, propagated::set);
+    assertThat(observed.get())
+        .isNotNull()
+        .isSameAs(propagated.get())
+        .isInstanceOf(ResponsesTransportException.class);
+    var failure = (ResponsesTransportException) observed.get();
+    assertThat(failure.confirmedAppUsageLimit()).isEqualTo(kind.equals("confirmed"));
+    assertThat(failure.retryAllowed()).isFalse();
+    assertThat(failure.getCause()).isNull();
+    assertThat(activeWhenObserved).hasValue(1);
+    assertThat(active).hasValue(0);
+    assertThat(released).hasValue(1);
+  }
 }
