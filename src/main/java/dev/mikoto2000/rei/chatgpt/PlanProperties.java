@@ -23,7 +23,7 @@ public record PlanProperties(
   /** 受け取った情報からPlanPropertiesを作成する。 */
   @org.springframework.boot.context.properties.bind.ConstructorBinding
   public PlanProperties {
-    maxConcurrent = maxConcurrent == null ? 1 : maxConcurrent;
+    if (maxConcurrent == null) maxConcurrent = 1;
     if (maxConcurrent < 1 || maxConcurrent > 8)
       throw new IllegalArgumentException("rei.chatgpt-plan.max-concurrent must be between 1 and 8");
     if (credentialDirectory == null)
