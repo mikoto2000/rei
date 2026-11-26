@@ -27,7 +27,7 @@ public interface ChatPlanAccounts {
   /** One inference admission; release it before tools or a child request run. */
   interface Request extends AutoCloseable {
     /** Completes when this admission is invalidated; contains no credential or native options. */
-    java.util.concurrent.CompletionStage<Void> invalidated();
+    java.util.concurrent.CompletionStage<Invalidation> invalidated();
 
     /** Releases the request exactly once, including on error and cancellation. */
     @Override

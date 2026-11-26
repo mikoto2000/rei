@@ -163,15 +163,22 @@ public final class PlanOAuth {
     if (loggingOut(account)) throw ChatGptException.of(AUTH_REQUIRED);
   }
 
-  private final java.util.List<java.util.function.Consumer<String>> invalidationListeners =
-      new java.util.concurrent.CopyOnWriteArrayList<>();
+  private final java.util.List<
+          java.util.function.BiConsumer<
+              String, dev.mikoto2000.rei.modeloptions.ChatPlanAccounts.Invalidation>>
+      invalidationListeners = new java.util.concurrent.CopyOnWriteArrayList<>();
 
-  void onInvalidated(java.util.function.Consumer<String> listener) {
+  void onInvalidated(
+      java.util.function.BiConsumer<
+              String, dev.mikoto2000.rei.modeloptions.ChatPlanAccounts.Invalidation>
+          listener) {
     invalidationListeners.add(java.util.Objects.requireNonNull(listener));
   }
 
-  private void invalidate(String account) {
-    if (account != null) for (var listener : invalidationListeners) listener.accept(account);
+  private void invalidate(
+      String account, dev.mikoto2000.rei.modeloptions.ChatPlanAccounts.Invalidation reason) {
+    if (account != null)
+      for (var listener : invalidationListeners) listener.accept(account, reason);
   }
 
   /** 指定された値や利用先を使って、PlanOAuthを初期化する。 */
@@ -269,7 +276,9 @@ public final class PlanOAuth {
       s.save(attempt.account(), tokens);
       return null;
     });
-    invalidate(attempt.account());
+    invalidate(
+        attempt.account(),
+        dev.mikoto2000.rei.modeloptions.ChatPlanAccounts.Invalidation.REGISTRATION_CHANGED);
   }
 
   /** Returns a local authorization incarnation without refreshing or exposing credentials. */
@@ -297,7 +306,14 @@ public final class PlanOAuth {
     try {
       return accessLocked(account, expectedRegistration);
     } catch (ChatGptException invalid) {
-      if (invalid.code() == AUTH_INVALID || invalid.code() == CONSENT_REQUIRED) invalidate(account);
+      if (invalid.code() == AUTH_INVALID)
+        invalidate(
+            account,
+            dev.mikoto2000.rei.modeloptions.ChatPlanAccounts.Invalidation.AUTHENTICATION_INVALID);
+      else if (invalid.code() == CONSENT_REQUIRED)
+        invalidate(
+            account,
+            dev.mikoto2000.rei.modeloptions.ChatPlanAccounts.Invalidation.CONSENT_REQUIRED);
       throw invalid;
     }
   }
@@ -347,11 +363,12 @@ public final class PlanOAuth {
   public boolean logout(String account) {
     if (account != null) activeLogouts.merge(account, 1, Integer::sum);
     try {
-      invalidate(account);
+      invalidate(account, dev.mikoto2000.rei.modeloptions.ChatPlanAccounts.Invalidation.SIGNED_OUT);
       return revokeAndClear(account);
     } finally {
       try {
-        invalidate(account);
+        invalidate(
+            account, dev.mikoto2000.rei.modeloptions.ChatPlanAccounts.Invalidation.SIGNED_OUT);
       } finally {
         if (account != null)
           activeLogouts.computeIfPresent(

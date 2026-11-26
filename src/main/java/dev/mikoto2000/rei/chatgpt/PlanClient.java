@@ -278,10 +278,15 @@ public final class PlanClient
 
   /** 実行中の処理を停止する。 */
   public void stop(String account) {
+    stop(account, dev.mikoto2000.rei.modeloptions.ChatPlanAccounts.Invalidation.STOPPED);
+  }
+
+  private void stop(
+      String account, dev.mikoto2000.rei.modeloptions.ChatPlanAccounts.Invalidation reason) {
     generations
         .computeIfAbsent(account, a -> new java.util.concurrent.atomic.AtomicInteger())
         .incrementAndGet();
-    requestSlots.invalidate(account);
+    requestSlots.invalidate(account, reason);
   }
 
   /**

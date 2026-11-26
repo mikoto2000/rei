@@ -44,7 +44,7 @@ final class PlanRequestSlots {
     return java.util.Objects.requireNonNull(admitted.get());
   }
 
-  void invalidate(String account) {
+  void invalidate(String account, ChatPlanAccounts.Invalidation reason) {
     var cancelled = new java.util.ArrayList<Permit>();
     active.forEach((key, scope) -> {
       if (!key.account().equals(account)) return;
@@ -56,15 +56,17 @@ final class PlanRequestSlots {
           });
     });
     // Completion can synchronously close a permit and reenter this map.
-    for (var request : cancelled) request.invalidation.complete(null);
+    for (var request : cancelled) request.invalidation.complete(reason);
   }
 
   private final class Permit implements ChatPlanAccounts.Request {
     private final Key key;
     private final Scope scope;
     private final AtomicBoolean closed = new AtomicBoolean();
-    private final CompletableFuture<Void> invalidation = new CompletableFuture<>();
-    private final CompletionStage<Void> signal = invalidation.minimalCompletionStage();
+    private final CompletableFuture<ChatPlanAccounts.Invalidation> invalidation =
+        new CompletableFuture<>();
+    private final CompletionStage<ChatPlanAccounts.Invalidation> signal =
+        invalidation.minimalCompletionStage();
 
     private Permit(Key key, Scope scope) {
       this.key = key;
@@ -72,7 +74,7 @@ final class PlanRequestSlots {
     }
 
     @Override
-    public CompletionStage<Void> invalidated() {
+    public CompletionStage<ChatPlanAccounts.Invalidation> invalidated() {
       return signal;
     }
 
