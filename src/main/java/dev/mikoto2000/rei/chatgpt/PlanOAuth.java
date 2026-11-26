@@ -152,6 +152,17 @@ public final class PlanOAuth {
   /** 使用量。 */
   private final Map<String, Instant> used = new java.util.concurrent.ConcurrentHashMap<>();
 
+  private final java.util.List<java.util.function.Consumer<String>> invalidationListeners =
+      new java.util.concurrent.CopyOnWriteArrayList<>();
+
+  void onInvalidated(java.util.function.Consumer<String> listener) {
+    invalidationListeners.add(java.util.Objects.requireNonNull(listener));
+  }
+
+  private void invalidate(String account) {
+    if (account != null) for (var listener : invalidationListeners) listener.accept(account);
+  }
+
   /** 指定された値や利用先を使って、PlanOAuthを初期化する。 */
   public PlanOAuth(
       ProtectedCredentialStore store,
@@ -306,6 +317,15 @@ public final class PlanOAuth {
 
   /** ChatGPTとの連携において、ログアウトに該当するか判定する。 */
   public boolean logout(String account) {
+    invalidate(account);
+    try {
+      return revokeAndClear(account);
+    } finally {
+      invalidate(account);
+    }
+  }
+
+  private boolean revokeAndClear(String account) {
     return store.locked(s -> {
       var saved = s.load(account);
       if (saved == null) return true;

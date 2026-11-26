@@ -137,6 +137,7 @@ public final class PlanClient
     this.oauth = oauth;
     this.transport = transport;
     this.clock = clock;
+    oauth.onInvalidated(this::stop);
   }
 
   /** Observes local authorization without reading tokens into the common connection layer. */
@@ -158,10 +159,19 @@ public final class PlanClient
   public dev.mikoto2000.rei.modeloptions.ChatPlanAccounts.Request begin(
       String account, String registration, String model) {
     requireRegistration(registration);
+    var generation =
+        generations.computeIfAbsent(
+            account, value -> new java.util.concurrent.atomic.AtomicInteger());
+    int initial = generation.get();
     if (!registration.equals(oauth.registration(account))) throw ChatGptException.of(AUTH_REQUIRED);
     if (model == null || model.isBlank() || model.codePoints().anyMatch(Character::isISOControl))
       throw ChatGptException.of(MODEL_UNAVAILABLE);
-    return requestSlots.begin(account, registration);
+    var request = requestSlots.begin(account, registration);
+    if (generation.get() != initial) {
+      request.close();
+      throw ChatGptException.of(CANCELLED);
+    }
+    return request;
   }
 
   /** Reuses the protected refresh and visible model catalog for an accepted account. */
@@ -265,6 +275,7 @@ public final class PlanClient
     generations
         .computeIfAbsent(account, a -> new java.util.concurrent.atomic.AtomicInteger())
         .incrementAndGet();
+    requestSlots.invalidate(account);
   }
 
   /**

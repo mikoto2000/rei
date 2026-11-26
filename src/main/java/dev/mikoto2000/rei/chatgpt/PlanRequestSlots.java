@@ -44,6 +44,21 @@ final class PlanRequestSlots {
     return java.util.Objects.requireNonNull(admitted.get());
   }
 
+  void invalidate(String account) {
+    var cancelled = new java.util.ArrayList<Permit>();
+    active.forEach((key, scope) -> {
+      if (!key.account().equals(account)) return;
+      active.computeIfPresent(
+          key,
+          (ignored, current) -> {
+            if (current == scope) cancelled.addAll(scope.requests);
+            return current;
+          });
+    });
+    // Completion can synchronously close a permit and reenter this map.
+    for (var request : cancelled) request.invalidation.complete(null);
+  }
+
   private final class Permit implements ChatPlanAccounts.Request {
     private final Key key;
     private final Scope scope;
