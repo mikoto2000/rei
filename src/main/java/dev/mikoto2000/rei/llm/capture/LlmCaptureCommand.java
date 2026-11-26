@@ -29,6 +29,13 @@ import picocli.CommandLine.Spec;
     subcommands = LlmCaptureCommand.Capture.class,
     mixinStandardHelpOptions = true)
 public final class LlmCaptureCommand implements Runnable {
+  @org.springframework.beans.factory.annotation.Autowired(required = false)
+  public void setChatConnections(dev.mikoto2000.rei.llm.ChatConnectionService connections) {}
+
+  public void setEndpointMenu(java.util.function.Function<
+      java.util.List<dev.mikoto2000.rei.llm.ChatConnectionService.Endpoint>,
+      java.util.Optional<String>> menu) {}
+
   /** 保存先。 */
   private final java.util.function.BiConsumer<Object, String> reserveCapture;
 
