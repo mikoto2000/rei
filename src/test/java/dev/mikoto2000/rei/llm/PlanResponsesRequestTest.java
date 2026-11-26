@@ -82,6 +82,90 @@ class PlanResponsesRequestTest {
     }
   }
 
+  @ParameterizedTest
+  @ValueSource(
+      strings = {
+        "max_output_tokens",
+        "temperature",
+        "top_p",
+        "max_tool_calls",
+        "truncation",
+        "service_tier",
+        "prompt_cache_key",
+        "safety_identifier",
+        "metadata"
+      })
+  void unsupportedExplicitPlanSettingsNameTheFieldWithoutEchoingItsValue(String field)
+      throws Exception {
+    try (var fixture = new Fixture()) {
+      var defaults = fixture.options();
+      var builder = defaults.mutate();
+      switch (field) {
+        case "max_output_tokens" -> builder.maxOutputTokens(1);
+        case "temperature" -> builder.temperature(0.1);
+        case "top_p" -> builder.topP(0.9);
+        case "max_tool_calls" -> builder.maxToolCalls(1);
+        case "truncation" -> builder.truncation("disabled");
+        case "service_tier" -> builder.serviceTier("default");
+        case "prompt_cache_key" -> builder.promptCacheKey("PRIVATE_OPTION_VALUE");
+        case "safety_identifier" -> builder.safetyIdentifier("PRIVATE_OPTION_VALUE");
+        case "metadata" -> builder.metadata(Map.of("private", "PRIVATE_OPTION_VALUE"));
+        default -> throw new AssertionError(field);
+      }
+      var model = ResponsesAdapter.createForRun(fixture.pin, defaults, fixture.client);
+      assertThatThrownBy(() -> model.call(new Prompt("fixture", builder.build())))
+          .isInstanceOf(IllegalArgumentException.class)
+          .hasMessageContaining(field)
+          .hasMessageNotContaining("PRIVATE_OPTION_VALUE");
+      assertThat(fixture.requests).isEmpty();
+    }
+  }
+
+  @ParameterizedTest
+  @ValueSource(
+      strings = {"authentication", "resource", "registration", "account", "replay", "streaming"})
+  void untrustedPlanBindingsAreRejectedBeforeAnyRequest(String change) throws Exception {
+    try (var fixture = new Fixture()) {
+      var source = fixture.pin;
+      var endpoint = source.endpoint();
+      var capabilities = new java.util.HashMap<>(source.capabilities());
+      if (change.equals("streaming"))
+        capabilities.put(
+            LlmEndpointCapabilities.Capability.STREAMING, LlmEndpointCapabilities.Support.UNKNOWN);
+      var pin =
+          new RunLlmConnection(
+              source.profileId(),
+              true,
+              source.provider(),
+              change.equals("authentication") ? LlmAuthentication.API_KEY : source.authentication(),
+              change.equals("account") ? null : source.accountRef(),
+              change.equals("registration") ? null : source.accountRegistration(),
+              new ResolvedLlmEndpoint(
+                  endpoint.endpointId(),
+                  endpoint.generation(),
+                  endpoint.apiType(),
+                  change.equals("resource") ? "http://foreign.invalid/v1" : endpoint.baseUrl(),
+                  endpoint.credentialRef(),
+                  endpoint.model(),
+                  new LlmCapabilities(
+                      change.equals("replay")
+                          ? ReasoningReplayMode.NONE
+                          : ReasoningReplayMode.ENCRYPTED,
+                      36,
+                      Set.of()),
+                  null,
+                  null,
+                  endpoint.readTimeout()),
+              capabilities,
+              Map.of());
+      assertThatThrownBy(() ->
+              ResponsesAdapter.createForRun(
+                  pin, (OpenAiResponsesChatOptions) RunNativeOptions.options(pin), fixture.client))
+          .isInstanceOf(IllegalStateException.class);
+      assertThat(fixture.requests).isEmpty();
+    }
+  }
+
   private static final class Fixture implements AutoCloseable {
     final RunLlmConnection pin =
         new RunLlmConnection(
