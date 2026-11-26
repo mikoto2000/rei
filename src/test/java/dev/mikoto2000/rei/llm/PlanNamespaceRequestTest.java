@@ -210,7 +210,7 @@ class PlanNamespaceRequestTest {
     return result.get();
   }
 
-  private static RunLlmConnection pin(PlanResponsesRequestTest.Fixture fixture) {
+  static RunLlmConnection pin(PlanResponsesRequestTest.Fixture fixture) {
     var source = fixture.pin;
     var capabilities = new java.util.HashMap<>(source.capabilities());
     capabilities.put(
