@@ -10,6 +10,9 @@ import java.nio.file.Path;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.Set;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
@@ -43,7 +46,7 @@ class PlanRequestSlotsTest {
     return tokens;
   }
 
-  private ChatPlanAccounts accounts() {
+  private PlanClient accounts() {
     PlanTransport transport =
         (uri, method, headers, body, timeout, cancelled) -> {
           http.incrementAndGet();
@@ -145,5 +148,59 @@ class PlanRequestSlotsTest {
       assertThat(accepted).isNotNull();
     }
     assertThat(http).hasValue(0);
+  }
+
+  @Test
+  void stoppingOneAccountInvalidatesItsRequestsAndAllowsEagerCleanupToReenterAdmission() {
+    var personal = register("personal", false);
+    var work = register("work", false);
+    var client = accounts();
+    try (var first = begin(client, "personal", personal.registrationId(), "model-a");
+        var other = begin(client, "work", work.registrationId(), "model-a")) {
+      first.invalidated().thenRun(first::close);
+      client.stop("personal");
+      assertThat(first.invalidated().toCompletableFuture()).isCompleted();
+      assertThat(other.invalidated().toCompletableFuture()).isNotDone();
+      try (var replacement = begin(client, "personal", personal.registrationId(), "model-a")) {
+        assertThat(replacement.invalidated().toCompletableFuture()).isNotDone();
+      }
+    }
+    assertThat(http).hasValue(0);
+  }
+
+  @Test
+  void logoutInvalidatesRequestsBeforeWaitingForRemoteRevocation() throws Exception {
+    var saved = register("personal", false);
+    var entered = new CountDownLatch(1);
+    var release = new CountDownLatch(1);
+    PlanTransport transport =
+        (uri, method, headers, body, timeout, cancelled) -> {
+          if (method.equals("GET"))
+            return PlanOAuthTest.reply(
+                200, "{\"revocation_endpoint\":\"https://auth.openai.com/revoke\"}");
+          entered.countDown();
+          try {
+            if (!release.await(5, TimeUnit.SECONDS))
+              throw new AssertionError("Revocation fixture was not released");
+          } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+            throw new AssertionError(interrupted);
+          }
+          return PlanOAuthTest.reply(200, "");
+        };
+    var oauth = new PlanOAuth(store(), transport, (id, account, nonce) -> null, Clock.systemUTC());
+    var client = new PlanClient(oauth, transport, Clock.systemUTC());
+    try (var pool = Executors.newVirtualThreadPerTaskExecutor();
+        var request = begin(client, "personal", saved.registrationId(), "model-a")) {
+      request.invalidated().thenRun(request::close);
+      var logout = pool.submit(() -> oauth.logout("personal"));
+      try {
+        assertThat(entered.await(5, TimeUnit.SECONDS)).isTrue();
+        assertThat(request.invalidated().toCompletableFuture()).isCompleted();
+      } finally {
+        release.countDown();
+      }
+      assertThat(logout.get(5, TimeUnit.SECONDS)).isTrue();
+    }
   }
 }
