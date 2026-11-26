@@ -138,7 +138,9 @@ final class ResponsesToolNamespace {
     void accept(com.openai.models.responses.ResponseOutputItem item, boolean complete) {
       if (!item.isFunctionCall()) return;
       var call = item.asFunctionCall();
-      if (!"rei".equals(call.namespace().orElse(null))
+      if (!Set.of("type", "id", "call_id", "name", "namespace", "arguments", "status")
+              .containsAll(call._allProperties().keySet())
+          || !"rei".equals(call.namespace().orElse(null))
           || !declared.contains(call.name())
           || !validCallId(call.callId())
           || history.containsKey(call.callId())) throw invalid();

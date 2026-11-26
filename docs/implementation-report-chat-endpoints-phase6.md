@@ -61,3 +61,11 @@ Phase 6 は進行中。外部送信同意の実装と統合検証が完了する
 既存 `/approval show` と project-scoped `GET /api/v1/projects/{projectId}/approvals/{id}/inference` で、保護済みの system/user/history・parts・公開ツール定義と送信先を確認できる。表示は権限を付与・消費せず、一覧には本文を展開しない。内容と承認の目的・所有者・接続の照合が済んだデータだけを返す。保存用 JSON mapper のノード型を Web API に渡さず、通常の JSON データへ投影する。表示用の接続情報には中立な `AcceptedRunOptions` を使う。この範囲の関連 59 テストと全 6 アーキテクチャ集合の一致を確認した。
 
 承認受付・復元・キュー投入時にも目的と内容を確認する。承認更新の短い SQL transaction に、独自の `BEGIN IMMEDIATE` を使う既存ペイロード読み取りを重ねない。本文は先に保護参照から検証し、権限を付与する transaction 内で文書が検証済みのものと完全一致することを再確認する。検証後にツール説明を変更する競合を注入し、承認が付与されず元の PENDING が維持されることを確認した。既存の保存ストア全体の transaction 規則は変更していない。目的・内容の変更を各境界で拒否するテスト、従来の再起動テストを含む関連 69 テストが成功し、アーキテクチャの追加・削除はなかった。
+
+## 送信ポリシーと実際の承認後継続
+
+推論送信は既存ポリシーの NETWORK_WRITE と EXTERNAL_SIDE_EFFECT を使って判定する。ツール名の再分類で送信権限を変えず、管理者の拒否を承認済み grant より優先する。AUTO_APPROVE、音声入力、明示的 full-auto の既存規則を適用し、ToolPermissionGuard は変更しない。関連 102 テストが成功した。通常ループの synthetic fixture には送信を明示的に許可する実ポリシーと保護ストアを設定し、以前の期待値を維持した関連 58 テストが成功した。実サービス向け設定は変更していない。
+
+実際の ChatExecutionService と SQL 承認保存を使い、3 モードで「未承認なら HTTP 0 回 → 接続選択変更 → 明示承認 → 元の接続で HTTP 1 回」を確認した。承認待ちに入る前に予約した推論回数を続行時に二重計上する不具合を Red で再現し、保護された inference 待機だけを表す Saved.inferencePending で修正した。通常の tool 続行と Checkpoint の予算規則を変えず、関連 69 テスト（従来の再開とアーキテクチャを含む）が成功した。
+
+未確認の native function call フィールドが黙って失われるケースは、completed と added イベントの双方を含む 6 ケースで検査した。26 テスト中 5 件の assertion failure、0 error を確認した。この記録時点では、型付き SDK 境界での拒否を追加した修正の回帰検証を実行中である。
