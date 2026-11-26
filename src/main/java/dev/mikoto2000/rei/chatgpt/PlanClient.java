@@ -113,6 +113,8 @@ public final class PlanClient
   /** OAuth認証。 */
   private final PlanOAuth oauth;
 
+  private final PlanRequestSlots requestSlots = new PlanRequestSlots(1);
+
   /** 通信経路。 */
   private final PlanTransport transport;
 
@@ -149,6 +151,17 @@ public final class PlanClient
         || expected.length() > 128
         || expected.codePoints().anyMatch(Character::isISOControl))
       throw ChatGptException.of(AUTH_REQUIRED);
+  }
+
+  /** Admits one inference without acquiring a credential or retaining a whole Run. */
+  @Override
+  public dev.mikoto2000.rei.modeloptions.ChatPlanAccounts.Request begin(
+      String account, String registration, String model) {
+    requireRegistration(registration);
+    if (!registration.equals(oauth.registration(account))) throw ChatGptException.of(AUTH_REQUIRED);
+    if (model == null || model.isBlank() || model.codePoints().anyMatch(Character::isISOControl))
+      throw ChatGptException.of(MODEL_UNAVAILABLE);
+    return requestSlots.begin(account, registration);
   }
 
   /** Reuses the protected refresh and visible model catalog for an accepted account. */
