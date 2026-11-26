@@ -458,24 +458,29 @@ public final class PlanClient
               stop)) {
         var remaining = Duration.ofNanos(Math.max(1, deadline - System.nanoTime()));
         if (response.status() != 200) {
-          throw httpError(response, "responses", remaining, stop);
+          var failure = httpError(response, "responses", remaining, stop);
+          if (failure.confirmedAppUsageLimit()) pauseRequests(account, registration);
+          throw failure;
         }
         String type = mediaType(response);
         if ((!type.isEmpty() && !type.equals("text/event-stream")) || !identityEncoding(response))
           throw failure(PROTOCOL, response, "responses", -1, receiveLimit);
         var assembler = new PlanSseAssembler();
-        return PlanIO.read(
-            response.body(),
-            remaining,
-            stop,
-            () -> {
-              try {
-                return assembler.read(response.body(), receiveLimit, type.isEmpty());
-              } catch (ChatGptException e) {
-                throw failure(
-                    e.code(), response, "responses", assembler.receivedBytes(), receiveLimit);
-              }
-            });
+        var result =
+            PlanIO.read(
+                response.body(),
+                remaining,
+                stop,
+                () -> {
+                  try {
+                    return assembler.read(response.body(), receiveLimit, type.isEmpty());
+                  } catch (ChatGptException e) {
+                    throw failure(
+                        e.code(), response, "responses", assembler.receivedBytes(), receiveLimit);
+                  }
+                });
+        if (assembler.confirmedAppUsageLimit()) pauseRequests(account, registration);
+        return result;
       }
     }
   }
