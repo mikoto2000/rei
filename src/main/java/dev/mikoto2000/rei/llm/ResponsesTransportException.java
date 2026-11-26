@@ -24,6 +24,7 @@ final class ResponsesTransportException extends IllegalStateException
   /** Fixed codes survive existing user diagnostics without exposing SDK bodies or causes. */
   @Override
   public String diagnosticCode() {
+    if (safeCode != null) return safeCode;
     return switch (category) {
       case AUTHENTICATION -> "authentication_failed";
       case RATE_LIMIT -> "rate_limited";
@@ -42,6 +43,7 @@ final class ResponsesTransportException extends IllegalStateException
   /** Only host-defined guidance crosses the shared diagnostic boundary. */
   @Override
   public String diagnosticMessage() {
+    if (safeMessage != null) return safeMessage;
     return switch (category) {
       case AUTHENTICATION -> "LLM の認証に失敗しました。接続先と認証設定を確認してください。";
       case RATE_LIMIT -> "LLM の呼び出し制限に達しました。利用枠と実行予算を確認してください。";
@@ -61,6 +63,8 @@ final class ResponsesTransportException extends IllegalStateException
   private final Category category;
   private final ModelTokenUsage usage;
   private final boolean retryAllowed;
+  private final String safeCode;
+  private final String safeMessage;
 
   @Override
   public boolean retryAllowed() {
@@ -81,9 +85,20 @@ final class ResponsesTransportException extends IllegalStateException
 
   private ResponsesTransportException(
       Category category, ModelTokenUsage usage, boolean retryAllowed) {
+    this(category, usage, retryAllowed, null, null);
+  }
+
+  private ResponsesTransportException(
+      Category category,
+      ModelTokenUsage usage,
+      boolean retryAllowed,
+      String safeCode,
+      String safeMessage) {
     super("Responses transport failed: " + category);
     this.category = category;
     this.usage = usage;
+    this.safeCode = safeCode;
+    this.safeMessage = safeMessage;
     this.retryAllowed =
         retryAllowed
             && (category == Category.TRANSIENT
@@ -165,8 +180,12 @@ final class ResponsesTransportException extends IllegalStateException
     while (error instanceof java.util.concurrent.CompletionException && error.getCause() != null)
       error = error.getCause();
     Throwable nested = error;
-    for (int depth = 0; nested != null && depth < 32; depth++, nested = nested.getCause())
+    for (int depth = 0; nested != null && depth < 32; depth++, nested = nested.getCause()) {
       if (nested instanceof ResponsesTransportException failure) return failure;
+      if (nested instanceof dev.mikoto2000.rei.toolcontract.ExternalReadFailure failure)
+        return new ResponsesTransportException(
+            Category.PROVIDER, null, false, failure.diagnosticCode(), failure.diagnosticMessage());
+    }
     if (error instanceof com.openai.errors.OpenAIInvalidDataException
         || error instanceof IllegalArgumentException)
       return new ResponsesTransportException(Category.INVALID_RESPONSE);
