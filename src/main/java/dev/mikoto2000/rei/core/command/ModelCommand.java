@@ -12,6 +12,20 @@ import picocli.CommandLine.Parameters;
 @Command(name = "model", description = "使用する chat モデルを確認・指定します")
 @RequiredArgsConstructor
 public class ModelCommand implements Runnable {
+  @org.springframework.beans.factory.annotation.Autowired(required = false)
+  public void setChatConnections(dev.mikoto2000.rei.modeloptions.ChatModelSelection connections) {
+    java.util.Objects.requireNonNull(connections);
+    selectedModel = () -> connections.selection().model();
+    selectModel = connections::selectModel;
+  }
+
+  private java.util.function.Supplier<String> selectedModel;
+  private java.util.function.Consumer<String> selectModel;
+
+  private String selectedModel() {
+    return selectedModel == null ? currentModelHolder.get() : selectedModel.get();
+  }
+
   /** 現在モデル保持先。 */
   private final ModelHolderService currentModelHolder;
 
@@ -23,12 +37,13 @@ public class ModelCommand implements Runnable {
   @Override
   public void run() {
     if (modelName.isEmpty()) {
-      IO.println(currentModelHolder.get());
+      IO.println(selectedModel());
       return;
     }
 
     String nextModel = modelName.get();
-    currentModelHolder.set(nextModel);
-    IO.println("current model: " + currentModelHolder.get());
+    if (selectModel == null) currentModelHolder.set(nextModel);
+    else selectModel.accept(nextModel);
+    IO.println("current model: " + selectedModel());
   }
 }

@@ -48,6 +48,40 @@ final class PinnedChatModels implements AutoCloseable {
     return cache.get(connection);
   }
 
+  java.util.List<String> models(RunLlmConnection connection) {
+    verify(connection);
+    var client =
+        PinnedOpenAiClients.openModels(
+            connection,
+            () -> {
+              verify(connection);
+              return credential.apply(connection);
+            },
+            transport,
+            java.util.List.of(),
+            () -> verify(connection));
+    try {
+      return client.models().list().data().stream()
+          .map(com.openai.models.models.Model::id)
+          .filter(id ->
+              !id.isBlank()
+                  && id.length() <= 1024
+                  && id.codePoints().noneMatch(Character::isISOControl))
+          .distinct()
+          .sorted()
+          .toList();
+    } catch (RuntimeException failure) {
+      var status =
+          failure instanceof com.openai.errors.OpenAIServiceException response
+              ? ": HTTP " + response.statusCode()
+              : "";
+      // SDK exception bodies are untrusted and can echo credentials. Expose only a status.
+      throw new IllegalStateException("Selected chat endpoint model catalog unavailable" + status);
+    } finally {
+      client.close();
+    }
+  }
+
   private ChatModel create(RunLlmConnection connection) {
     verify(connection);
     if (connection.endpoint().apiType() == LlmApiType.RESPONSES && connection.named())

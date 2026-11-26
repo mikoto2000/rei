@@ -119,7 +119,7 @@ public final class MeetingSelectionMenu {
         lines.add(
             new AttributedString(
                 single
-                    ? "↑↓ 移動 / Enter 選択して再開 / Esc 取消"
+                    ? "↑↓ 移動 / Enter 選択 / Esc 取消"
                     : "↑↓ 移動 / Space 選択・解除 / Enter 保存 / Esc 取消 (" + selected.size() + "/3)"));
         // Keep the cursor visible even in a short terminal; truncate labels without ANSI execution.
         int count = Math.min(candidates.size(), Math.max(1, rows - 2));

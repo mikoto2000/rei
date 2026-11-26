@@ -68,6 +68,47 @@ final class RunLlmConnectionFactory {
     this.registration = registration;
   }
 
+  /** Metadata requests do not require inference generation settings to be applicable. */
+  RunLlmConnection discovery(String profile, String modelOverride) {
+    if (!catalog.hasNamedProfiles()) return capture(profile, modelOverride);
+    var source = catalog.connection(profile);
+    var metadata =
+        catalog.profiles().stream()
+            .filter(value -> value.id().equals(profile))
+            .findFirst()
+            .orElseThrow();
+    if (metadata.provider() == LlmProvider.CHATGPT_PLAN)
+      throw new IllegalStateException("ChatGPT model discovery requires verified account support");
+    var model = modelOverride == null ? metadata.model() : modelOverride;
+    var capabilities =
+        java.util.Objects.equals(model, metadata.model())
+            ? metadata.capabilities()
+            : metadata.capabilities().forUnconfirmedModel();
+    var endpoint =
+        new ResolvedLlmEndpoint(
+            profile,
+            metadata.generation(),
+            metadata.api(),
+            source.getBaseUrl(),
+            "chat-endpoint:" + profile,
+            model,
+            new LlmCapabilities(
+                ReasoningReplayMode.NONE, capabilities.maxTools(), java.util.Set.of()),
+            null,
+            null,
+            readTimeout);
+    return new RunLlmConnection(
+        profile,
+        true,
+        metadata.provider(),
+        metadata.authentication(),
+        null,
+        null,
+        endpoint,
+        capabilities.effective(),
+        java.util.Map.of());
+  }
+
   RunLlmConnection capture(String profile, String modelOverride) {
     var connection = catalog.connection(profile);
     var metadata =

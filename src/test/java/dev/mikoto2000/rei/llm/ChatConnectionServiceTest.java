@@ -42,6 +42,7 @@ class ChatConnectionServiceTest {
       var owner = owner("first", mode);
       var pin = service.accept(owner);
       service.select("second");
+      assertThat(service.currentEndpoint().profile().id()).isEqualTo("second");
       assertThat(service.accept(owner)).isSameAs(pin);
       assertThat(service.options(owner).getModel()).isEqualTo("first-model");
       assertThat(service.options(owner).getToolContext())
@@ -145,6 +146,98 @@ class ChatConnectionServiceTest {
       service.release(owner);
       service.select("second");
       assertThatThrownBy(() -> service.options(owner)).isInstanceOf(IllegalStateException.class);
+    }
+  }
+
+  @Test
+  void selectionViewFollowsTheEndpointAndRemembersEachEndpointsModel() {
+    var holder = new ModelHolderService("static-helper");
+    try (var service =
+        service(
+            named("http://first.invalid", "http://second.invalid"), holder, new ArrayList<>())) {
+      assertThat(service.selection())
+          .isEqualTo(
+              new dev.mikoto2000.rei.modeloptions.ChatModelSelection.Selection(
+                  "first", "first-model"));
+      service.selectModel("first-picked");
+      service.select("second");
+      assertThat(service.selection())
+          .isEqualTo(
+              new dev.mikoto2000.rei.modeloptions.ChatModelSelection.Selection(
+                  "second", "second-model"));
+      service.selectModel("second-picked");
+      service.select("first");
+      assertThat(service.selection())
+          .isEqualTo(
+              new dev.mikoto2000.rei.modeloptions.ChatModelSelection.Selection(
+                  "first", "first-picked"));
+      assertThat(holder.get()).isEqualTo("static-helper");
+    }
+  }
+
+  @Test
+  void legacySelectionViewUsesItsFeatureModelAndThenItsExplicitChatOverride() {
+    var properties = new LlmProperties();
+    var feature = new LlmProperties.Server();
+    feature.setModel("feature-model");
+    properties.setFeature(LlmFeature.CHAT, feature);
+    var holder = new ModelHolderService("static-helper");
+    try (var service = service(properties, holder, new ArrayList<>())) {
+      assertThat(service.selection())
+          .isEqualTo(
+              new dev.mikoto2000.rei.modeloptions.ChatModelSelection.Selection(
+                  "default", "feature-model"));
+      service.selectModel("chosen-chat-model");
+      assertThat(service.selection())
+          .isEqualTo(
+              new dev.mikoto2000.rei.modeloptions.ChatModelSelection.Selection(
+                  "default", "chosen-chat-model"));
+      assertThat(
+              service.accept(owner("selected", AgentRunContext.Mode.EXCLUSIVE)).endpoint().model())
+          .isEqualTo("chosen-chat-model");
+      assertThat(holder.get()).isEqualTo("static-helper");
+    }
+  }
+
+  @Test
+  void observingSubscriptionSelectionDoesNotRequireLoginOrReadAmbientModelSettings() {
+    var properties =
+        new Binder(
+                new MapConfigurationPropertySource(
+                    Map.of(
+                        "rei.llm.features.chat.active", "subscription",
+                        "rei.llm.features.chat.endpoints.subscription.provider", "chatgpt-plan",
+                        "rei.llm.features.chat.endpoints.subscription.api", "responses",
+                        "rei.llm.features.chat.endpoints.subscription.account-ref", "personal",
+                        "rei.llm.features.chat.endpoints.subscription.model", "configured-model")))
+            .bind("rei.llm", LlmProperties.class)
+            .get();
+    var holder = mock(ModelHolderService.class);
+    when(holder.get()).thenThrow(new AssertionError("Selection consulted ambient model"));
+    try (var service = service(properties, holder, new ArrayList<>())) {
+      assertThat(service.selection())
+          .isEqualTo(
+              new dev.mikoto2000.rei.modeloptions.ChatModelSelection.Selection(
+                  "subscription", "configured-model"));
+    }
+  }
+
+  @Test
+  void restartRestoresConfiguredEndpointAndModelInsteadOfLastRuntimeChoice() {
+    var properties = named("http://first.invalid", "http://second.invalid");
+    try (var first = service(properties, new ModelHolderService("helper"), new ArrayList<>())) {
+      first.select("second");
+      first.selectModel("runtime-model");
+      assertThat(first.selection())
+          .isEqualTo(
+              new dev.mikoto2000.rei.modeloptions.ChatModelSelection.Selection(
+                  "second", "runtime-model"));
+    }
+    try (var restarted = service(properties, new ModelHolderService("helper"), new ArrayList<>())) {
+      assertThat(restarted.selection())
+          .isEqualTo(
+              new dev.mikoto2000.rei.modeloptions.ChatModelSelection.Selection(
+                  "first", "first-model"));
     }
   }
 

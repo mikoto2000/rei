@@ -1804,6 +1804,9 @@ dev.mikoto2000.rei.llm.capture.LlmCaptureCommand -> dev.mikoto2000.rei.applicati
 dev.mikoto2000.rei.llm.capture.LlmCaptureCommand -> dev.mikoto2000.rei.core.project.ProjectService
 dev.mikoto2000.rei.llm.capture.LlmCaptureCommand -> dev.mikoto2000.rei.event.FailureMessages
 dev.mikoto2000.rei.llm.capture.LlmCaptureCommand$ActionCandidates -> dev.mikoto2000.rei.core.completion.FirstArgumentCandidates
+dev.mikoto2000.rei.llm.capture.LlmCaptureCommand$EndpointCandidates -> dev.mikoto2000.rei.core.completion.CompletionCandidate
+dev.mikoto2000.rei.llm.capture.LlmCaptureCommand$EndpointCandidates -> dev.mikoto2000.rei.core.completion.CompletionContext
+dev.mikoto2000.rei.llm.capture.LlmCaptureCommand$EndpointCandidates -> dev.mikoto2000.rei.core.completion.CompletionMetadata
 dev.mikoto2000.rei.llm.discovery.ToolCatalog -> dev.mikoto2000.rei.core.contextbudget.DeliveryToolRegistration
 dev.mikoto2000.rei.llm.discovery.ToolDiscovery -> dev.mikoto2000.rei.core.chat.AgentRunContext
 dev.mikoto2000.rei.llm.discovery.ToolDiscovery -> dev.mikoto2000.rei.core.chat.AgentRunContext$Mode

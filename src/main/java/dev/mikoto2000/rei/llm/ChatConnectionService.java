@@ -2,6 +2,7 @@ package dev.mikoto2000.rei.llm;
 
 import dev.mikoto2000.rei.core.chat.AgentRunContext;
 import dev.mikoto2000.rei.core.service.ModelHolderService;
+import dev.mikoto2000.rei.modeloptions.ChatModelSelection.Selection;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.model.openai.autoconfigure.OpenAiChatProperties;
@@ -12,12 +13,20 @@ import org.springframework.beans.factory.ObjectProvider;
 
 /** Host-owned common connection selection, Run snapshots and inference resources. */
 @org.springframework.stereotype.Component
-public final class ChatConnectionService implements AutoCloseable {
+public final class ChatConnectionService
+    implements AutoCloseable,
+        dev.mikoto2000.rei.modeloptions.ChatModelSelection,
+        dev.mikoto2000.rei.modeloptions.ChatEndpointSelection<ChatConnectionService.Endpoint> {
+  public static final String SELECTION_SCOPE =
+      "Selection scope: process-wide; next Run only; resets on restart. Inference not verified.";
+
   private final ChatEndpointCatalog catalog;
+  private final Integer defaultOutputTokens;
   private final java.util.function.BiFunction<
           ToolCallingChatOptions, AgentRunContext, ToolCallingChatOptions>
       bindRunOptions;
   private final LegacyChatConnectionSource legacy;
+  private final java.util.function.Supplier<String> legacyModel;
   private final RunLlmConnectionFactory factory;
   private final ChatRunConnections connections;
   private final PinnedChatModels modelCache;
@@ -37,6 +46,7 @@ public final class ChatConnectionService implements AutoCloseable {
       ObjectProvider<OpenAiChatProperties> chat,
       ObjectProvider<dev.mikoto2000.rei.llm.capture.CaptureStore> captures) {
     this.catalog = catalog;
+    this.defaultOutputTokens = properties.getMaxOutputTokens();
     this.bindRunOptions = models::bindRunOptions;
     this.legacy =
         new LegacyChatConnectionSource(
@@ -57,6 +67,8 @@ public final class ChatConnectionService implements AutoCloseable {
             },
             () -> System.getenv("OPENAI_API_KEY"));
     var configuredModel = catalog.hasNamedProfiles() ? null : catalog.profiles().getFirst().model();
+    this.legacyModel =
+        configuredModel == null || configuredModel.isBlank() ? holder::get : () -> configuredModel;
     this.factory =
         RunLlmConnectionFactory.withLegacySettings(
             catalog,
@@ -76,6 +88,195 @@ public final class ChatConnectionService implements AutoCloseable {
             32,
             models::decorateRunChatModel);
     this.routed = new RunLlmConnectionModel(modelCache::model, factory::verifyBinding);
+  }
+
+  /** Nonsecret current selection; observing it never dispatches inference. */
+  public Selection selection() {
+    return selection(connections.selection());
+  }
+
+  private Selection selection(ChatRunConnections.Selection selected) {
+    var model = selected.models().get(selected.endpoint());
+    if (model == null) {
+      model =
+          catalog.profiles().stream()
+              .filter(profile -> profile.id().equals(selected.endpoint()))
+              .findFirst()
+              .orElseThrow()
+              .model();
+      if ((model == null || model.isBlank()) && !catalog.hasNamedProfiles())
+        model = legacyModel.get();
+    }
+    return new Selection(selected.endpoint(), model);
+  }
+
+  /** Public endpoint projection; no URL, credential reference or native options. */
+  public record Endpoint(
+      ChatEndpointCatalog.Profile profile,
+      boolean active,
+      ReasoningReplayMode reasoningReplay,
+      String authenticationState,
+      String unavailableReason,
+      java.util.Map<String, Object> generationSettings,
+      java.util.Map<String, String> unappliedSettings,
+      java.util.List<String> diagnostics) {
+    public Endpoint {
+      java.util.Objects.requireNonNull(profile, "profile");
+      generationSettings = RunGenerationSettings.copy(generationSettings);
+      unappliedSettings = java.util.Map.copyOf(unappliedSettings);
+      diagnostics = java.util.List.copyOf(diagnostics);
+    }
+
+    @Override
+    public java.util.Map<String, Object> generationSettings() {
+      return java.util.Collections.unmodifiableMap(
+          new java.util.LinkedHashMap<>(generationSettings));
+    }
+
+    @com.fasterxml.jackson.annotation.JsonProperty("selectionScope")
+    public String selectionScope() {
+      return SELECTION_SCOPE;
+    }
+  }
+
+  @Override
+  public Endpoint currentEndpoint() {
+    return endpoints().stream()
+        .filter(Endpoint::active)
+        .findFirst()
+        .orElseThrow(() -> new IllegalStateException("Current chat endpoint is unavailable"));
+  }
+
+  public java.util.List<Endpoint> endpoints() {
+    var selected = connections.selection();
+    return catalog.profiles().stream()
+        .map(configured -> {
+          var model = selected.models().getOrDefault(configured.id(), configured.model());
+          if ((model == null || model.isBlank()) && !catalog.hasNamedProfiles())
+            model = legacyModel.get();
+          var capabilities =
+              java.util.Objects.equals(model, configured.model())
+                  ? configured.capabilities()
+                  : configured.capabilities().forUnconfirmedModel();
+          var profile =
+              new ChatEndpointCatalog.Profile(
+                  configured.id(),
+                  model,
+                  configured.provider(),
+                  configured.api(),
+                  configured.authentication(),
+                  configured.accountRef(),
+                  configured.generation(),
+                  configured.usagePath(),
+                  capabilities);
+          if (!catalog.hasNamedProfiles())
+            return legacyEndpoint(profile, profile.id().equals(selected.endpoint()));
+          var source = catalog.connection(profile.id());
+          var applied = new java.util.LinkedHashMap<String, Object>();
+          var unapplied = new java.util.LinkedHashMap<String, String>();
+          var reasons = new java.util.ArrayList<String>();
+          var diagnostics = new java.util.ArrayList<>(catalog.diagnostics());
+          var outputKey =
+              profile.api() == LlmApiType.RESPONSES ? "max_output_tokens" : "max_tokens";
+          if (capabilities.effective().get(LlmEndpointCapabilities.Capability.MAX_OUTPUT_TOKENS)
+              == LlmEndpointCapabilities.Support.SUPPORTED) {
+            applied.put(
+                outputKey,
+                source.getMaxOutputTokens() == null
+                    ? defaultOutputTokens
+                    : source.getMaxOutputTokens());
+          } else {
+            unapplied.put(outputKey, "unsupported or unconfirmed");
+            if (source.getMaxOutputTokens() != null)
+              reasons.add("max-output-tokens is unsupported or unconfirmed");
+            else diagnostics.add("Inherited max-output-tokens omitted: unsupported or unconfirmed");
+          }
+          if (source.getTemperature() != null) {
+            if (capabilities.effective().get(LlmEndpointCapabilities.Capability.TEMPERATURE)
+                == LlmEndpointCapabilities.Support.SUPPORTED)
+              applied.put("temperature", source.getTemperature());
+            else {
+              unapplied.put("temperature", "unsupported or unconfirmed");
+              reasons.add("temperature is unsupported or unconfirmed");
+            }
+          }
+          var replay =
+              profile.api() == LlmApiType.CHAT_COMPLETIONS
+                  ? ReasoningReplayMode.NONE
+                  : source.getReasoningReplay();
+          if (replay == null) reasons.add("reasoning-replay must be configured for Responses");
+          var authenticationState = authenticationState(profile.authentication());
+          if (profile.authentication() == LlmAuthentication.UNCONFIGURED)
+            reasons.add("Authentication is not configured");
+          if (profile.provider() == LlmProvider.CHATGPT_PLAN)
+            reasons.add("ChatGPT account registration requires verification");
+          if (catalog.hasNamedProfiles() && profile.api() == LlmApiType.RESPONSES)
+            reasons.add("Named Responses inference policy is not enabled");
+          return new Endpoint(
+              profile,
+              profile.id().equals(selected.endpoint()),
+              replay,
+              authenticationState,
+              reasons.isEmpty() ? null : String.join("; ", reasons),
+              applied,
+              unapplied,
+              diagnostics);
+        })
+        .toList();
+  }
+
+  @Override
+  public dev.mikoto2000.rei.modeloptions.ChatModelSelection.Models models() {
+    var selected = selection(connections.selection());
+    var connection = factory.discovery(selected.endpoint(), selected.model());
+    return new dev.mikoto2000.rei.modeloptions.ChatModelSelection.Models(
+        selected, modelCache.models(connection));
+  }
+
+  private Endpoint legacyEndpoint(ChatEndpointCatalog.Profile profile, boolean active) {
+    try {
+      var connection = factory.capture(profile.id(), profile.model());
+      var resolved =
+          new ChatEndpointCatalog.Profile(
+              profile.id(),
+              connection.endpoint().model(),
+              profile.provider(),
+              connection.endpoint().apiType(),
+              connection.authentication(),
+              profile.accountRef(),
+              profile.generation(),
+              profile.usagePath(),
+              profile.capabilities());
+      return new Endpoint(
+          resolved,
+          active,
+          connection.endpoint().capabilities().reasoningReplay(),
+          authenticationState(connection.authentication()),
+          null,
+          connection.generation(),
+          java.util.Map.of(),
+          catalog.diagnostics());
+    } catch (RuntimeException unavailable) {
+      return new Endpoint(
+          profile,
+          active,
+          profile.api() == LlmApiType.CHAT_COMPLETIONS ? ReasoningReplayMode.NONE : null,
+          authenticationState(profile.authentication()),
+          "Effective legacy settings are unavailable",
+          java.util.Map.of(),
+          java.util.Map.of(),
+          catalog.diagnostics());
+    }
+  }
+
+  private static String authenticationState(LlmAuthentication authentication) {
+    return switch (authentication) {
+      case NONE -> "not-required";
+      case API_KEY -> "configured";
+      case CHATGPT_OAUTH -> "unverified";
+      case UNCONFIGURED -> "unconfigured";
+      case LEGACY -> "legacy";
+    };
   }
 
   public RunLlmConnection accept(AgentRunContext owner) {

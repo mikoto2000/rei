@@ -18,15 +18,15 @@ import org.springframework.web.bind.annotation.RestController;
 /**
  * モデルをWeb APIの操作として受け付ける。
  *
- * <p>Named model controls using the same holder as the existing Shell.
+ * <p>Model controls use the same process-wide connection selection as Shell.
  */
 @RestController
 @ConditionalOnProperty(name = "rei.web.enabled", havingValue = "true")
 @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
 @RequestMapping("/api/v1/models")
-public class ModelController {
+public final class ModelController {
   /** モデル一覧。 */
-  private final OpenAiCompatibleModelsService models;
+  private final Supplier<Models> modelCatalog;
 
   /** 保持先。 */
   private final Supplier<String> selectedModel;
@@ -35,9 +35,21 @@ public class ModelController {
 
   /** 指定された値や利用先を使って、ModelControllerを初期化する。 */
   public ModelController(OpenAiCompatibleModelsService models, ModelHolderService holder) {
-    this.models = models;
+    this.modelCatalog = () -> new Models(models.listModels(), holder.get());
     this.selectedModel = () -> holder.get();
     this.selectModel = model -> holder.set(model);
+  }
+
+  @org.springframework.beans.factory.annotation.Autowired
+  public ModelController(dev.mikoto2000.rei.modeloptions.ChatModelSelection selection) {
+    java.util.Objects.requireNonNull(selection);
+    this.modelCatalog =
+        () -> {
+          var snapshot = selection.models();
+          return new Models(snapshot.models(), snapshot.selection().model());
+        };
+    this.selectedModel = () -> selection.selection().model();
+    this.selectModel = selection::selectModel;
   }
 
   /**
@@ -71,7 +83,7 @@ public class ModelController {
   /** 条件に合う対象を一覧にして、呼び出し元が参照できるようにする。 */
   @GetMapping
   public Models list() {
-    return new Models(models.listModels(), selectedModel.get());
+    return modelCatalog.get();
   }
 
   /** Web APIによる操作で用いる現在を返す。 */

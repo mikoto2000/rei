@@ -8,6 +8,24 @@ import java.util.function.Supplier;
 final class PinnedOpenAiClients {
   private PinnedOpenAiClients() {}
 
+  static OpenAIClient openModels(
+      RunLlmConnection connection,
+      Supplier<String> credential,
+      okhttp3.OkHttpClient transport,
+      List<okhttp3.Interceptor> interceptors,
+      Runnable verify) {
+    return open(
+        connection.endpoint(),
+        connection.authentication(),
+        credential,
+        transport,
+        interceptors,
+        connection.requestTimeout(),
+        connection.transport(),
+        java.util.Objects.requireNonNull(verify),
+        true);
+  }
+
   static OpenAIClient open(
       RunLlmConnection connection,
       Supplier<String> credential,
@@ -22,7 +40,8 @@ final class PinnedOpenAiClients {
         interceptors,
         connection.requestTimeout(),
         connection.transport(),
-        java.util.Objects.requireNonNull(verify));
+        java.util.Objects.requireNonNull(verify),
+        false);
   }
 
   static OpenAIClient open(
@@ -39,7 +58,8 @@ final class PinnedOpenAiClients {
         interceptors,
         endpoint.readTimeout(),
         java.util.Map.of(),
-        () -> {});
+        () -> {},
+        false);
   }
 
   private static OpenAIClient open(
@@ -50,7 +70,8 @@ final class PinnedOpenAiClients {
       List<okhttp3.Interceptor> interceptors,
       java.time.Duration deadline,
       java.util.Map<String, String> attributes,
-      Runnable verify) {
+      Runnable verify,
+      boolean modelDiscovery) {
     if (transport.followRedirects()
         || transport.followSslRedirects()
         || transport.retryOnConnectionFailure()
@@ -95,15 +116,21 @@ final class PinnedOpenAiClients {
     var expected =
         okhttp3.HttpUrl.get(
             endpoint.baseUrl().replaceAll("/+$", "")
-                + (endpoint.apiType() == LlmApiType.RESPONSES
-                    ? "/responses"
-                    : "/chat/completions"));
+                + (modelDiscovery
+                    ? "/models"
+                    : endpoint.apiType() == LlmApiType.RESPONSES
+                        ? "/responses"
+                        : "/chat/completions"));
     builder.addInterceptor(chain -> {
       var request = chain.request();
-      if (!request.method().equals("POST")
+      if (!request.method().equals(modelDiscovery ? "GET" : "POST")
+          || modelDiscovery && request.body() != null
           || !request.url().equals(expected)
           || request.header("Host") != null)
-        throw new java.io.IOException("Pinned inference destination changed");
+        throw new java.io.IOException(
+            modelDiscovery
+                ? "Pinned model discovery destination changed"
+                : "Pinned inference destination changed");
       if (request.header("api-key") != null
           || request.header("x-api-key") != null
           || request.header("Cookie") != null

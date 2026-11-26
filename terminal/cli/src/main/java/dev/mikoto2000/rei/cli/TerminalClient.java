@@ -91,6 +91,8 @@ public final class TerminalClient implements AutoCloseable {
   /** モデル識別子一覧。 */
   private volatile List<String> modelIds = List.of();
 
+  private volatile List<String> endpointIds = List.of();
+
   /** プロジェクトパス一覧。 */
   private volatile List<String> projectPaths = List.of();
 
@@ -376,6 +378,14 @@ public final class TerminalClient implements AutoCloseable {
       values.addAll(LOCAL_ACTIONS.getOrDefault(words.getFirst(), List.of()));
     if (wordIndex == 1 && !words.isEmpty() && words.getFirst().equals("/model"))
       values.addAll(modelIds);
+    if (!words.isEmpty() && words.getFirst().equals("/llm")) {
+      if (wordIndex == 1) values.addAll(List.of("capture", "chat"));
+      if (words.size() > 1 && words.get(1).equals("chat")) {
+        if (wordIndex == 2) values.addAll(List.of("list", "show", "use"));
+        if (wordIndex == 3 && words.size() > 2 && words.get(2).equals("use"))
+          values.addAll(endpointIds);
+      }
+    }
     String type = catalog.candidateType(words, wordIndex);
     if (type.endsWith("$RegisteredProjectCandidates")
         || type.endsWith("$ProjectDirectoryCandidates")) values.addAll(projectPaths);
@@ -750,8 +760,57 @@ public final class TerminalClient implements AutoCloseable {
     watch(run);
   }
 
+  private void chatEndpointCommand(List<String> words) throws IOException, InterruptedException {
+    var request = RemoteCommands.route(words, project, session);
+    var response =
+        request.method().equals("GET")
+            ? backend.get(request.path())
+            : backend.mutation(request.method(), request.path(), request.body());
+    String operation = words.get(2);
+    if (response.isArray()) {
+      var ids = new ArrayList<String>();
+      var candidates = new ArrayList<MeetingSelectionMenu.Candidate>();
+      for (var entry : response) {
+        String id = entry.path("profile").path("id").asText();
+        ids.add(id);
+        candidates.add(new MeetingSelectionMenu.Candidate(id, ChatEndpointOutput.label(entry)));
+      }
+      endpointIds = List.copyOf(ids);
+      if (operation.equals("list")) {
+        response.forEach(entry -> out(ChatEndpointOutput.label(entry)));
+        return;
+      }
+      if (!ApprovalDisplayState.interactive(terminal)) {
+        out("Noninteractive selection: /llm chat use <endpoint-name>");
+        return;
+      }
+      var choice = MeetingSelectionMenu.chooseOne(reader, candidates);
+      if (choice.isEmpty()) {
+        out("Selection cancelled.");
+        return;
+      }
+      var selected =
+          RemoteCommands.route(List.of("/llm", "chat", "use", choice.get()), project, session);
+      response = backend.mutation(selected.method(), selected.path(), selected.body());
+    }
+    if (operation.equals("show")) out(ChatEndpointOutput.detail(response));
+    else {
+      out("Selected: " + ChatEndpointOutput.label(response));
+      out(response.path("selectionScope").asText());
+      currentModel = response.path("profile").path("model").asText("unknown");
+      modelIds = List.of();
+    }
+  }
+
   void command(String line) throws IOException, InterruptedException {
     var rawWords = commandWords(line);
+    if (rawWords.size() >= 2
+        && rawWords.getFirst().equals("/llm")
+        && rawWords.get(1).equals("chat")
+        && (rawWords.size() == 2 || Set.of("--help", "-h").contains(rawWords.getLast()))) {
+      out("/llm chat list|show|use [endpoint-name]");
+      return;
+    }
     String requestedHelp = catalog.requestedHelp(rawWords);
     if (requestedHelp != null) {
       if (!requestedHelp.isEmpty()) out(requestedHelp);
@@ -791,6 +850,10 @@ public final class TerminalClient implements AutoCloseable {
     if (name.equals("/resume") && action.equals("overview") && words.size() == 2) {
       requireProject();
       presentResume(true);
+      return;
+    }
+    if (name.equals("/llm") && action.equals("chat")) {
+      chatEndpointCommand(words);
       return;
     }
     if (catalog.requiresSubcommand(words)) {

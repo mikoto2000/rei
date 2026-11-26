@@ -500,6 +500,9 @@ business: dev.mikoto2000.rei.llm.RunLlmConnectionModel -> dev.mikoto2000.rei.cor
 business: dev.mikoto2000.rei.llm.StableToolDefinitions -> dev.mikoto2000.rei.core.contextbudget.DeliveryToolRegistration
 business: dev.mikoto2000.rei.llm.capture.LlmCaptureCommand -> dev.mikoto2000.rei.core.project.ProjectService
 business: dev.mikoto2000.rei.llm.capture.LlmCaptureCommand$ActionCandidates -> dev.mikoto2000.rei.core.completion.FirstArgumentCandidates
+business: dev.mikoto2000.rei.llm.capture.LlmCaptureCommand$EndpointCandidates -> dev.mikoto2000.rei.core.completion.CompletionCandidate
+business: dev.mikoto2000.rei.llm.capture.LlmCaptureCommand$EndpointCandidates -> dev.mikoto2000.rei.core.completion.CompletionContext
+business: dev.mikoto2000.rei.llm.capture.LlmCaptureCommand$EndpointCandidates -> dev.mikoto2000.rei.core.completion.CompletionMetadata
 business: dev.mikoto2000.rei.llm.discovery.ToolCatalog -> dev.mikoto2000.rei.core.contextbudget.DeliveryToolRegistration
 business: dev.mikoto2000.rei.llm.discovery.ToolDiscovery -> dev.mikoto2000.rei.core.chat.AgentRunContext
 business: dev.mikoto2000.rei.llm.discovery.ToolDiscovery -> dev.mikoto2000.rei.core.chat.AgentRunContext$Mode
