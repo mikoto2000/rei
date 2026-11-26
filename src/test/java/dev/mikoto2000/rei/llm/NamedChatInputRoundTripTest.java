@@ -73,6 +73,8 @@ class NamedChatInputRoundTripTest {
               new AgentEventFactory(Clock.systemUTC()),
               ignored -> {});
       execution.setRunContext(owner);
+      execution.setContinuation(
+          dev.mikoto2000.rei.testfixtures.FixtureInferencePermissions.automatic(data));
       var context = new java.util.HashMap<>(fixture.options.getToolContext());
       context.put(ModelMessagePayloadStore.EXCHANGE_CONTEXT_KEY, exchange);
       context.put(

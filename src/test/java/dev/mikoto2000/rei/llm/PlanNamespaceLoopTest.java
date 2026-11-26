@@ -66,6 +66,8 @@ class PlanNamespaceLoopTest {
           new RunExecutionContext(
               run.runId(), budget, new ProgressEvaluator(directory), events, ignored -> {});
       execution.setRunContext(run);
+      execution.setContinuation(
+          dev.mikoto2000.rei.testfixtures.FixtureInferencePermissions.automatic(source));
       execution.setToolPermissionGuard(
           new ToolPermissionGuard(
               new ToolPermissionPolicy(new ToolPermissionProperties(true, null, null, null)),

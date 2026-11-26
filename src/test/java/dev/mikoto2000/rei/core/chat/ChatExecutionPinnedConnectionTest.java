@@ -47,8 +47,8 @@ class ChatExecutionPinnedConnectionTest {
       fixture.engine.accept(owner, "fixture");
       assertThat(fixture.connections.require(owner).profileId()).isEqualTo("first");
       fixture.connections.select("second");
-      assertThat(fixture.engine.execute(owner, "fixture", new UserInterventionQueue()).success())
-          .isTrue();
+      var result = fixture.engine.execute(owner, "fixture", new UserInterventionQueue());
+      assertThat(result.success()).as("%s: %s", result.stopCode(), result.errorMessage()).isTrue();
       assertThat(first.requests).hasSize(1);
       assertThat(second.requests).isEmpty();
       var body = first.requests.getFirst();
@@ -70,7 +70,7 @@ class ChatExecutionPinnedConnectionTest {
               owner("direct", AgentRunContext.Mode.CONVERSATION),
               "fixture",
               new UserInterventionQueue());
-      assertThat(result.success()).isTrue();
+      assertThat(result.success()).as("%s: %s", result.stopCode(), result.errorMessage()).isTrue();
       assertThat(first.requests).hasSize(1);
     }
   }
@@ -103,8 +103,8 @@ class ChatExecutionPinnedConnectionTest {
                   dev.mikoto2000.rei.core.stagnation.RunExecutionContext.ProgressState.class));
       first.beforeReply = () -> observed.set(saved.get());
       fixture.engine.setCheckpoints(checkpoints);
-      assertThat(fixture.engine.execute(owner, "fixture", new UserInterventionQueue()).success())
-          .isTrue();
+      var result = fixture.engine.execute(owner, "fixture", new UserInterventionQueue());
+      assertThat(result.success()).as("%s: %s", result.stopCode(), result.errorMessage()).isTrue();
       assertThat(observed.get()).isNotNull();
       assertThat(observed.get().connection()).isEqualTo(expected);
       assertThat(observed.get().budget().llmCalls()).isEqualTo(1);
@@ -234,6 +234,15 @@ class ChatExecutionPinnedConnectionTest {
     when(nativeModel.getOptions())
         .thenThrow(new AssertionError("Main chat sampled ambient options"));
     var models = new LlmModelProvider(nativeModel, properties);
+    var data = new org.sqlite.SQLiteDataSource();
+    data.setUrl("jdbc:sqlite:" + root.resolve("native-input.db"));
+    var wiring = new org.springframework.beans.factory.support.DefaultListableBeanFactory();
+    wiring.registerSingleton(
+        "payloads", new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore(data));
+    var injection =
+        new org.springframework.beans.factory.annotation.AutowiredAnnotationBeanPostProcessor();
+    injection.setBeanFactory(wiring);
+    injection.processInjection(models);
     var holder = new ModelHolderService("helper-model");
     var connections =
         new ChatConnectionService(
@@ -283,10 +292,23 @@ class ChatExecutionPinnedConnectionTest {
             Optional.empty(),
             Optional.empty());
     engine.setChatConnections(connections);
-    return new Fixture(engine, connections);
+    engine.setConversationLogStore(
+        new dev.mikoto2000.rei.conversation.ConversationLogStore(
+            root.resolve("conversation-logs"),
+            java.time.Clock.systemUTC(),
+            new com.fasterxml.jackson.databind.ObjectMapper()
+                .registerModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule())));
+    engine.setContinuations(
+        provider(
+            RunContinuation.class,
+            dev.mikoto2000.rei.testfixtures.FixtureInferencePermissions.automatic(data)));
+    return new Fixture(engine, connections, data);
   }
 
-  private record Fixture(ChatExecutionService engine, ChatConnectionService connections)
+  private record Fixture(
+      ChatExecutionService engine,
+      ChatConnectionService connections,
+      org.sqlite.SQLiteDataSource data)
       implements AutoCloseable {
     public void close() {
       connections.close();
