@@ -155,15 +155,15 @@ class ChatConnectionServiceTest {
         service(
             named("http://first.invalid", "http://second.invalid"), holder, new ArrayList<>())) {
       assertThat(service.selection())
-          .isEqualTo(new ChatConnectionService.Selection("first", "first-model"));
+          .isEqualTo(new dev.mikoto2000.rei.modeloptions.ChatModelSelection.Selection("first", "first-model"));
       service.selectModel("first-picked");
       service.select("second");
       assertThat(service.selection())
-          .isEqualTo(new ChatConnectionService.Selection("second", "second-model"));
+          .isEqualTo(new dev.mikoto2000.rei.modeloptions.ChatModelSelection.Selection("second", "second-model"));
       service.selectModel("second-picked");
       service.select("first");
       assertThat(service.selection())
-          .isEqualTo(new ChatConnectionService.Selection("first", "first-picked"));
+          .isEqualTo(new dev.mikoto2000.rei.modeloptions.ChatModelSelection.Selection("first", "first-picked"));
       assertThat(holder.get()).isEqualTo("static-helper");
     }
   }
@@ -177,10 +177,10 @@ class ChatConnectionServiceTest {
     var holder = new ModelHolderService("static-helper");
     try (var service = service(properties, holder, new ArrayList<>())) {
       assertThat(service.selection())
-          .isEqualTo(new ChatConnectionService.Selection("default", "feature-model"));
+          .isEqualTo(new dev.mikoto2000.rei.modeloptions.ChatModelSelection.Selection("default", "feature-model"));
       service.selectModel("chosen-chat-model");
       assertThat(service.selection())
-          .isEqualTo(new ChatConnectionService.Selection("default", "chosen-chat-model"));
+          .isEqualTo(new dev.mikoto2000.rei.modeloptions.ChatModelSelection.Selection("default", "chosen-chat-model"));
       assertThat(
               service.accept(owner("selected", AgentRunContext.Mode.EXCLUSIVE)).endpoint().model())
           .isEqualTo("chosen-chat-model");
@@ -205,7 +205,7 @@ class ChatConnectionServiceTest {
     when(holder.get()).thenThrow(new AssertionError("Selection consulted ambient model"));
     try (var service = service(properties, holder, new ArrayList<>())) {
       assertThat(service.selection())
-          .isEqualTo(new ChatConnectionService.Selection("subscription", "configured-model"));
+          .isEqualTo(new dev.mikoto2000.rei.modeloptions.ChatModelSelection.Selection("subscription", "configured-model"));
     }
   }
 
@@ -216,11 +216,11 @@ class ChatConnectionServiceTest {
       first.select("second");
       first.selectModel("runtime-model");
       assertThat(first.selection())
-          .isEqualTo(new ChatConnectionService.Selection("second", "runtime-model"));
+          .isEqualTo(new dev.mikoto2000.rei.modeloptions.ChatModelSelection.Selection("second", "runtime-model"));
     }
     try (var restarted = service(properties, new ModelHolderService("helper"), new ArrayList<>())) {
       assertThat(restarted.selection())
-          .isEqualTo(new ChatConnectionService.Selection("first", "first-model"));
+          .isEqualTo(new dev.mikoto2000.rei.modeloptions.ChatModelSelection.Selection("first", "first-model"));
     }
   }
 

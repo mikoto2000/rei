@@ -13,7 +13,7 @@ import picocli.CommandLine.Parameters;
 @RequiredArgsConstructor
 public class ModelCommand implements Runnable {
   @org.springframework.beans.factory.annotation.Autowired(required = false)
-  public void setChatConnections(dev.mikoto2000.rei.llm.ChatConnectionService connections) {
+  public void setChatConnections(dev.mikoto2000.rei.modeloptions.ChatModelSelection connections) {
     java.util.Objects.requireNonNull(connections);
     selectedModel = () -> connections.selection().model();
     selectModel = connections::selectModel;

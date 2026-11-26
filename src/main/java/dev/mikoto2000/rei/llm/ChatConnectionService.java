@@ -2,6 +2,7 @@ package dev.mikoto2000.rei.llm;
 
 import dev.mikoto2000.rei.core.chat.AgentRunContext;
 import dev.mikoto2000.rei.core.service.ModelHolderService;
+import dev.mikoto2000.rei.modeloptions.ChatModelSelection.Selection;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.model.openai.autoconfigure.OpenAiChatProperties;
@@ -12,7 +13,7 @@ import org.springframework.beans.factory.ObjectProvider;
 
 /** Host-owned common connection selection, Run snapshots and inference resources. */
 @org.springframework.stereotype.Component
-public final class ChatConnectionService implements AutoCloseable {
+public final class ChatConnectionService implements AutoCloseable, dev.mikoto2000.rei.modeloptions.ChatModelSelection {
   private final ChatEndpointCatalog catalog;
   private final int defaultOutputTokens;
   private final java.util.function.BiFunction<
@@ -84,8 +85,6 @@ public final class ChatConnectionService implements AutoCloseable {
   }
 
   /** Nonsecret current selection; observing it never dispatches inference. */
-  public record Selection(String endpoint, String model) {}
-
   public Selection selection() {
     var selected = connections.selection();
     var model = selected.models().get(selected.endpoint());
