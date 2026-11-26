@@ -16,7 +16,14 @@ import org.springframework.web.bind.annotation.RestController;
 @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
 @RequestMapping("/api/v1/llm/chat")
 public final class ChatEndpointsController {
-  public ChatEndpointsController(ChatConnectionService connections) {}
+  private final java.util.function.Supplier<List<ChatConnectionService.Endpoint>> endpoints;
+  private final java.util.function.Consumer<String> selectEndpoint;
+
+  public ChatEndpointsController(ChatConnectionService connections) {
+    java.util.Objects.requireNonNull(connections);
+    endpoints = connections::endpoints;
+    selectEndpoint = connections::select;
+  }
 
   public record Selection(String endpoint) implements StrictApiRequest {
     public Selection {
@@ -26,11 +33,18 @@ public final class ChatEndpointsController {
   }
 
   @GetMapping
-  public List<ChatConnectionService.Endpoint> list() { return List.of(); }
+  public List<ChatConnectionService.Endpoint> list() { return endpoints.get(); }
 
   @GetMapping("/current")
-  public ChatConnectionService.Endpoint current() { return null; }
+  public ChatConnectionService.Endpoint current() {
+    return list().stream().filter(ChatConnectionService.Endpoint::active).findFirst()
+        .orElseThrow(() -> new IllegalStateException("Current chat endpoint is unavailable"));
+  }
 
   @PutMapping("/current")
-  public ChatConnectionService.Endpoint select(@RequestBody Selection selection) { return null; }
+  public ChatConnectionService.Endpoint select(@RequestBody Selection selection) {
+    if (selection == null) throw new IllegalArgumentException("Endpoint selection required");
+    selectEndpoint.accept(selection.endpoint());
+    return current();
+  }
 }
