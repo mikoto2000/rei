@@ -513,7 +513,8 @@ public class LlmModelProvider implements dev.mikoto2000.rei.secretary.SecretaryP
       throw new IllegalStateException("Accepted Run connection is unavailable");
     boolean responses =
         options instanceof org.springframework.ai.openai.responses.OpenAiResponsesChatOptions;
-    boolean named = captured instanceof RunLlmConnection connection && connection.named();
+    var connection = (RunLlmConnection) captured;
+    boolean named = connection != null && connection.named();
     if (!responses && !named) return options;
     if (!(context.get(ResolvedLlmEndpoint.CONTEXT_KEY) instanceof ResolvedLlmEndpoint endpoint)
         || endpoint.apiType() != (responses ? LlmApiType.RESPONSES : LlmApiType.CHAT_COMPLETIONS))

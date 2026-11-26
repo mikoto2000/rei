@@ -50,7 +50,7 @@ public class ApprovalContinuationService implements RunContinuation {
   private final BiConsumer<String, String> retireContinuationGrant;
 
   /** 保存先。 */
-  private final ApprovalContinuationStore store;
+  private final java.util.function.Supplier<ApprovalContinuationStore> store;
 
   private final InferenceExportGuard inferenceGuard;
 
@@ -131,7 +131,7 @@ public class ApprovalContinuationService implements RunContinuation {
     this.decideApproval =
         decision -> approvals.decide(decision.project(), decision.id(), decision.approved());
     this.retireContinuationGrant = (project, id) -> approvals.retireContinuationGrant(project, id);
-    this.store = store;
+    this.store = () -> store;
     this.inferenceGuard = new InferenceExportGuard(approvals, clock);
     this.registry = registry;
     this.runs = runs;
@@ -146,7 +146,7 @@ public class ApprovalContinuationService implements RunContinuation {
 
   /** ツール利用の権限制御で用いる状態を返す。 */
   public Optional<String> state(String id) {
-    return store.find(id).map(ApprovalContinuationStore.Entry::state);
+    return store.get().find(id).map(ApprovalContinuationStore.Entry::state);
   }
 
   /** Human-only read view; neither request options nor executable callbacks are exported. */
@@ -164,6 +164,11 @@ public class ApprovalContinuationService implements RunContinuation {
     }
 
     @Override
+    public List<Map<String, Object>> messages() {
+      return List.copyOf(messages);
+    }
+
+    @Override
     public String toString() {
       return "InferenceView[approvalId="
           + approvalId
@@ -176,10 +181,10 @@ public class ApprovalContinuationService implements RunContinuation {
   /** Resolve only the owning project's verified, protected pre-inference snapshot. */
   public Optional<InferenceView> inference(String project, String id) {
     var request = findApproval.apply(project, id);
-    var found = store.find(id);
+    var found = store.get().find(id);
     if (found.isEmpty()) return Optional.empty();
     var entry = found.get();
-    var document = store.document(entry);
+    var document = store.get().document(entry);
     if (document.inference() == null) return Optional.empty();
     var owner = document.owner();
     if (!project.equals(owner.projectId())
@@ -189,7 +194,7 @@ public class ApprovalContinuationService implements RunContinuation {
     validate(owner);
     dev.mikoto2000.rei.modeloptions.AcceptedRunOptions connection = document.connection();
     inferenceGuard.verifySavedApproval(id, owner, connection, document.inference());
-    var messages = store.inferenceMessages(entry);
+    var messages = store.get().inferenceMessages(entry);
     return Optional.of(
         new InferenceView(
             id,
@@ -237,6 +242,7 @@ public class ApprovalContinuationService implements RunContinuation {
     var rows = new LinkedHashMap<String, ToolApprovalRepository.Request>();
     listApprovals.apply(project).forEach(request -> rows.put(request.id(), request));
     store
+        .get()
         .visible(project)
         .forEach(id -> {
           var request = findApproval.apply(project, id);
@@ -247,7 +253,7 @@ public class ApprovalContinuationService implements RunContinuation {
 
   /** ツール利用の権限制御において、待機中承認に該当するか判定する。 */
   public boolean waitingApproval(AgentRunContext owner) {
-    return store.active().stream()
+    return store.get().active().stream()
         .anyMatch(e ->
             e.runId().equals(owner.runId())
                 && Set.of("WAITING_APPROVAL", "QUEUED", "DENY_QUEUED").contains(e.state()));
@@ -271,22 +277,24 @@ public class ApprovalContinuationService implements RunContinuation {
     inferenceGuard.verifySavedApproval(id, owner, connection, input);
     execution.captureModelInput(prepared.prompt());
     execution.endIteration();
-    var previous = store.resuming(owner.runId());
-    store.saveInference(
-        id,
-        owner,
-        execution.userRequest(),
-        execution.budgetSnapshot(),
-        managed.containsKey(owner.runId()) || execution.hasParentReservation(),
-        execution.protocolHistorySnapshot(),
-        connection,
-        input);
+    var previous = store.get().resuming(owner.runId());
+    store
+        .get()
+        .saveInference(
+            id,
+            owner,
+            execution.userRequest(),
+            execution.budgetSnapshot(),
+            managed.containsKey(owner.runId()) || execution.hasParentReservation(),
+            execution.protocolHistorySnapshot(),
+            connection,
+            input);
     previous.ifPresent(old -> {
       retireContinuationGrant.accept(owner.projectId(), old.approvalId());
-      store.state(old.approvalId(), "COMPLETED");
+      store.get().state(old.approvalId(), "COMPLETED");
     });
     if (!registry.getObject().transition(owner.runId(), RunStatus.WAITING_APPROVAL, null)) {
-      store.state(id, "CANCELLED");
+      store.get().state(id, "CANCELLED");
       throw new java.util.concurrent.CancellationException();
     }
     return Optional.empty();
@@ -322,23 +330,25 @@ public class ApprovalContinuationService implements RunContinuation {
             .responses(pending.completed())
             .build());
     execution.preserveToolResults(partialHistory);
-    var previous = store.resuming(owner.runId());
-    store.save(
-        id,
-        owner,
-        execution.userRequest(),
-        history,
-        pending,
-        execution.budgetSnapshot(),
-        managed.containsKey(owner.runId()) || execution.hasParentReservation(),
-        execution.protocolHistorySnapshot(),
-        execution.progressSnapshot().connection());
+    var previous = store.get().resuming(owner.runId());
+    store
+        .get()
+        .save(
+            id,
+            owner,
+            execution.userRequest(),
+            history,
+            pending,
+            execution.budgetSnapshot(),
+            managed.containsKey(owner.runId()) || execution.hasParentReservation(),
+            execution.protocolHistorySnapshot(),
+            execution.progressSnapshot().connection());
     previous.ifPresent(old -> {
       retireContinuationGrant.accept(owner.projectId(), old.approvalId());
-      store.state(old.approvalId(), "COMPLETED");
+      store.get().state(old.approvalId(), "COMPLETED");
     });
     if (!registry.getObject().transition(owner.runId(), RunStatus.WAITING_APPROVAL, null)) {
-      store.state(id, "CANCELLED");
+      store.get().state(id, "CANCELLED");
       throw new java.util.concurrent.CancellationException();
     }
   }
@@ -355,10 +365,10 @@ public class ApprovalContinuationService implements RunContinuation {
     String verifiedInferenceDocument = null;
     if (approved) {
       var request = findApproval.apply(project, id);
-      var saved = store.find(id);
+      var saved = store.get().find(id);
       if (saved.isPresent()
           && saved.get().state().equals("WAITING_APPROVAL")
-          && store.document(saved.get()).inference() != null) {
+          && store.get().document(saved.get()).inference() != null) {
         // Protected payloads use their own transaction. Verify before the short decision
         // transaction, then compare the exact immutable document again before granting.
         verifyInferenceBinding(saved.get(), request, true);
@@ -368,13 +378,13 @@ public class ApprovalContinuationService implements RunContinuation {
     String verifiedDocument = verifiedInferenceDocument;
     return transaction.execute(tx -> {
       var current = findApproval.apply(project, id);
-      var entry = store.find(id);
+      var entry = store.get().find(id);
       if (continueRun) {
         var saved =
             entry.orElseThrow(() ->
                 new IllegalStateException(
                     "No saved invocation; approve normally and use /resume list for this older request"));
-        var owner = store.document(saved).owner();
+        var owner = store.get().document(saved).owner();
         if (!project.equals(owner.projectId())
             || !current.runId().equals(owner.runId())
             || !current.sessionId().equals(owner.conversationId()))
@@ -392,7 +402,7 @@ public class ApprovalContinuationService implements RunContinuation {
       if (approved)
         entry.ifPresent(saved -> {
           if (saved.state().equals("WAITING_APPROVAL")
-              && store.document(saved).inference() != null
+              && store.get().document(saved).inference() != null
               && !java.util.Objects.equals(verifiedDocument, saved.document()))
             throw new IllegalArgumentException(
                 "Inference approval content changed during decision");
@@ -405,9 +415,9 @@ public class ApprovalContinuationService implements RunContinuation {
       if (!decided.status().equals(approved ? "APPROVED" : "DENIED")
           && !(continueRun && decided.status().equals("CONSUMED")))
         throw new IllegalStateException("Approval already decided differently");
-      if (continueRun && !store.queue(id))
+      if (continueRun && !store.get().queue(id))
         throw new IllegalStateException("Continuation acceptance conflict");
-      if (!approved) entry.ifPresent(saved -> store.deny(id));
+      if (!approved) entry.ifPresent(saved -> store.get().deny(id));
       return decided;
     });
   }
@@ -415,13 +425,13 @@ public class ApprovalContinuationService implements RunContinuation {
   /** 保存済みの記録から、利用する状態を復元する。 */
   @Override
   public Saved restore(AgentRunContext owner) {
-    var entry = store.resuming(owner.runId());
+    var entry = store.get().resuming(owner.runId());
     if (entry.isPresent()) {
-      if (!store.document(entry.get()).owner().equals(owner))
+      if (!store.get().document(entry.get()).owner().equals(owner))
         throw new IllegalArgumentException("Continuation ownership mismatch");
       verifyInferenceBinding(
           entry.get(), findApproval.apply(owner.projectId(), entry.get().approvalId()), false);
-      return store.saved(entry.get());
+      return store.get().saved(entry.get());
     }
     var external = slack.getIfAvailable();
     return external == null ? null : external.restore(owner);
@@ -434,10 +444,11 @@ public class ApprovalContinuationService implements RunContinuation {
     boolean waiting = external != null && external.suspend(execution, history);
     if (waiting)
       store
+          .get()
           .resuming(execution.runContext().runId())
           .ifPresent(entry -> {
             retireContinuationGrant.accept(execution.runContext().projectId(), entry.approvalId());
-            store.state(entry.approvalId(), "COMPLETED");
+            store.get().state(entry.approvalId(), "COMPLETED");
           });
     return waiting;
   }
@@ -445,16 +456,18 @@ public class ApprovalContinuationService implements RunContinuation {
   /** ツール利用の権限制御に関する終端を処理する。 */
   @Override
   public void terminal(AgentRunContext owner) {
-    if (store.active().stream().anyMatch(entry -> entry.runId().equals(owner.runId()))) {
+    if (store.get().active().stream().anyMatch(entry -> entry.runId().equals(owner.runId()))) {
       var status = registry.getObject().get(owner.runId()).status();
-      store.active().stream()
+      store.get().active().stream()
           .filter(entry -> entry.runId().equals(owner.runId()))
           .forEach(entry -> retireContinuationGrant.accept(owner.projectId(), entry.approvalId()));
-      store.finishRun(
-          owner.runId(),
-          status == RunStatus.COMPLETED
-              ? "COMPLETED"
-              : status == RunStatus.CANCELLED ? "CANCELLED" : "UNKNOWN");
+      store
+          .get()
+          .finishRun(
+              owner.runId(),
+              status == RunStatus.COMPLETED
+                  ? "COMPLETED"
+                  : status == RunStatus.CANCELLED ? "CANCELLED" : "UNKNOWN");
     }
     var external = slack.getIfAvailable();
     if (external != null) external.terminal(owner);
@@ -463,15 +476,19 @@ public class ApprovalContinuationService implements RunContinuation {
   /** 終端イベント公開前でも、実行結果から承認継続の結果を確定する。 */
   @Override
   public void terminal(AgentRunContext owner, ChatExecutionResult result) {
-    if (store.active().stream().anyMatch(entry -> entry.runId().equals(owner.runId()))) {
-      store.active().stream()
+    if (store.get().active().stream().anyMatch(entry -> entry.runId().equals(owner.runId()))) {
+      store.get().active().stream()
           .filter(entry -> entry.runId().equals(owner.runId()))
           .forEach(entry -> retireContinuationGrant.accept(owner.projectId(), entry.approvalId()));
-      store.finishRun(
-          owner.runId(),
-          result.success()
-              ? "COMPLETED"
-              : result.status() == ChatExecutionResult.Status.CANCELLED ? "CANCELLED" : "UNKNOWN");
+      store
+          .get()
+          .finishRun(
+              owner.runId(),
+              result.success()
+                  ? "COMPLETED"
+                  : result.status() == ChatExecutionResult.Status.CANCELLED
+                      ? "CANCELLED"
+                      : "UNKNOWN");
     }
     var external = slack.getIfAvailable();
     if (external != null) external.terminal(owner);
@@ -480,8 +497,8 @@ public class ApprovalContinuationService implements RunContinuation {
   /** 要求を後続の処理へ引き渡すため、案内を受け付ける。 */
   @Override
   public void acceptGuidance(AgentRunContext owner, List<Message> guidance) {
-    if (store.active().stream().anyMatch(e -> e.runId().equals(owner.runId())))
-      store.guidance(owner, guidance);
+    if (store.get().active().stream().anyMatch(e -> e.runId().equals(owner.runId())))
+      store.get().guidance(owner, guidance);
     else {
       var external = slack.getIfAvailable();
       if (external != null) external.acceptGuidance(owner, guidance);
@@ -535,7 +552,7 @@ public class ApprovalContinuationService implements RunContinuation {
       ApprovalContinuationStore.Entry entry,
       ToolApprovalRepository.Request request,
       boolean verifyContent) {
-    var document = store.document(entry);
+    var document = store.get().document(entry);
     if (document.inference() == null) {
       if (request.tool().equals("inferenceExport"))
         throw new IllegalArgumentException("Inference approval binding unavailable");
@@ -550,7 +567,7 @@ public class ApprovalContinuationService implements RunContinuation {
     validate(owner);
     inferenceGuard.verifySavedApproval(
         entry.approvalId(), owner, document.connection(), document.inference());
-    if (verifyContent) store.saved(entry);
+    if (verifyContent) store.get().saved(entry);
   }
 
   /** 後続の操作を進められるか判断するため、実行を確認する。 */
@@ -567,21 +584,21 @@ public class ApprovalContinuationService implements RunContinuation {
   /** ツール利用の権限制御に関するpumpを処理する。 */
   @Scheduled(fixedDelay = 500, scheduler = "approvalContinuationScheduler")
   public synchronized void pump() {
-    for (var entry : store.active()) {
+    for (var entry : store.get().active()) {
       try {
-        var doc = store.document(entry);
+        var doc = store.get().document(entry);
         var owner = doc.owner();
         var current = registry.getObject().get(owner.runId());
         if (current.status() == RunStatus.CANCELLED) {
           retireContinuationGrant.accept(owner.projectId(), entry.approvalId());
-          store.state(entry.approvalId(), "CANCELLED");
+          store.get().state(entry.approvalId(), "CANCELLED");
           notifyParent(owner, ChatExecutionResult.cancelled());
           continue;
         }
         if (entry.state().equals("RESUMING")) {
-          if (!store.ownerAlive(entry)) {
+          if (!store.get().ownerAlive(entry)) {
             retireContinuationGrant.accept(owner.projectId(), entry.approvalId());
-            store.state(entry.approvalId(), "UNKNOWN");
+            store.get().state(entry.approvalId(), "UNKNOWN");
             if (registry.getObject().claimWaiting(owner))
               runs.getObject().finishMissingTerminal(owner, RunStatus.UNKNOWN);
             markCheckpoint(owner, "UNKNOWN");
@@ -591,12 +608,12 @@ public class ApprovalContinuationService implements RunContinuation {
         if (router.getObject().containsRun(owner.projectId(), owner.runId())) continue;
         var request = findApproval.apply(owner.projectId(), entry.approvalId());
         if (!clock.instant().isBefore(request.expiresAt())) {
-          store.state(entry.approvalId(), "EXPIRED");
+          store.get().state(entry.approvalId(), "EXPIRED");
           stop(owner, ChatExecutionResult.failed("Approval expired", "approval_expired"));
           continue;
         }
         if (request.status().equals("DENIED") || entry.state().equals("DENY_QUEUED")) {
-          store.state(entry.approvalId(), "DENIED");
+          store.get().state(entry.approvalId(), "DENIED");
           stop(owner, ChatExecutionResult.cancelled());
           continue;
         }
@@ -608,7 +625,7 @@ public class ApprovalContinuationService implements RunContinuation {
           verifyInferenceBinding(entry, request, true);
         } catch (RuntimeException changed) {
           retireContinuationGrant.accept(owner.projectId(), entry.approvalId());
-          store.state(entry.approvalId(), "UNKNOWN");
+          store.get().state(entry.approvalId(), "UNKNOWN");
           if (registry.getObject().claimWaiting(owner))
             runs.getObject().finishMissingTerminal(owner, RunStatus.UNKNOWN);
           markCheckpoint(owner, "UNKNOWN");
@@ -616,13 +633,14 @@ public class ApprovalContinuationService implements RunContinuation {
         }
         if (doc.managedParent() && !managed.containsKey(owner.runId())) {
           retireContinuationGrant.accept(owner.projectId(), entry.approvalId());
-          store.state(entry.approvalId(), "UNKNOWN");
+          store.get().state(entry.approvalId(), "UNKNOWN");
           if (registry.getObject().claimWaiting(owner))
             runs.getObject().finishMissingTerminal(owner, RunStatus.UNKNOWN);
           markCheckpoint(owner, "UNKNOWN");
           continue;
         }
-        if (!registry.getObject().claimWaiting(owner) || !store.claim(entry.approvalId())) continue;
+        if (!registry.getObject().claimWaiting(owner) || !store.get().claim(entry.approvalId()))
+          continue;
         router
             .getObject()
             .submitContinuation(
@@ -638,7 +656,7 @@ public class ApprovalContinuationService implements RunContinuation {
                             findApproval
                                 .apply(owner.projectId(), entry.approvalId())
                                 .expiresAt())) {
-                      store.state(entry.approvalId(), "EXPIRED");
+                      store.get().state(entry.approvalId(), "EXPIRED");
                       runs.getObject().finishMissingTerminal(owner, RunStatus.FAILED);
                       markCheckpoint(owner, "FAILED");
                       notifyParent(
@@ -657,7 +675,7 @@ public class ApprovalContinuationService implements RunContinuation {
                                 parent == null ? null : parent.reservation());
                   } catch (RuntimeException uncertain) {
                     retireContinuationGrant.accept(owner.projectId(), entry.approvalId());
-                    store.state(entry.approvalId(), "UNKNOWN");
+                    store.get().state(entry.approvalId(), "UNKNOWN");
                     runs.getObject().finishMissingTerminal(owner, RunStatus.UNKNOWN);
                     notifyParent(
                         owner,
@@ -667,11 +685,13 @@ public class ApprovalContinuationService implements RunContinuation {
                   }
                   if (result.status() != ChatExecutionResult.Status.WAITING) {
                     retireContinuationGrant.accept(owner.projectId(), entry.approvalId());
-                    store.state(
-                        entry.approvalId(),
-                        result.status() == ChatExecutionResult.Status.CANCELLED
-                            ? "CANCELLED"
-                            : result.success() ? "COMPLETED" : "UNKNOWN");
+                    store
+                        .get()
+                        .state(
+                            entry.approvalId(),
+                            result.status() == ChatExecutionResult.Status.CANCELLED
+                                ? "CANCELLED"
+                                : result.success() ? "COMPLETED" : "UNKNOWN");
                     runs.getObject()
                         .finishMissingTerminal(
                             owner,
@@ -684,12 +704,16 @@ public class ApprovalContinuationService implements RunContinuation {
                 work -> runs.getObject().execute(owner, work));
       } catch (RuntimeException unavailable) {
         // A claimed submission is uncertain; never silently requeue the side effect.
-        if (store.find(entry.approvalId()).map(e -> e.state().equals("RESUMING")).orElse(false)) {
+        if (store
+            .get()
+            .find(entry.approvalId())
+            .map(e -> e.state().equals("RESUMING"))
+            .orElse(false)) {
           retireContinuationGrant.accept(
-              store.document(entry).owner().projectId(), entry.approvalId());
-          store.state(entry.approvalId(), "UNKNOWN");
+              store.get().document(entry).owner().projectId(), entry.approvalId());
+          store.get().state(entry.approvalId(), "UNKNOWN");
           try {
-            var owner = store.document(entry).owner();
+            var owner = store.get().document(entry).owner();
             if (registry.getObject().claimWaiting(owner))
               runs.getObject().finishMissingTerminal(owner, RunStatus.UNKNOWN);
             markCheckpoint(owner, "UNKNOWN");

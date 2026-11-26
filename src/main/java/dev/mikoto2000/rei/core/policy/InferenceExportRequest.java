@@ -27,8 +27,9 @@ final class InferenceExportRequest {
         supplied == null
             ? java.util.List.<ToolCallback>of()
             : supplied.stream().map(InferenceExportRequest::snapshot).toList();
-    var frozen = new Prompt(messages, options.mutate().toolCallbacks(callbacks).build());
-    var frozenOptions = (ToolCallingChatOptions) frozen.getOptions();
+    var frozenOptions =
+        java.util.Objects.requireNonNull(options.mutate().toolCallbacks(callbacks).build());
+    var frozen = new Prompt(messages, frozenOptions);
     var context = frozenOptions.getToolContext();
     var captured =
         context == null
@@ -76,9 +77,9 @@ final class InferenceExportRequest {
   }
 
   ApprovalContinuationStore.InferenceInput input() {
+    var options = java.util.Objects.requireNonNull((ToolCallingChatOptions) prompt.getOptions());
     return new ApprovalContinuationStore.InferenceInput(
-        fingerprint,
-        definitions(((ToolCallingChatOptions) prompt.getOptions()).getToolCallbacks()));
+        fingerprint, definitions(java.util.Objects.requireNonNull(options.getToolCallbacks())));
   }
 
   private static java.util.List<ApprovalContinuationStore.InferenceTool> definitions(

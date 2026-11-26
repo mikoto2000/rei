@@ -77,7 +77,7 @@ final class ResponsesSdkBoundary {
       ReasoningReplayMode replay,
       boolean plan,
       ResponsesToolNamespace.Exchange namespace) {
-    if (arguments == null) return null;
+    if (arguments == null) return new Object[0];
     var rewritten = arguments.clone();
     // Kotlin's JsonField<Nothing> singleton erases to a raw Java type. Missing holds no value.
     @SuppressWarnings("unchecked")

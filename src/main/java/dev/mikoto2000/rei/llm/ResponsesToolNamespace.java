@@ -63,8 +63,10 @@ final class ResponsesToolNamespace {
         received = new java.util.concurrent.ConcurrentHashMap<>();
 
     Exchange(org.springframework.ai.chat.prompt.Prompt prompt, ResolvedLlmEndpoint endpoint) {
-      var options = (org.springframework.ai.model.tool.ToolCallingChatOptions) prompt.getOptions();
-      var context = options.getToolContext();
+      var options =
+          java.util.Objects.requireNonNull(
+              (org.springframework.ai.model.tool.ToolCallingChatOptions) prompt.getOptions());
+      var context = java.util.Objects.requireNonNull(options.getToolContext());
       Object owner = context.get(ResponsesReasoningReplay.OWNER_CONTEXT_KEY);
       if (context.get(dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ORIGIN_CONTEXT_KEY)
           instanceof dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Origin origin)

@@ -27,20 +27,34 @@ public final class InferenceExportGuard {
   private static final com.fasterxml.jackson.databind.ObjectMapper JSON =
       new com.fasterxml.jackson.databind.ObjectMapper()
           .enable(com.fasterxml.jackson.databind.SerializationFeature.ORDER_MAP_ENTRIES_BY_KEYS);
-  private final ToolApprovalRepository approvals;
+  private final java.util.function.BiFunction<
+          String, AgentRunContext, ToolApprovalRepository.Request>
+      requestApproval;
+  private final java.util.function.BiPredicate<String, AgentRunContext> consumeApproval;
+  private final java.util.function.Function<
+          String, java.util.function.BiPredicate<String, AgentRunContext>>
+      matchApproval;
+
   private final Clock clock;
-  private volatile ToolPermissionPolicy policy =
-      new ToolPermissionPolicy(new ToolPermissionProperties(true, null, null, null));
+  private volatile java.util.function.Function<Boolean, PermissionDecision> inferencePolicy =
+      new ToolPermissionPolicy(new ToolPermissionProperties(true, null, null, null))
+          ::evaluateInference;
 
   public InferenceExportGuard(ToolApprovalRepository approvals, Clock clock) {
-    this.approvals = java.util.Objects.requireNonNull(approvals);
+    java.util.Objects.requireNonNull(approvals);
+    this.requestApproval =
+        (canonical, owner) -> approvals.request("inferenceExport", canonical, owner);
+    this.consumeApproval =
+        (canonical, owner) -> approvals.consume("inferenceExport", canonical, owner);
+    this.matchApproval =
+        id -> (canonical, owner) -> approvals.matches(id, "inferenceExport", canonical, owner);
     this.clock = java.util.Objects.requireNonNull(clock);
   }
 
   /** Configure the administrator's policy independently of callback execution restrictions. */
   @org.springframework.beans.factory.annotation.Autowired(required = false)
   public void configurePolicy(ToolPermissionPolicy policy) {
-    this.policy = java.util.Objects.requireNonNull(policy);
+    this.inferencePolicy = java.util.Objects.requireNonNull(policy)::evaluateInference;
   }
 
   public record Decision(Prompt prompt, String approvalId) {
@@ -68,8 +82,9 @@ public final class InferenceExportGuard {
         || connection == null
         || !connection.named()
         || input == null
-        || !approvals.matches(
-            id, "inferenceExport", canonical(owner, connection, input.contentFingerprint()), owner))
+        || !matchApproval
+            .apply(id)
+            .test(canonical(owner, connection, input.contentFingerprint()), owner))
       throw new IllegalArgumentException("Saved inference approval binding mismatch");
   }
 
@@ -82,29 +97,27 @@ public final class InferenceExportGuard {
         || owner.conversationId().isBlank()
         || owner.runId().isBlank())
       throw new IllegalArgumentException("Inference export requires an owning project/session/Run");
-    if (!(prompt.getOptions() instanceof ToolCallingChatOptions options)
-        || options.getToolContext() == null
-        || !(options
-                .getToolContext()
-                .get(dev.mikoto2000.rei.modeloptions.ModelOptions.RUN_CONNECTION_CONTEXT_KEY)
+    if (!(prompt.getOptions() instanceof ToolCallingChatOptions options))
+      throw new IllegalArgumentException("Inference export requires explicit model options");
+    var context = options.getToolContext();
+    if (context == null
+        || !(context.get(dev.mikoto2000.rei.modeloptions.ModelOptions.RUN_CONNECTION_CONTEXT_KEY)
             instanceof AcceptedRunOptions accepted)
         || !connection.fingerprint().equals(accepted.fingerprint())
         || !connection.fingerprint().matches("[0-9a-f]{64}"))
       throw new IllegalArgumentException("Inference export accepted connection mismatch");
-    var decision = policy.evaluateInference(owner.voiceInput());
+    var decision = inferencePolicy.apply(owner.voiceInput());
     if (decision == PermissionDecision.DENY)
       throw new ToolPermissionException("inferenceExport", PermissionDecision.DENY);
     var prepared = InferenceExportRequest.prepare(prompt);
     String canonical = canonical(owner, connection, prepared.fingerprint());
     if (decision == PermissionDecision.AUTO_APPROVE) return new Decision(prepared.prompt(), null);
-    if (approvals.consume("inferenceExport", canonical, owner))
-      return new Decision(prepared.prompt(), null);
-    var request = approvals.request("inferenceExport", canonical, owner);
+    if (consumeApproval.test(canonical, owner)) return new Decision(prepared.prompt(), null);
+    var request = requestApproval.apply(canonical, owner);
     if (!clock.instant().isBefore(request.expiresAt()))
       throw new SecurityException("Inference export approval expired");
     if (request.status().equals("APPROVED")) {
-      if (approvals.consume("inferenceExport", canonical, owner))
-        return new Decision(prepared.prompt(), null);
+      if (consumeApproval.test(canonical, owner)) return new Decision(prepared.prompt(), null);
       throw new SecurityException("Inference export approval was already consumed");
     }
     if (!request.status().equals("PENDING"))
