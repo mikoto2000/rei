@@ -269,6 +269,7 @@ public final class PlanOAuth {
       s.save(attempt.account(), tokens);
       return null;
     });
+    invalidate(attempt.account());
   }
 
   /** Returns a local authorization incarnation without refreshing or exposing credentials. */
@@ -293,6 +294,15 @@ public final class PlanOAuth {
 
   /** Checks an optional accepted incarnation under the same lock as token rotation. */
   public TokenSet access(String account, String expectedRegistration) {
+    try {
+      return accessLocked(account, expectedRegistration);
+    } catch (ChatGptException invalid) {
+      if (invalid.code() == AUTH_INVALID || invalid.code() == CONSENT_REQUIRED) invalidate(account);
+      throw invalid;
+    }
+  }
+
+  private TokenSet accessLocked(String account, String expectedRegistration) {
     requireNotLoggingOut(account);
     return store.locked(s -> {
       requireNotLoggingOut(account);
