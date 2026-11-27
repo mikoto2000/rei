@@ -39,6 +39,15 @@ const port = (): LlmPort => ({
       models: [],
     }),
 });
+it("rejects missing IPC metadata without replacing the last valid display", async () => {
+  const api = port();
+  const selection = new LlmSelection(api, "server");
+  await selection.refresh();
+  vi.mocked(api.endpoints).mockResolvedValueOnce(undefined as never);
+  await selection.refresh();
+  expect(selection.snapshot().error).toBe("InvalidResponse");
+  expect(selection.snapshot().endpoints[0].profile.id).toBe("local");
+});
 function deferred<T>() {
   let resolve!: (value: T) => void;
   const promise = new Promise<T>((r) => {
