@@ -148,7 +148,9 @@ public record LlmEndpointCapabilities(
               Capability.TOOL_NAMESPACE,
               Capability.REASONING_REPLAY,
               Capability.VISION,
-              Capability.FILE_INPUT)) transport.put(capability, Support.SUPPORTED);
+              Capability.FILE_INPUT,
+              Capability.REASONING_EFFORT,
+              Capability.STRUCTURED_OUTPUT)) transport.put(capability, Support.SUPPORTED);
       transport.put(Capability.CHAT_COMPLETIONS, Support.UNSUPPORTED);
       for (var capability :
           EnumSet.of(Capability.TEMPERATURE, Capability.TOP_P, Capability.MAX_OUTPUT_TOKENS))
