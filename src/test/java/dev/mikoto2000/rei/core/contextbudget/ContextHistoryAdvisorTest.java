@@ -528,7 +528,8 @@ class ContextHistoryAdvisorTest {
       assertThat(projected.getContents())
           .contains("old display request", "old display answer", "current request")
           .doesNotContain("old actual", "opaque-native-history");
-      assertThat(loads).hasValue(0);
+      // Foreign completed history must inspect protected inputs to avoid silently dropping media.
+      assertThat(loads).hasValue(scenario.equals("legacyApi") ? 0 : 1);
       assertThat(
               projected.getInstructions().stream()
                   .filter(AssistantMessage.class::isInstance)

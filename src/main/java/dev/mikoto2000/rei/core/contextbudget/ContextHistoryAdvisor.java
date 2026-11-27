@@ -424,10 +424,7 @@ public class ContextHistoryAdvisor implements BaseChatMemoryAdvisor {
       if (!(target instanceof ModelMessagePayloadStore.Origin origin)) continue;
       if (!origin.endpoint().equals(endpoint)) {
         var rows = rowsByRun.getOrDefault(run, List.of());
-        if (last * 3 + 1 > through
-            && rows.stream()
-                .anyMatch(row ->
-                    "tool".equals(row.metadata().get(ModelMessagePayloadStore.HISTORY_ROLE)))) {
+        if (last * 3 + 1 > through) {
           if (!(boundary instanceof ModelMessagePayloadStore.Exchange exchange)
               || owner == null
               || !exchange.run().equals(owner.runId())
@@ -437,7 +434,8 @@ public class ContextHistoryAdvisor implements BaseChatMemoryAdvisor {
           if (store == null) store = payloads.get();
           if (store == null) throw protocolRejected();
           var operations =
-              commonToolHistory(store, exchange.scope(), rows, run, first, last, count);
+              commonHistory(
+                  store, exchange.scope(), rows, run, first, last, count, through, projected);
           if (!operations.isEmpty())
             projected.put(last * 3 + 1, historical(new AssistantMessage(operations), last * 3 + 1));
         }
@@ -515,14 +513,16 @@ public class ContextHistoryAdvisor implements BaseChatMemoryAdvisor {
         grant);
   }
 
-  private static String commonToolHistory(
+  private static String commonHistory(
       ModelMessagePayloadStore store,
       ModelMessagePayloadStore.Scope scope,
       List<ConversationLogEntry> rows,
       String run,
       long first,
       long last,
-      long count) {
+      long count,
+      long through,
+      Map<Long, Message> projected) {
     if (rows.size() != count
         || rows.isEmpty()
         || rows.getFirst().sequence() != first
@@ -574,7 +574,21 @@ public class ContextHistoryAdvisor implements BaseChatMemoryAdvisor {
                 || call.arguments() == null) throw incompatibleToolHistory();
             pending.put(call.id(), call);
           }
-        } else if (!(message instanceof UserMessage)) throw incompatibleToolHistory();
+        } else if (message instanceof UserMessage user) {
+          long sequence = row.sequence() * 3 + 1;
+          if (sequence > through && !user.getMedia().isEmpty())
+            projected.put(
+                sequence,
+                historical(
+                    UserMessage.builder()
+                        .text("Attachments from a completed turn (historical data):")
+                        .media(
+                            user.getMedia().stream()
+                                .map(ContextHistoryAdvisor::commonMedia)
+                                .toList())
+                        .build(),
+                    sequence));
+        } else throw incompatibleToolHistory();
       }
     }
     if (!pending.isEmpty()) throw incompatibleToolHistory();
@@ -583,9 +597,22 @@ public class ContextHistoryAdvisor implements BaseChatMemoryAdvisor {
         + operations;
   }
 
+  private static org.springframework.ai.content.Media commonMedia(
+      org.springframework.ai.content.Media source) {
+    // Provider file IDs are not portable authority. Keep only explicit data; the destination's
+    // input policy and content-bound export approval still admit the projected request.
+    var builder = org.springframework.ai.content.Media.builder().mimeType(source.getMimeType());
+    if (source.getName() != null) builder.name(source.getName());
+    var data = source.getData();
+    if (data instanceof byte[] bytes) builder.data(bytes.clone());
+    else if (data instanceof String text) builder.data(text);
+    else throw incompatibleToolHistory();
+    return builder.build();
+  }
+
   private static IllegalStateException incompatibleToolHistory() {
     return new IllegalStateException(
-        "Completed tool history is incomplete or incompatible; start a new session");
+        "Completed history is incomplete or incompatible; start a new session");
   }
 
   private static void retireCoveredHistory(
