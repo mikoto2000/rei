@@ -35,6 +35,9 @@ Memory, consolidation, vector, Artifact and Checkpoint limits remain unchanged.
 
 ## Startup gate
 
+Version 23 adds autonomous opportunity, draft, revision and audit rows. The migration
+does not enable generation or publication. See [autonomous draft foundation](autonomous-action.md).
+
 `StorageMigrationConfiguration` exposes a static, highest-priority
 `BeanFactoryPostProcessor`. It prepares storage before ordinary beans are created,
 including datasource/repository constructors, `@PostConstruct` subscriptions,

@@ -68,7 +68,7 @@ class RawResultCapacityMigrationTest {
     try (var db = DriverManager.getConnection("jdbc:sqlite:" + root.resolve("storage.db"));
         var sql = db.createStatement()) {
       sql.execute("DROP INDEX stored_objects_raw_capacity");
-      sql.execute("DELETE FROM storage_migrations WHERE version=22");
+      sql.execute("DELETE FROM storage_migrations WHERE version>=22");
       sql.execute("PRAGMA user_version=21");
     }
     try (var migration = new StorageMigrationCoordinator(root)) {
