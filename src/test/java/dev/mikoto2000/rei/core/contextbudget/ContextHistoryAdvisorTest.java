@@ -104,6 +104,9 @@ class ContextHistoryAdvisorTest {
     "COMPLETED,true,ok",
     "COMPLETED,true,checkpointGrant",
     "COMPLETED,false,ok",
+    "COMPLETED,false,mediaPng",
+    "COMPLETED,false,mediaPdf",
+    "FAILED,false,mediaPng",
     "COMPLETED,false,completedTool",
     "FAILED,false,completedTool",
     "COMPLETED,false,completedToolName",
@@ -193,7 +196,25 @@ class ContextHistoryAdvisorTest {
                       .toList())
               .properties(original.getMetadata())
               .build();
-    var userRef = previousExchange.withKey("input").reference(new UserMessage("old actual input"));
+    var originalInput = new UserMessage("old actual input");
+    if (scenario.startsWith("media")) {
+      var attachment = dir.resolve(scenario.equals("mediaPdf") ? "fixture.pdf" : "fixture.png");
+      if (scenario.equals("mediaPdf"))
+        java.nio.file.Files.writeString(attachment, "%PDF-1.4\nfixture-only\n%%EOF");
+      else
+        javax.imageio.ImageIO.write(
+            new java.awt.image.BufferedImage(1, 1, java.awt.image.BufferedImage.TYPE_INT_RGB),
+            "png",
+            attachment.toFile());
+      var resolved =
+          new dev.mikoto2000.rei.core.command.InlineFileAttachmentResolver()
+              .resolve("old actual input `@file:" + attachment + "`");
+      assertThat(resolved.warnings()).isEmpty();
+      assertThat(resolved.media()).hasSize(1);
+      originalInput = UserMessage.builder().text(resolved.prompt()).media(resolved.media()).build();
+    }
+    var inputBytes = new dev.mikoto2000.rei.modelmessage.ModelMessageCodec().encode(originalInput);
+    var userRef = previousExchange.withKey("input").reference(originalInput);
     var assistantRef = previousExchange.withKey("answer").reference(original);
     var protocolEntries =
         new java.util.ArrayList<
@@ -448,6 +469,34 @@ class ContextHistoryAdvisorTest {
       assertThat(assembler.assemble(projected, "chat", current.runId(), () -> {}).getContents())
           .contains("retained native summary", "current request")
           .doesNotContain("old actual", "opaque-native-history");
+      return;
+    }
+    if (scenario.startsWith("media") && status == ConversationTurnStore.Status.COMPLETED) {
+      assertThat(projected.getContents())
+          .contains("old display request", "old display answer", "current request")
+          .doesNotContain("opaque-native-history");
+      var media =
+          projected.getInstructions().stream()
+              .filter(UserMessage.class::isInstance)
+              .map(UserMessage.class::cast)
+              .flatMap(message -> message.getMedia().stream())
+              .toList();
+      assertThat(media).hasSize(1);
+      assertThat(media.getFirst().getDataAsByteArray())
+          .isEqualTo(originalInput.getMedia().getFirst().getDataAsByteArray());
+      assertThat(media.getFirst().getMimeType())
+          .isEqualTo(originalInput.getMedia().getFirst().getMimeType());
+      assertThat(media.getFirst().getName())
+          .isEqualTo(originalInput.getMedia().getFirst().getName());
+      assertThat(
+              new dev.mikoto2000.rei.modelmessage.ModelMessageCodec()
+                  .encode(
+                      payloads
+                          .restoreHistory(previousExchange.scope(), pointers.getFirst())
+                          .orElseThrow()))
+          .isEqualTo(inputBytes);
+      assertThat(payloads.restoreHistory(previousExchange.scope(), pointers.get(1)).orElseThrow())
+          .isEqualTo(original);
       return;
     }
     if (scenario.equals("completedTool") && status == ConversationTurnStore.Status.COMPLETED) {
