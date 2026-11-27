@@ -16,6 +16,16 @@ class AutonomousDraftContentTest {
   }
 
   @Test
+  void unpairedSurrogatesCannotReuseTheHashOfReplacementText() {
+    assertThat(AutonomousDraft.Content.create(1, "?", "reason", List.of()).text()).isEqualTo("?");
+    for (String text :
+        new String[] {"\uD800", "\uDC00", "before\uD800after", "before\uDC00after"}) {
+      assertThatThrownBy(() -> AutonomousDraft.Content.create(1, text, "reason", List.of()))
+          .isInstanceOf(IllegalArgumentException.class);
+    }
+  }
+
+  @Test
   void countsGraphemesRatherThanUtf16CodeUnits() {
     assertThat(AutonomousDraft.Content.create(1, "😀".repeat(300), "reason", List.of()).text())
         .hasSize(600);

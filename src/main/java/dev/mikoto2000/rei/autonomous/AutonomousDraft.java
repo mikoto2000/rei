@@ -1,5 +1,8 @@
 package dev.mikoto2000.rei.autonomous;
 
+import java.nio.CharBuffer;
+import java.nio.charset.CharacterCodingException;
+import java.nio.charset.CodingErrorAction;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -87,9 +90,17 @@ public record AutonomousDraft(
 
     private static String hash(String text) {
       try {
-        return HexFormat.of()
-            .formatHex(
-                MessageDigest.getInstance("SHA-256").digest(text.getBytes(StandardCharsets.UTF_8)));
+        var encoded =
+            StandardCharsets.UTF_8
+                .newEncoder()
+                .onMalformedInput(CodingErrorAction.REPORT)
+                .onUnmappableCharacter(CodingErrorAction.REPORT)
+                .encode(CharBuffer.wrap(text));
+        var digest = MessageDigest.getInstance("SHA-256");
+        digest.update(encoded);
+        return HexFormat.of().formatHex(digest.digest());
+      } catch (CharacterCodingException malformed) {
+        throw new IllegalArgumentException("Invalid Unicode draft text", malformed);
       } catch (NoSuchAlgorithmException unavailable) {
         throw new IllegalStateException(unavailable);
       }
