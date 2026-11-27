@@ -123,7 +123,7 @@ class GoalBudgetChatIntegrationTest {
             (claim, run, done) ->
                 done.accept(
                     new GoalLoopService.Outcome(
-                        chat.execute(
+                        chat.executeIndependent(
                             new AgentRunContext(run, "session", dir, "project"),
                             "Artifact",
                             new UserInterventionQueue(),
@@ -235,7 +235,7 @@ class GoalBudgetChatIntegrationTest {
                     }
                   };
               var result =
-                  chat.execute(
+                  chat.executeIndependent(
                       new AgentRunContext(run, "session", dir, "project"),
                       "Produce artifact",
                       new UserInterventionQueue(),

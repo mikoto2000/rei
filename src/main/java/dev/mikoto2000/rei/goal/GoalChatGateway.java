@@ -154,7 +154,8 @@ public class GoalChatGateway
         (owner, call) -> {
           var reservation = GoalRepository.chatReservation(call.budget());
           return call.privateModel() == null
-              ? chat.execute(owner, call.prompt(), new UserInterventionQueue(), reservation)
+              ? chat.executeIndependent(
+                  owner, call.prompt(), new UserInterventionQueue(), reservation)
               : chat.executePrivateSecretaryDraft(
                   owner, call.prompt(), reservation, call.privateModel());
         };

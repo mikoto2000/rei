@@ -279,7 +279,7 @@ class EventTriggerTest {
                     "session", project, "test", now, now)));
     var chat = org.mockito.Mockito.mock(ChatExecutionService.class);
     org.mockito.Mockito.when(
-            chat.execute(
+            chat.executeIndependent(
                 org.mockito.ArgumentMatchers.any(),
                 org.mockito.ArgumentMatchers.eq("Continue"),
                 org.mockito.ArgumentMatchers.any()))
@@ -317,7 +317,7 @@ class EventTriggerTest {
     assertTrue(jobs.isEmpty());
     var capture = org.mockito.ArgumentCaptor.forClass(AgentRunContext.class);
     org.mockito.Mockito.verify(chat)
-        .execute(
+        .executeIndependent(
             capture.capture(),
             org.mockito.ArgumentMatchers.eq("Continue"),
             org.mockito.ArgumentMatchers.any());

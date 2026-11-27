@@ -70,7 +70,10 @@ class ChatConnectionServiceTest {
       assertThat(pin.authentication()).isEqualTo(LlmAuthentication.API_KEY);
       assertThat(pin.accountRef()).isNull();
       assertThat(pin.accountRegistration()).isNull();
-      assertThat(new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(pin))
+      assertThat(
+              new com.fasterxml.jackson.databind.ObjectMapper()
+                  .registerModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule())
+                  .writeValueAsString(pin))
           .doesNotContain("PRIVATE_");
       assertThat(service.accept(owner)).isSameAs(pin);
       service.select("first");

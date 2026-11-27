@@ -349,7 +349,7 @@ public final class ChatConnectionService
 
   /** Accept an independent background inference without inheriting the normal chat selection. */
   public RunLlmConnection acceptIndependent(AgentRunContext owner) {
-    return connections.accept(owner);
+    return connections.acceptIndependent(owner);
   }
 
   public RunLlmConnection require(AgentRunContext owner) {
