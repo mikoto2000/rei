@@ -87,6 +87,15 @@ final class ChatRunConnections {
   }
 
   private static void requireSupportedProfile(RunLlmConnection connection) {
+    if (connection.named() && connection.endpoint().apiType() == LlmApiType.CHAT_COMPLETIONS) {
+      for (var capability :
+          java.util.List.of(
+              LlmEndpointCapabilities.Capability.CHAT_COMPLETIONS,
+              LlmEndpointCapabilities.Capability.STREAMING))
+        if (connection.capabilities().get(capability) != LlmEndpointCapabilities.Support.SUPPORTED)
+          throw new IllegalStateException(
+              "Chat capability is unsupported or unconfirmed: " + capability);
+    }
     if (connection.named() && connection.endpoint().apiType() == LlmApiType.RESPONSES) {
       ResponsesProfilePolicy.requireConnection(connection);
       ResponsesProfilePolicy.requireCapability(

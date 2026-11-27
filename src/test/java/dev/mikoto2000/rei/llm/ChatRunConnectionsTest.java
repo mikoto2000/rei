@@ -336,6 +336,8 @@ class ChatRunConnectionsTest {
       var prefix = "rei.llm.features.chat.endpoints." + name + ".";
       values.put(prefix + "base-url", "http://" + name + ".invalid");
       values.put(prefix + "authentication", "none");
+      values.put(prefix + "server-capabilities.chat-completions", "supported");
+      values.put(prefix + "server-capabilities.streaming", "supported");
       values.put(prefix + "model", name + "-model");
     }
     var props =
