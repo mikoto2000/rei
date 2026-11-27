@@ -11,6 +11,7 @@ mod checkpoints;
 mod dependencies;
 mod goals;
 mod history;
+mod llm;
 mod schedules;
 mod stateful;
 mod tasks;
@@ -143,6 +144,18 @@ impl HttpReiClient {
 }
 #[async_trait]
 impl ReiClient for HttpReiClient {
+    async fn llm_endpoints(&self) -> Result<Vec<LlmEndpoint>> {
+        self.connection_endpoints().await
+    }
+    async fn llm_select(&self, endpoint: &str) -> Result<LlmEndpoint> {
+        self.connection_select(endpoint).await
+    }
+    async fn llm_models(&self) -> Result<LlmModels> {
+        self.connection_models().await
+    }
+    async fn llm_select_model(&self, endpoint: &str, model: &str) -> Result<LlmModels> {
+        self.connection_select_model(endpoint, model).await
+    }
     async fn list_artifacts(&self, query: ArtifactQuery) -> Result<ArtifactPage> {
         self.artifacts_list(query).await
     }

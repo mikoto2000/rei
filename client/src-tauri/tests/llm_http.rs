@@ -7,15 +7,21 @@ fn endpoint() -> Value {
 async fn serve(router: Router) -> HttpReiClient {
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let url = format!("http://{}", listener.local_addr().unwrap());
-    tokio::spawn(async move { axum::serve(listener, router).await.unwrap(); });
+    tokio::spawn(async move {
+        axum::serve(listener, router).await.unwrap();
+    });
     HttpReiClient::new(&url, Some(Secret::new("fixture-server-key".into()))).unwrap()
 }
 #[tokio::test]
 async fn named_metadata_is_authenticated_and_projects_only_public_fields() {
-    let api = serve(Router::new().route("/api/v1/llm/chat", get(|headers: HeaderMap| async move {
-        assert_eq!(headers["authorization"], "Bearer fixture-server-key");
-        Json(json!([endpoint()]))
-    }))).await;
+    let api = serve(Router::new().route(
+        "/api/v1/llm/chat",
+        get(|headers: HeaderMap| async move {
+            assert_eq!(headers["authorization"], "Bearer fixture-server-key");
+            Json(json!([endpoint()]))
+        }),
+    ))
+    .await;
     let rows = api.llm_endpoints().await.unwrap();
     assert_eq!(rows[0].profile.id, "local");
     assert!(!serde_json::to_string(&rows).unwrap().contains("PRIVATE_"));
@@ -32,7 +38,10 @@ async fn writes_use_the_shared_routes_and_bind_model_to_expected_endpoint() {
             Json(json!({"endpoint":"local","model":"second"}))
         }))).await;
     assert_eq!(api.llm_select("local").await.unwrap().profile.id, "local");
-    assert_eq!(api.llm_models().await.unwrap().models, vec!["model", "second"]);
+    assert_eq!(
+        api.llm_models().await.unwrap().models,
+        vec!["model", "second"]
+    );
     let changed = api.llm_select_model("local", "second").await.unwrap();
     assert_eq!(changed.endpoint, "local");
     assert_eq!(changed.current_model.as_deref(), Some("second"));
@@ -40,5 +49,8 @@ async fn writes_use_the_shared_routes_and_bind_model_to_expected_endpoint() {
 #[tokio::test]
 async fn missing_controls_are_reported_without_inference_or_retry() {
     let api = serve(Router::new()).await;
-    assert_eq!(api.llm_endpoints().await.unwrap_err(), AppError::EndpointNotFound);
+    assert_eq!(
+        api.llm_endpoints().await.unwrap_err(),
+        AppError::EndpointNotFound
+    );
 }
