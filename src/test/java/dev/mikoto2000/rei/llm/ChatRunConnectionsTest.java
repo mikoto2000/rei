@@ -13,6 +13,34 @@ import org.springframework.boot.context.properties.source.MapConfigurationProper
 
 class ChatRunConnectionsTest {
   @Test
+  void selectingASecondDeclaredPlanModelPreservesIndependentConfirmationAndOldPins() {
+    var values = new HashMap<String, String>();
+    values.put("rei.llm.features.chat.active", "plan");
+    String prefix = "rei.llm.features.chat.endpoints.plan.";
+    values.put(prefix + "provider", "chatgpt-plan");
+    values.put(prefix + "api", "responses");
+    values.put(prefix + "account-ref", "personal");
+    values.put(prefix + "model", "first-model");
+    for (var capability : java.util.List.of("responses", "streaming", "reasoning-replay"))
+      values.put(prefix + "server-capabilities." + capability, "supported");
+    values.put(prefix + "model-capabilities.reasoning-replay", "supported");
+    values.put(prefix + "model-capabilities-by-name.[second-model].reasoning-replay", "supported");
+    var properties = new Binder(new MapConfigurationPropertySource(values)).bind("rei.llm", LlmProperties.class).get();
+    var catalog = new ChatEndpointCatalog(properties);
+    var connections = new ChatRunConnections(catalog, new RunLlmConnectionFactory(catalog, properties,
+        ignored -> { throw new AssertionError("No fallback"); }, ignored -> "fixture-registration"));
+    var original = connections.accept(owner("first", "session"));
+    connections.selectModel("plan", "second-model");
+    var second = connections.accept(owner("second", "session"));
+    assertThat(second.endpoint().model()).isEqualTo("second-model");
+    assertThat(second.capabilities()).containsEntry(LlmEndpointCapabilities.Capability.REASONING_REPLAY, LlmEndpointCapabilities.Support.SUPPORTED);
+    assertThat(original.endpoint().model()).isEqualTo("first-model");
+    connections.selectModel("plan", "unknown-third");
+    assertThatThrownBy(() -> connections.accept(owner("third", "session"))).isInstanceOf(IllegalStateException.class);
+    assertThat(connections.require(owner("second", "session"))).isSameAs(second);
+  }
+
+  @Test
   void delayedModelChoiceCannotMutateADifferentEndpoint() {
     var connections = connections();
     var original = connections.accept(owner("first-pin", "session"));

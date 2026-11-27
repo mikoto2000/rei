@@ -21,6 +21,85 @@ import org.springframework.boot.context.properties.source.MapConfigurationProper
 /** Metadata only: no HTTP, inference, token refresh or ambient model access. */
 class ChatEndpointDescriptionTest {
   @Test
+  void publicGenerationMatchesConfiguredNativeSettingsAndExplicitProvider() {
+    var values = settings();
+    values.put(prefix("first") + "provider", "openai-api");
+    values.put(prefix("first") + "base-url", "https://api.openai.com/v1");
+    values.put(prefix("first") + "generation.reasoning-effort", "low");
+    values.put(prefix("first") + "server-capabilities.reasoning-effort", "supported");
+    values.put(prefix("first") + "model-capabilities.reasoning-effort", "supported");
+    try (var service = service(values)) {
+      assertThat(service.currentEndpoint().generationSettings())
+          .containsEntry("reasoning_effort", "low")
+          .containsEntry("max_completion_tokens", 256)
+          .doesNotContainKey("max_tokens");
+    }
+  }
+
+  @Test
+  void rejectedConfiguredGenerationIsReportedWithoutReadingCredentials() {
+    var values = settings();
+    values.put(prefix("first") + "generation.store", "true");
+    try (var service = service(values)) {
+      assertThat(service.currentEndpoint().unappliedSettings()).containsKey("store");
+      assertThat(service.currentEndpoint().unavailableReason()).contains("store");
+      assertThat(service.currentEndpoint().generationSettings()).doesNotContainKey("store");
+    }
+  }
+
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.CsvSource({
+    "chat-completions,unknown", "chat-completions,unsupported",
+    "streaming,unknown", "streaming,unsupported"
+  })
+  void namedChatMetadataExplainsTheSameApiAdmissionRequirements(String capability, String support) {
+    var values = settings();
+    values.put(prefix("first") + "server-capabilities." + capability, support);
+    try (var service = service(values)) {
+      assertThat(service.currentEndpoint().unavailableReason())
+          .contains(capability.toUpperCase(java.util.Locale.ROOT).replace('-', '_'));
+    }
+  }
+
+  @Test
+  void modelControlsRejectAStaleEndpointInsteadOfChangingTheNewSelection() throws Exception {
+    var values = settings();
+    values.put(prefix("first") + "server-capabilities.chat-completions", "supported");
+    values.put(prefix("first") + "server-capabilities.streaming", "supported");
+    try (var service = service(values)) {
+      var controller = new dev.mikoto2000.rei.web.ModelController(service);
+      var request = new ObjectMapper().readValue(
+          "{\"model\":\"stale-model\",\"endpoint\":\"first\"}",
+          dev.mikoto2000.rei.web.ModelController.Selection.class);
+      service.select("second");
+      assertThatThrownBy(() -> controller.select(request))
+          .isInstanceOf(org.springframework.web.server.ResponseStatusException.class)
+          .satisfies(error -> assertThat(((org.springframework.web.server.ResponseStatusException) error).getStatusCode().value()).isEqualTo(409));
+      assertThat(service.selection().model()).isEqualTo("second-model");
+    }
+  }
+
+  @Test
+  void explicitSecondModelDeclarationsAreProjectedWithoutBorrowingTheFirstModelsCapabilities() {
+    var values = settings();
+    values.remove(prefix("first") + "temperature");
+    values.remove(prefix("first") + "max-output-tokens");
+    values.put(prefix("first") + "model-capabilities-by-name.[confirmed-second].max-output-tokens", "supported");
+    values.put(prefix("first") + "model-capabilities-by-name.[confirmed-second].vision", "unsupported");
+    try (var service = service(values)) {
+      service.selectModel("confirmed-second");
+      var selected = service.currentEndpoint();
+      assertThat(selected.profile().capabilities().effective())
+          .containsEntry(LlmEndpointCapabilities.Capability.MAX_OUTPUT_TOKENS, LlmEndpointCapabilities.Support.SUPPORTED)
+          .containsEntry(LlmEndpointCapabilities.Capability.VISION, LlmEndpointCapabilities.Support.UNSUPPORTED);
+      assertThat(selected.generationSettings()).containsEntry("max_tokens", 4096);
+      service.selectModel("unknown-third");
+      assertThat(service.currentEndpoint().profile().capabilities().effective())
+          .containsEntry(LlmEndpointCapabilities.Capability.MAX_OUTPUT_TOKENS, LlmEndpointCapabilities.Support.UNKNOWN);
+    }
+  }
+
+  @Test
   void descriptionsShowOnlyDeclaredUsageAndSafeEffectiveSettings() throws Exception {
     try (var service = service(settings())) {
       var entries = service.endpoints();
