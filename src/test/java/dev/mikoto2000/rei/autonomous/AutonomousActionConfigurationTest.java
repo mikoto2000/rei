@@ -44,6 +44,7 @@ class AutonomousActionConfigurationTest {
             assertThat(context)
                 .hasNotFailed()
                 .hasSingleBean(AutonomousDraftStore.class)
+                .hasSingleBean(AutonomousPublicSources.class)
                 .hasSingleBean(AutonomousDraftLifecycle.class));
   }
 
@@ -51,7 +52,11 @@ class AutonomousActionConfigurationTest {
   void foundationIsAvailableWithoutAChatModelAndRemainsDisabled() {
     context()
         .run(context -> {
-          assertThat(context).hasNotFailed().hasSingleBean(AutonomousDraftStore.class);
+          assertThat(context)
+              .hasNotFailed()
+              .hasSingleBean(AutonomousDraftStore.class)
+              .hasSingleBean(AutonomousPublicSources.class);
+          assertThat(context.getBean(AutonomousPublicSources.class).publicSnapshot()).isEmpty();
           assertThat(context.getBean(AutonomousActionProperties.class).enabled()).isFalse();
           var result =
               context
