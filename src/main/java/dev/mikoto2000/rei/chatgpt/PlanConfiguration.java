@@ -52,6 +52,16 @@ public class PlanConfiguration {
     return new dev.mikoto2000.rei.subagent.CodexAppServerSubAgentBackend(backend);
   }
 
+  /** Web・Slackの実行台帳がないShell起動でも、既存Plan機能の実行を共有して管理する。 */
+  @Bean
+  @org.springframework.boot.autoconfigure.condition.ConditionalOnExpression(
+      "!${rei.web.enabled:false} && !${rei.slack.enabled:false}")
+  @org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean(
+      dev.mikoto2000.rei.application.run.RunRegistry.class)
+  dev.mikoto2000.rei.application.run.RunRegistry planShellRunRegistry(Clock clock) {
+    return new dev.mikoto2000.rei.application.run.RunRegistry(clock);
+  }
+
   /** 依頼を進める方針を決めるため、通信経路の計画を組み立てる。 */
   @Bean
   PlanTransport planTransport() {
