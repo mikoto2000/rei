@@ -33,6 +33,97 @@ import org.springframework.boot.context.properties.source.MapConfigurationProper
 class ChatConnectionServiceTest {
   @TempDir Path root;
 
+  @Test
+  void independentStaticLocalInferencePreservesItsConfiguredModelAndNoAuth() throws Exception {
+    try (var fixture = new PinnedChatModelsTest.Fixture()) {
+      var properties = named("http://first.invalid/v1", "http://second.invalid/v1");
+      var chat = properties.feature(LlmFeature.CHAT);
+      chat.setBaseUrl(
+          fixture
+              .pin("static", "dedicated-background", LlmAuthentication.NONE)
+              .endpoint()
+              .baseUrl());
+      chat.setModel("dedicated-background");
+      properties.setFeature(LlmFeature.CHAT, chat);
+      var accounts = mock(dev.mikoto2000.rei.modeloptions.ChatPlanAccounts.class);
+      try (var service =
+          service(properties, new ModelHolderService("static-holder"), new ArrayList<>(), true)) {
+        service.setPlanAccounts(
+            provider(dev.mikoto2000.rei.modeloptions.ChatPlanAccounts.class, accounts));
+        service.selectModel("normal-chat-choice");
+        service.select("second");
+        var owner = owner("owned-independent", AgentRunContext.Mode.EXCLUSIVE);
+        var pin = service.acceptIndependent(owner);
+        assertThat(pin.endpoint().model()).isEqualTo("dedicated-background");
+        assertThat(pin.authentication()).isEqualTo(LlmAuthentication.NONE);
+        assertThat(
+                service
+                    .model()
+                    .call(new Prompt("fixture", service.options(owner)))
+                    .getResult()
+                    .getOutput()
+                    .getText())
+            .isEqualTo("fixture-answer");
+        assertThat(fixture.headers).containsExactly("<none>");
+        assertThat(fixture.bodies.getFirst().path("model").asText())
+            .isEqualTo("dedicated-background");
+        org.mockito.Mockito.verifyNoInteractions(accounts);
+      }
+    }
+  }
+
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(
+      strings = {"unchanged", "base-url", "api-key", "generation"})
+  void restoredIndependentConnectionsRetainTheirBindingInsteadOfTheCurrentSelection(String change) {
+    var properties = named("http://first.invalid/v1", "http://second.invalid/v1");
+    var chat = properties.feature(LlmFeature.CHAT);
+    chat.setBaseUrl("http://static-background.invalid/v1");
+    chat.setModel("static-background");
+    properties.setFeature(LlmFeature.CHAT, chat);
+    RunLlmConnection saved;
+    try (var service =
+        service(properties, new ModelHolderService("holder"), new ArrayList<>(), true)) {
+      saved = service.acceptIndependent(owner("old-independent", AgentRunContext.Mode.EXCLUSIVE));
+    }
+    if (!change.equals("unchanged")) {
+      chat = properties.feature(LlmFeature.CHAT);
+      if (change.equals("base-url")) chat.setBaseUrl("http://changed-background.invalid/v1");
+      if (change.equals("api-key")) chat.setApiKey("PRIVATE_CHANGED_KEY");
+      if (change.equals("generation")) chat.setEndpointGeneration(2);
+      properties.setFeature(LlmFeature.CHAT, chat);
+    }
+    try (var service =
+        service(properties, new ModelHolderService("new-holder"), new ArrayList<>(), true)) {
+      service.select("second");
+      var owner = owner("resumed-independent", AgentRunContext.Mode.EXCLUSIVE);
+      if (!change.equals("unchanged")) {
+        assertThatThrownBy(() -> service.restore(owner, saved))
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("static connection binding")
+            .hasMessageNotContaining("PRIVATE_CHANGED_KEY");
+        assertThatThrownBy(() -> service.require(owner)).isInstanceOf(IllegalStateException.class);
+      } else {
+        service.restore(owner, saved);
+        assertThat(service.acceptIndependent(owner)).isEqualTo(saved);
+        assertThat(service.selection().endpoint()).isEqualTo("second");
+      }
+    }
+  }
+
+  @Test
+  void anIndependentEntryCannotRelabelAnAlreadyAcceptedNamedRun() {
+    var properties = named("http://first.invalid/v1", "http://second.invalid/v1");
+    try (var service = service(properties, new ModelHolderService("holder"), new ArrayList<>())) {
+      var owner = owner("already-normal", AgentRunContext.Mode.EXCLUSIVE);
+      var pin = service.accept(owner);
+      assertThatThrownBy(() -> service.acceptIndependent(owner))
+          .isInstanceOf(IllegalStateException.class)
+          .hasMessageContaining("normal chat Run");
+      assertThat(service.require(owner)).isSameAs(pin);
+    }
+  }
+
   @org.junit.jupiter.params.ParameterizedTest
   @org.junit.jupiter.params.provider.ValueSource(booleans = {false, true})
   void independentInferenceCannotInheritASelectedLocalOrSubscriptionProfile(boolean plan)
