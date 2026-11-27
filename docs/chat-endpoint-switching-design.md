@@ -3,9 +3,10 @@
 作成日: 2026-11-24
 状態: 旧設計案。全体方針は [共通 LLM 接続基盤](llm-connection-foundation-design.md)を参照。
 
-2026-11-25: 通常チャットの ChatGPT 利用枠対応を含む実装に向けて
-[Phase 0 の棚卸しと SDK 検証](chat-endpoints-implementation.md)を開始した。
-以下の旧提案より今回の要件と現行コードを優先する。接続先選択 UI はまだ未実装。
+現在の設定・CLI・GUIの操作は[共通接続ガイド](chat-llm-connections.md)、
+検証条件は[互換性マトリクス](chat-llm-compatibility.md)、
+段階的な実装は[実装記録](chat-endpoints-implementation.md)を参照する。
+以下は実装前の提案を保存したもので、今回の要件と現行コードを優先する。
 
 ## 目的
 

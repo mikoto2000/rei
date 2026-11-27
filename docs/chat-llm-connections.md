@@ -71,6 +71,8 @@ rei:
 
 OpenAI APIを登録する場合は`REI_NAMED_OPENAI_API_KEY`を設定する。未設定の空キーは起動時に拒否されるため、使わない`openai`ブロックは削除する。`authentication: none`には`api-key`を記載しない。rootや他の接続先のキー、環境変数の暗黙継承、dummy keyの補完は行わない。`subscription`に任意URLやAPIキーを指定することもできない。
 
+ローカルの認証なし接続とChatGPTの登録だけを使う構成には、OpenAI APIキーは不要。Plan未ログインでも起動して設定を確認でき、推論受付時にはログイン・能力・登録の条件を検査する。Rei Web APIの`REI_API_KEY`はクライアントからReiへの認証用で、モデルサービスのキーとは別である。
+
 Chat Completionsを利用する接続先では`api: chat-completions`とし、`server-capabilities.chat-completions`と`streaming`を確認する。Function Callingにはサーバーとモデル双方の確認が必要。API、Provider、認証方式は独立した設定であり、モデル名やホスト名から推測しない。
 
 初回にモデルIDが不明な場合は、まず`chatgpt-plan.enabled`だけを有効にした従来構成で認証・モデル一覧の確認を行い、その値で名前付き接続先を登録して再起動する。**登録内容の変更には再起動が必要だが、登録済み接続先の選択には不要**。

@@ -23,7 +23,7 @@ Provider、API、認証、Capability、Replayを分離し、既存のエージ�
 | 8 | 履歴投影・媒体・生成設定・再送制約 | [#648](https://github.com/mikoto2000/rei/pull/648) |
 | 9 | GUI・モデル単位の能力宣言・競合検出 | [#649](https://github.com/mikoto2000/rei/pull/649) |
 
-Phase 10で統合検証と運用資料を仕上げる。実アカウント・実ローカルモデルへの
+Phase 10の[統合検証・運用資料](chat-llm-validation.md)では、全Java回帰9289件と品質ゲートを確認した。実アカウント・実ローカルモデルへの
 推論は実行していない。fixtureの成功を実サービスの互換性証明にしない。
 
 ## Phase 0 当時の棚卸しと参照資料

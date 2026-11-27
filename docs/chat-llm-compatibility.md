@@ -19,16 +19,17 @@
 
 | 項目 | 共通の判定とfixtureでの確認 | 残る実接続確認 |
 |---|---|---|
+| 起動 | 隔離JVMでルートOpenAIキー空・Plan未ログイン、名前付きローカル/Planの両初期選択で実アプリを起動。モデルHTTP要求0件 | 利用者のOS・設定・既存データを使った起動 |
 | 選択・モデル変更 | CLI/GUIが同じ選択サービスを使い、次のRunだけに適用。モデル変更は接続先を照合してCAS更新 | 実サーバーと実機GUIを組み合わせた操作 |
 | 認証なし | キーの取得なし、Authorization/API-key/Cookieなし | 対象ローカルサーバーが実際に認証不要であること |
 | APIキー | 自分のプロファイルのキーだけを直前取得。送信先・世代・APIの束縛を再確認 | 実キーの有効性・組織・権限 |
 | OAuth | 既存登録・refresh・保護ストアを再利用し、登録IDと要求枠を通常チャット/直接推論/app-serverで共有 | 実ログイン、アカウントの利用条件、利用枠 |
-| Function Calling | API表現とサーバー・モデル宣言を分離。完成したcall/result、動的ツール公開、モード、承認を検証 | 実モデルのschema解釈、引数生成、namespace対応 |
+| Function Calling | UNKNOWN/UNSUPPORTEDをCC/Responses共通でHTTP・資格情報参照前に拒否。API表現とサーバー・モデル宣言を分離。完成したcall/result、動的ツール公開、モード、承認を検証 | 実モデルのschema解釈、引数生成、namespace対応 |
 | Reasoning再送 | Responsesのencrypted/plaintext/noneを保存・復旧試験。異なる接続先へopaque payloadを移植しない | モデル・サーバー固有形式と必須再送条件 |
 | Chat Completionsのreasoning | native plaintextのcodecと明示要求を試験。設定経路の`REASONING_REPLAY`は非対応を維持 | native wire試験だけで設定経路を有効化しない |
 | 画像 | MIME、サイズ、data URI/URLと能力を検証。HTTPで型付き入力を確認 | 実モデルのVision性能と対応形式 |
 | ファイル | Responsesの入力と、Chat Completionsのinline PDFに制限。別形式を普通のテキストへ黙って変換しない | 実サーバー・モデルのファイル対応 |
-| 生成設定 | 対応宣言・型・範囲・APIを照合。明示した非対応値を拒否し、既定値の非適用理由を公開 | モデルの各設定の実効性 |
+| 生成設定 | 実SDKのCC/ResponsesでJSON Schemaの内容とstrictの真偽を照合。対応宣言・型・範囲・APIを照合。明示した非対応値を拒否し、既定値の非適用理由を公開 | モデルの各設定の実効性 |
 | SSE/失敗/取消 | 正常終端、部分引数、usage欠落、受信上限、異常終了、キャンセル、暗黙再送なしを検証 | 実サービスの通信切断・制限応答 |
 | 承認・Checkpoint | 内容・所有者・宛先を固定し、別プロセスで再開。成功済みツールの重複実行なしを検証 | 実環境の再起動と登録更新時の運用 |
 | 補助推論 | 要約/Work Context/Planner/Memory等、Scheduler/Goalが通常チャットの選択を暗黙継承しない | 運用設定が意図した静的接続を指すこと |
