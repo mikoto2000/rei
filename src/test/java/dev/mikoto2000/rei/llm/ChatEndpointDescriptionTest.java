@@ -21,6 +21,67 @@ import org.springframework.boot.context.properties.source.MapConfigurationProper
 /** Metadata only: no HTTP, inference, token refresh or ambient model access. */
 class ChatEndpointDescriptionTest {
   @Test
+  void httpModelSelectionCarriesIdentityRejectsStaleWritesAndKeepsModelOnlyCompatibility()
+      throws Exception {
+    try (var service = service(settings())) {
+      var mvc =
+          org.springframework.test.web.servlet.setup.MockMvcBuilders.standaloneSetup(
+                  new dev.mikoto2000.rei.web.ModelController(service))
+              .setControllerAdvice(new dev.mikoto2000.rei.web.ApiExceptionHandler())
+              .build();
+      String path = "/api/v1/models/current";
+      mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get(path))
+          .andExpect(
+              org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().isOk())
+          .andExpect(
+              org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath(
+                      "$.endpoint")
+                  .value("first"));
+      mvc.perform(
+              org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put(path)
+                  .contentType("application/json")
+                  .content("{\"model\":\"first-model\",\"endpoint\":\"first\"}"))
+          .andExpect(
+              org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().isOk())
+          .andExpect(
+              org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath(
+                      "$.endpoint")
+                  .value("first"));
+      service.select("second");
+      mvc.perform(
+              org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put(path)
+                  .contentType("application/json")
+                  .content("{\"model\":\"stale-model\",\"endpoint\":\"first\"}"))
+          .andExpect(
+              org.springframework.test.web.servlet.result.MockMvcResultMatchers.status()
+                  .isConflict());
+      mvc.perform(
+              org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put(path)
+                  .contentType("application/json")
+                  .content("{\"model\":\"second-model\"}"))
+          .andExpect(
+              org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().isOk())
+          .andExpect(
+              org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath(
+                      "$.endpoint")
+                  .value("second"));
+      mvc.perform(
+              org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put(path)
+                  .contentType("application/json")
+                  .content("{\"model\":\"second-model\",\"apiKey\":\"PRIVATE_VALUE\"}"))
+          .andExpect(
+              org.springframework.test.web.servlet.result.MockMvcResultMatchers.status()
+                  .isBadRequest())
+          .andExpect(
+              org.springframework.test.web.servlet.result.MockMvcResultMatchers.content()
+                  .string(
+                      org.hamcrest.Matchers.not(
+                          org.hamcrest.Matchers.containsString("PRIVATE_VALUE"))));
+      assertThat(service.selection().model()).isEqualTo("second-model");
+    }
+  }
+
+  @Test
   void publicGenerationMatchesConfiguredNativeSettingsAndExplicitProvider() {
     var values = settings();
     values.put(prefix("first") + "provider", "openai-api");

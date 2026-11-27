@@ -86,6 +86,10 @@ public record LlmEndpointCapabilities(
     return new LlmEndpointCapabilities(route, server, declared, maxTools);
   }
 
+  static void validateModelDeclarations(Map<String, String> declarations, String field) {
+    applyDeclarations(declarations, filled(Support.UNKNOWN), field);
+  }
+
   private static EnumMap<Capability, Support> filled(Support value) {
     var values = new EnumMap<Capability, Support>(Capability.class);
     for (var capability : Capability.values()) values.put(capability, value);

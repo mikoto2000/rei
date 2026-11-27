@@ -77,16 +77,8 @@ public final class ChatEndpointCatalog {
               .getModelCapabilitiesByName()
               .values()
               .forEach(declarations ->
-                  LlmEndpointCapabilities.resolve(
-                          server,
-                          provider(server, CHAT),
-                          server.getApi(),
-                          properties.getMaxTools(),
-                          CHAT,
-                          true)
-                      .withModelDeclarations(
-                          declarations,
-                          CHAT + ".endpoints." + name + ".model-capabilities-by-name")));
+                  LlmEndpointCapabilities.validateModelDeclarations(
+                      declarations, CHAT + ".endpoints." + name + ".model-capabilities-by-name")));
       initial = chat.getActive();
       profiles =
           endpoints.entrySet().stream()
