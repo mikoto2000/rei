@@ -24,20 +24,16 @@ export const endpoint = (id = "local"): LlmEndpoint => ({
 const port = (): LlmPort => ({
   endpoints: vi.fn().mockResolvedValue([endpoint()]),
   select: vi.fn().mockImplementation(async (_server, id) => endpoint(id)),
-  models: vi
-    .fn()
-    .mockResolvedValue({
-      endpoint: "local",
-      currentModel: "local-model",
-      models: ["local-model", "second"],
-    }),
-  selectModel: vi
-    .fn()
-    .mockResolvedValue({
-      endpoint: "local",
-      currentModel: "second",
-      models: [],
-    }),
+  models: vi.fn().mockResolvedValue({
+    endpoint: "local",
+    currentModel: "local-model",
+    models: ["local-model", "second"],
+  }),
+  selectModel: vi.fn().mockResolvedValue({
+    endpoint: "local",
+    currentModel: "second",
+    models: [],
+  }),
 });
 it("rejects missing IPC metadata without replacing the last valid display", async () => {
   const api = port();

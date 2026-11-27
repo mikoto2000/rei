@@ -59,6 +59,13 @@ export class LlmSelection {
     const revision = ++this.revision;
     try {
       const endpoints = await this.port.endpoints(this.server);
+      if (
+        !Array.isArray(endpoints) ||
+        endpoints.length === 0 ||
+        endpoints.filter((e) => e?.active).length !== 1 ||
+        endpoints.some((e) => !e?.profile?.id || !Array.isArray(e.diagnostics))
+      )
+        throw "InvalidResponse";
       if (revision === this.revision)
         this.update({ endpoints, models: null, error: null });
     } catch (error) {
