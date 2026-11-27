@@ -116,11 +116,11 @@ final class RunLlmConnectionFactory {
    * Existing static chat settings used by autonomous inference, independent of normal selection.
    */
   RunLlmConnection captureIndependent(String model) {
-    var settings = legacy.resolve(model);
+    var source = catalog.feature(LlmFeature.CHAT);
+    var settings = legacy.resolve(model == null && source != null ? source.getModel() : model);
     if (settings.authentication() != LlmAuthentication.API_KEY
         && settings.authentication() != LlmAuthentication.NONE)
       throw new IllegalStateException("Independent inference static authentication is unavailable");
-    var source = catalog.feature(LlmFeature.CHAT);
     var provider =
         LlmProvider.configured(source == null ? null : source.getProvider(), "static chat");
     if (provider == LlmProvider.CHATGPT_PLAN)
