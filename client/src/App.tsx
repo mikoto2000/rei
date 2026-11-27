@@ -882,6 +882,7 @@ export function App({
                   />
                 )}
                 <Chat
+                  llmCall={call}
                   onArtifacts={(selection) => {
                     setArtifactSelection(selection);
                     navigate("artifacts");
