@@ -20,6 +20,8 @@ final class ResponsesLoopFixture implements AutoCloseable {
           .retryOnConnectionFailure(false)
           .build();
   final List<JsonNode> requests = new java.util.concurrent.CopyOnWriteArrayList<>();
+  final java.util.concurrent.atomic.AtomicInteger credentialReads =
+      new java.util.concurrent.atomic.AtomicInteger();
   java.util.function.IntFunction<String> replies;
   final String reply =
       PlanResponsesRequestTest.Fixture.event(
@@ -93,6 +95,7 @@ final class ResponsesLoopFixture implements AutoCloseable {
         PinnedOpenAiClients.open(
             pin,
             () -> {
+              credentialReads.incrementAndGet();
               if (!plan) throw new AssertionError("No-auth route accessed credentials");
               return "fixture-plan-access";
             },

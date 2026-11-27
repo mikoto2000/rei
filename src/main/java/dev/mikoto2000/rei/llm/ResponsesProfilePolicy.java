@@ -104,7 +104,7 @@ final class ResponsesProfilePolicy {
     if (metadata != null && !metadata.isEmpty()) rejectUnsupported(metadata, "metadata");
     var tools = options.getToolCallbacks();
     if (tools != null && !tools.isEmpty()) {
-      requireCapability(connection, LlmEndpointCapabilities.Capability.FUNCTION_CALLING);
+      LlmInputPolicy.requireFunctionCalling(options, connection);
       if (connection.provider() == LlmProvider.CHATGPT_PLAN)
         requireCapability(connection, LlmEndpointCapabilities.Capability.TOOL_NAMESPACE);
     }
