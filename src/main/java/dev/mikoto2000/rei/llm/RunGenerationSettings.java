@@ -124,12 +124,12 @@ final class RunGenerationSettings {
         if (number < 0 || number > (name.equals("top_p") ? 1 : 2)) throw configuredInvalid();
         value = number;
       } else if (name.startsWith("max_")) {
-        double number = configuredNumber(value);
+        int number = configuredInteger(value);
         var bound = endpoint.maxOutputTokens();
-        if (bound == null || number < 1 || number > bound || number != Math.rint(number))
+        if (bound == null || number < 1 || number > bound)
           throw new IllegalArgumentException(
               "Named generation token limit exceeds the accepted bound: " + name);
-        value = (int) number;
+        value = number;
         if (name.equals("max_completion_tokens")) values.remove("max_tokens");
         if (name.equals("max_tokens")) values.remove("max_completion_tokens");
       } else if (name.equals("parallel_tool_calls")) value = configuredBoolean(value);
@@ -152,6 +152,19 @@ final class RunGenerationSettings {
     if ("true".equals(value)) return true;
     if ("false".equals(value)) return false;
     throw configuredInvalid();
+  }
+
+  private static int configuredInteger(Object value) {
+    try {
+      var number =
+          value instanceof Number numeric
+              ? new java.math.BigDecimal(numeric.toString())
+              : value instanceof String text ? new java.math.BigDecimal(text) : null;
+      if (number == null) throw configuredInvalid();
+      return number.intValueExact();
+    } catch (NumberFormatException | ArithmeticException invalid) {
+      throw configuredInvalid();
+    }
   }
 
   private static double configuredNumber(Object value) {
