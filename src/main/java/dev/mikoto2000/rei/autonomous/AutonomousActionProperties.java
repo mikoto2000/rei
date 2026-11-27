@@ -41,14 +41,24 @@ public record AutonomousActionProperties(
     }
 
     private static void requirePositive(Duration duration) {
-      if (duration == null || duration.isNegative() || duration.isZero()
+      if (duration == null
+          || duration.isNegative()
+          || duration.isZero()
           || duration.compareTo(Duration.ofDays(3660)) > 0)
         throw new IllegalArgumentException("Invalid autonomous draft duration");
     }
 
     public static Bluesky defaults() {
-      return new Bluesky(false, "0 0 12 * * *", "", 1, 1, Duration.ofHours(1),
-          Duration.ofHours(72), 3, Duration.ofHours(1),
+      return new Bluesky(
+          false,
+          "0 0 12 * * *",
+          "",
+          1,
+          1,
+          Duration.ofHours(1),
+          Duration.ofHours(72),
+          3,
+          Duration.ofHours(1),
           "あなたは AI 秘書のれいです。公開許可された話題から投稿案を考えてください。話題がなければ SKIP を返してください。");
     }
   }

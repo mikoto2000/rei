@@ -35,21 +35,42 @@ class AutonomousActionPolicyTest {
     var time = Instant.parse("2026-11-28T03:00:00Z");
     return java.util.stream.Stream.of(
         org.junit.jupiter.params.provider.Arguments.of(
-            new AutonomousActionContext(time, "did:plc:example", "rei.example", true, false, 0, 0, null), "stopping"),
+            new AutonomousActionContext(
+                time, "did:plc:example", "rei.example", true, false, 0, 0, null),
+            "stopping"),
         org.junit.jupiter.params.provider.Arguments.of(
-            new AutonomousActionContext(time, "did:plc:example", "rei.example", false, true, 0, 0, null), "active_opportunity"),
+            new AutonomousActionContext(
+                time, "did:plc:example", "rei.example", false, true, 0, 0, null),
+            "active_opportunity"),
         org.junit.jupiter.params.provider.Arguments.of(
-            new AutonomousActionContext(time, "", "rei.example", false, false, 0, 0, null), "target_not_configured"),
+            new AutonomousActionContext(time, "", "rei.example", false, false, 0, 0, null),
+            "target_not_configured"),
         org.junit.jupiter.params.provider.Arguments.of(
-            new AutonomousActionContext(time, "did:plc:example", "", false, false, 0, 0, null), "target_not_configured"),
+            new AutonomousActionContext(time, "did:plc:example", "", false, false, 0, 0, null),
+            "target_not_configured"),
         org.junit.jupiter.params.provider.Arguments.of(
-            new AutonomousActionContext(time, "did:plc:example", "rei.example", false, false, 1, 0, null), "pending_limit"),
+            new AutonomousActionContext(
+                time, "did:plc:example", "rei.example", false, false, 1, 0, null),
+            "pending_limit"),
         org.junit.jupiter.params.provider.Arguments.of(
-            new AutonomousActionContext(time, "did:plc:example", "rei.example", false, false, 0, 1, null), "daily_limit"),
+            new AutonomousActionContext(
+                time, "did:plc:example", "rei.example", false, false, 0, 1, null),
+            "daily_limit"),
         org.junit.jupiter.params.provider.Arguments.of(
-            new AutonomousActionContext(time, "did:plc:example", "rei.example", false, false, 0, 0, time.minusSeconds(3599)), "cooldown"),
+            new AutonomousActionContext(
+                time,
+                "did:plc:example",
+                "rei.example",
+                false,
+                false,
+                0,
+                0,
+                time.minusSeconds(3599)),
+            "cooldown"),
         org.junit.jupiter.params.provider.Arguments.of(
-            new AutonomousActionContext(time, "did:plc:example", "rei.example", false, false, 0, 0, time.plusSeconds(1)), "cooldown"));
+            new AutonomousActionContext(
+                time, "did:plc:example", "rei.example", false, false, 0, 0, time.plusSeconds(1)),
+            "cooldown"));
   }
 
   @Test
@@ -66,6 +87,12 @@ class AutonomousActionPolicyTest {
       boolean stopping, boolean active, int pending, int generated, Instant attempted) {
     return new AutonomousActionContext(
         Instant.parse("2026-11-28T03:00:00Z"),
-        "did:plc:example", "rei.example", stopping, active, pending, generated, attempted);
+        "did:plc:example",
+        "rei.example",
+        stopping,
+        active,
+        pending,
+        generated,
+        attempted);
   }
 }

@@ -34,18 +34,31 @@ class AutonomousActionPropertiesTest {
 
   @Test
   void frequencyDoesNotChangeDailyLimitAndPromptIsConfigurable() {
-    var settings = bind(Map.of("rei.autonomous-action.bluesky.cron", "0 */10 * * * *",
-        "rei.autonomous-action.bluesky.system-prompt", "custom",
-        "rei.autonomous-action.bluesky.zone", "Asia/Tokyo"));
+    var settings =
+        bind(
+            Map.of(
+                "rei.autonomous-action.bluesky.cron",
+                "0 */10 * * * *",
+                "rei.autonomous-action.bluesky.system-prompt",
+                "custom",
+                "rei.autonomous-action.bluesky.zone",
+                "Asia/Tokyo"));
     assertThat(settings.bluesky().maxDraftsPerDay()).isEqualTo(1);
     assertThat(settings.bluesky().systemPrompt()).isEqualTo("custom");
     assertThat(settings.bluesky().zone()).isEqualTo("Asia/Tokyo");
   }
 
   @ParameterizedTest
-  @CsvSource({"cron,invalid", "zone,Mars/Test", "max-drafts-per-day,0",
-      "max-pending-drafts,0", "cooldown,PT0S", "draft-expiration,-PT1H",
-      "max-regenerations,-1", "regeneration-cooldown,PT0S"})
+  @CsvSource({
+    "cron,invalid",
+    "zone,Mars/Test",
+    "max-drafts-per-day,0",
+    "max-pending-drafts,0",
+    "cooldown,PT0S",
+    "draft-expiration,-PT1H",
+    "max-regenerations,-1",
+    "regeneration-cooldown,PT0S"
+  })
   void invalidSettingsFailEvenWhileFeatureIsDisabled(String key, String value) {
     assertThatThrownBy(() -> bind(Map.of("rei.autonomous-action.bluesky." + key, value)))
         .isInstanceOf(org.springframework.boot.context.properties.bind.BindException.class);
