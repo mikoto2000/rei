@@ -22,7 +22,7 @@ Rei は、ターミナルとデスクトップGUIで使う AI 秘書です。Ope
 
 - JDK 25 以上（`java -version` で確認できます）
 - このリポジトリのソース一式
-- 利用する OpenAI 互換 API の接続先、モデル名、必要に応じた API キー
+- Codex を利用できる ChatGPT サブスクリプションのアカウント（以下の初期設定で使用）
 
 以下はソースから起動する手順です。リポジトリのルートで実行してください。Maven は同梱の Maven Wrapper を使用できます。初回は依存ファイルのダウンロードにネットワーク接続が必要です。
 
@@ -42,33 +42,70 @@ sh ./build.sh -DskipTests=false
 
 ### 2. AI の接続先を設定する
 
-通常チャットの名前付き接続先、ChatGPTサブスク、認証なしのローカルResponsesは[共通接続の利用ガイド](docs/chat-llm-connections.md)を参照してください。[互換性マトリクス](docs/chat-llm-compatibility.md)ではfixtureによる検証と実サービス未確認を区別しています。
+ここでは、Codex のサブスク（ChatGPT の利用枠）で通常チャットを使う設定を説明します。Rei の `Sign in with ChatGPT` で認証するため、この接続用の OpenAI API キーは不要です。現在、認証情報の保護保存は Windows の DPAPI に対応しています。Linux / macOS や API・ローカル LLM を使う場合は、後半の[その他の AI 接続設定](#その他の-ai-接続設定)を参照してください。
 
-以下は従来の静的接続を使う場合の例です。名前付き接続先では認証方式を個別に設定し、認証なしにdummy keyを補完しません。
+まず、[手順3](#3-起動して話しかける)のコマンドで従来 Shell を一度起動し、Rei の入力プロンプトで次を実行します。この段階では AI に話しかける必要はありません。
 
-次の例は、同じ PC の `http://localhost:11434` で公開されている `qwen3.5:9b` に接続します。URL・モデル名・キーを実際の接続先に置き換えてください。キーが不要なローカルサーバーでは `dummy-key` を指定できます。
-
-Windows（PowerShell）
-
-```powershell
-$env:REI_OPENAI_BASE_URL = 'http://localhost:11434'
-$env:REI_OPENAI_API_KEY = 'dummy-key'
-$env:REI_OPENAI_CHAT_MODEL = 'qwen3.5:9b'
-$env:REI_EMBEDDING_ENABLED = 'false'
+```text
+/config path
+/config init
+/exit
 ```
 
-Linux / macOS（Bash）
+表示された保存先の `application.yaml` に、次の設定を反映します。既存ファイルの `rei:` 以下に設定をまとめ、同じキーを重複させないでください。`rei.llm.features.chat` は以下の内容に置き換えます。初回はモデルIDが未確定でも、以下の仮値で起動して認証とモデル一覧の確認ができます。
 
-```bash
-export REI_OPENAI_BASE_URL=http://localhost:11434
-export REI_OPENAI_API_KEY=dummy-key
-export REI_OPENAI_CHAT_MODEL=qwen3.5:9b
-export REI_EMBEDDING_ENABLED=false
+```yaml
+rei:
+  embedding:
+    enabled: false
+  chatgpt-plan:
+    enabled: true
+    allowed-roles: []
+  llm:
+    features:
+      chat:
+        active: subscription
+        endpoints:
+          subscription:
+            provider: chatgpt-plan
+            api: responses
+            authentication: chatgpt-oauth
+            account-ref: personal
+            model: replace-with-account-model-slug
+            usage-path: chatgpt-plan
+            reasoning-replay: encrypted
+            server-capabilities:
+              responses: unknown
+              streaming: unknown
+              function-calling: unknown
+              tool-namespace: unknown
+              reasoning-replay: unknown
+            model-capabilities:
+              function-calling: unknown
+              reasoning-replay: unknown
 ```
 
-この例では、まず対話を始められるよう文書の埋め込みを無効にしています。文書検索を使うときは `REI_OPENAI_EMBEDDING_MODEL` を設定し、`REI_EMBEDDING_ENABLED=true` にして再起動してください。画像生成には画像生成 API に対応する接続先とモデルが必要です。
+Rei を再起動し、次を入力します。開いたブラウザで、利用する ChatGPT アカウント・Workspace・同意内容を確認してログインしてください。`personal` は Rei 内で使うアカウントの登録名です。
 
-これらの環境変数は、設定したターミナルから起動する Rei に適用されます。毎回入力したくない場合は、起動後に[設定ファイル](#設定とデータの保存先)を作成してください。
+```text
+/chatgpt login --account personal
+/chatgpt status
+/chatgpt models --account personal
+/exit
+```
+
+モデル一覧に表示されたID（slug）で `model` の仮値を置き換えます。`server-capabilities` と `model-capabilities` はサーバー・モデルの対応宣言です。[共通接続の利用ガイド](docs/chat-llm-connections.md#能力生成設定モデルごとの宣言)に従い、対応を確認した項目を `supported` に変更してください。通常チャットには Responses・ストリーミング・暗号化された推論の再送、ツールを使う場合は Function Calling・ツールの名前空間への対応が必要です。`unknown` のままでは必要な能力を使えず、モデル一覧への掲載だけでは対応確認になりません。実サービスでの確認状況は[互換性マトリクス](docs/chat-llm-compatibility.md)を参照してください。
+
+設定を保存して再起動し、次のコマンドで接続先・モデル・認証状態と利用不可理由を確認したら、手順3のように話しかけます。
+
+```text
+/llm chat list
+/llm chat show
+```
+
+`active: subscription` により、起動時からサブスクの接続先が選ばれます。登録済みの別接続先から切り替える場合は `/llm chat use subscription` を使います。認証と利用枠の操作は従来 Shell で行ってください。
+
+この設定は通常チャットの接続先を変更します。文書の埋め込みは無効にしており、画像生成・補助推論・SubAgent などの接続先は別途設定します。詳細は[共通接続の利用ガイド](docs/chat-llm-connections.md)と[認証・利用枠のガイド](docs/chatgpt-plan-subagents.md)を参照してください。
 
 ### 3. 起動して話しかける
 
@@ -102,7 +139,7 @@ Rei の入力プロンプトが表示されたら、文章をそのまま入力�
 | 軽量 CLI | ビルド後、`REI_API_KEY` を設定して Windows では `.\rei.bat`、Linux では `sh ./rei.sh` を実行します。既定の `auto` は同じデータディレクトリの Backend に接続するか、Backend を別プロセスで起動します。`--mode=client` は接続のみ、`--mode=server` は Backend の起動、`--mode=legacy-shell` は従来 Shell の起動です。macOS では `sh ./rei.sh --mode=legacy-shell` で従来 Shell を起動できます。[起動・停止と OS ごとの制約](docs/lightweight-cli-client.md) |
 | Native Client | Tauri 2 のクライアントを起動し、`REI_API_KEY` を設定した Rei の Web API に接続します。Web API Phase 1〜4 に対応し、会話履歴・Run・SSE の再接続・Workspace 操作を提供します。[起動・ビルド](client/README.md)・[API と対応機能](docs/native-web-api.md) |
 
-`REI_API_KEY` は Rei のクライアントと Backend の間の認証に使います。モデル接続用のキーは `REI_OPENAI_API_KEY` に設定します。
+`REI_API_KEY` は Rei のクライアントと Backend の間の認証に使います。AI 接続先の認証とは別の設定です。
 
 音声入力と `/chatgpt` の認証・利用枠操作には従来 Shell を使います。[コマンド対応表](docs/lightweight-cli-command-matrix.md)
 
@@ -226,6 +263,38 @@ Shell と Native Client は同じ Backend の Session History を利用します
 
 Slack で会話する場合は [Slack Bot ガイド](docs/slack-bot.md)を参照してください。
 明示的に有効化した Rei プロセスが Socket Mode 接続を管理します。通常 Shell、`--backend`、`--mode=server` の起動に対応します。
+
+## その他の AI 接続設定
+
+OpenAI API・認証なしのローカル LLM などを通常チャットの名前付き接続先として登録する方法は、[共通接続の利用ガイド](docs/chat-llm-connections.md)を参照してください。接続先ごとに認証方式を指定し、CLI の `/llm chat use` や GUI から切り替えられます。名前付き接続先の `authentication: none` には API キーを指定せず、dummy key の補完も行いません。
+
+### 従来の静的接続を使う場合
+
+次の例は、同じ PC の `http://localhost:11434` で公開されている `qwen3.5:9b` に接続します。URL・モデル名・キーを実際の接続先に置き換えてください。OpenAI API を使う場合は、ベース URL に `https://api.openai.com`、API キーに自分のキー、モデル名に利用可能なモデルIDを指定します。キーが不要なローカルサーバーでは、従来の静的接続に限り `dummy-key` を指定できます。
+
+Windows（PowerShell）
+
+```powershell
+$env:REI_OPENAI_BASE_URL = 'http://localhost:11434'
+$env:REI_OPENAI_API_KEY = 'dummy-key'
+$env:REI_OPENAI_CHAT_MODEL = 'qwen3.5:9b'
+$env:REI_EMBEDDING_ENABLED = 'false'
+```
+
+Linux / macOS（Bash）
+
+```bash
+export REI_OPENAI_BASE_URL=http://localhost:11434
+export REI_OPENAI_API_KEY=dummy-key
+export REI_OPENAI_CHAT_MODEL=qwen3.5:9b
+export REI_EMBEDDING_ENABLED=false
+```
+
+通常チャットでこの静的接続を使う場合は、`rei.llm.features.chat` の名前付き接続設定（`active`・`endpoints`）を外して再起動してください。名前付き接続先を使う構成では、上の環境変数だけで通常チャットの選択先は変わりません。
+
+この例では、まず対話を始められるよう文書の埋め込みを無効にしています。文書検索を使うときは `REI_OPENAI_EMBEDDING_MODEL` を設定し、`REI_EMBEDDING_ENABLED=true` にして再起動してください。設定ファイルで有効化する場合は `rei.embedding.enabled: true` に変更します。画像生成には画像生成 API に対応する接続先とモデルが必要です。
+
+これらの環境変数は、設定したターミナルから起動する Rei に適用されます。毎回入力したくない場合は、[設定ファイル](#設定とデータの保存先)に保存できます。設定項目の詳細は[設定ガイド](docs/configuration.md#openai-互換-api)を参照してください。
 
 ## 困ったときは
 
