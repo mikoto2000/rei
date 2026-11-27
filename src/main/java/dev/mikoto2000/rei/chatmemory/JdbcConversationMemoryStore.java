@@ -24,9 +24,11 @@ import org.springframework.ai.chat.messages.MessageType;
 import org.springframework.ai.chat.messages.SystemMessage;
 import org.springframework.ai.chat.messages.ToolResponseMessage;
 import org.springframework.ai.chat.messages.UserMessage;
+import org.springframework.core.NestedRuntimeException;
 import org.springframework.jdbc.core.BatchPreparedStatementSetter;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.util.Assert;
 
@@ -46,7 +48,7 @@ public final class JdbcConversationMemoryStore implements ConversationMemoryStor
   public JdbcConversationMemoryStore(DataSource dataSource) {
     Assert.notNull(dataSource, "dataSource cannot be null");
     jdbc = new JdbcTemplate(dataSource);
-    transaction = new TransactionTemplate(new DataSourceTransactionManager(dataSource));
+    transaction = transactionTemplate(dataSource);
   }
 
   private JdbcConversationMemoryStore(JdbcTemplate jdbcTemplate) {
@@ -54,7 +56,14 @@ public final class JdbcConversationMemoryStore implements ConversationMemoryStor
     DataSource dataSource = jdbcTemplate.getDataSource();
     Assert.notNull(dataSource, "jdbcTemplate dataSource cannot be null");
     jdbc = jdbcTemplate;
-    transaction = new TransactionTemplate(new DataSourceTransactionManager(dataSource));
+    transaction = transactionTemplate(dataSource);
+  }
+
+  private static TransactionTemplate transactionTemplate(DataSource dataSource) {
+    var manager = new DataSourceTransactionManager(dataSource);
+    // SQLite leaves a transaction active when COMMIT returns BUSY. Roll it back before retrying.
+    manager.setRollbackOnCommitFailure(true);
+    return new TransactionTemplate(manager);
   }
 
   /** Uses the application's configured template, including query timeout and fetch settings. */
@@ -111,12 +120,44 @@ public final class JdbcConversationMemoryStore implements ConversationMemoryStor
               "JdbcChatMemoryRepository does not support tool call messages. Some messages were filtered out for conversation: "
                   + conversationId);
     }
-    transaction.executeWithoutResult(status -> {
-      deleteByConversationId(conversationId);
-      jdbc.batchUpdate(
-          "INSERT INTO SPRING_AI_CHAT_MEMORY (conversation_id, content, type, timestamp, sequence_id) VALUES (?, ?, ?, ?, ?)",
-          new MessageBatch(conversationId, persistable));
-    });
+    // A participating transaction cannot be restarted here; its owner must handle failures.
+    boolean ownsTransaction = !TransactionSynchronizationManager.isActualTransactionActive();
+    for (int attempt = 0; ; attempt++) {
+      try {
+        transaction.executeWithoutResult(status -> {
+          deleteByConversationId(conversationId);
+          jdbc.batchUpdate(
+              "INSERT INTO SPRING_AI_CHAT_MEMORY (conversation_id, content, type, timestamp, sequence_id) VALUES (?, ?, ?, ?, ?)",
+              new MessageBatch(conversationId, persistable));
+        });
+        return;
+      } catch (NestedRuntimeException failure) {
+        if (!ownsTransaction
+            || attempt >= 3
+            || !isSqliteContention(failure)
+            || Thread.currentThread().isInterrupted()) throw failure;
+        org.apache.commons.logging.LogFactory.getLog(JdbcConversationMemoryStore.class)
+            .warn("Chat memory storage busy; retrying transaction (retry " + (attempt + 1) + "/3)");
+        try {
+          Thread.sleep(100L << attempt);
+        } catch (InterruptedException interrupted) {
+          Thread.currentThread().interrupt();
+          throw failure;
+        }
+      }
+    }
+  }
+
+  private static boolean isSqliteContention(Throwable failure) {
+    var seen =
+        java.util.Collections.newSetFromMap(new java.util.IdentityHashMap<Throwable, Boolean>());
+    for (var cause = failure; cause != null && seen.add(cause); cause = cause.getCause()) {
+      if (cause instanceof org.sqlite.SQLiteException sqlite) {
+        int code = sqlite.getResultCode().code & 0xff;
+        return code == 5 || code == 6;
+      }
+    }
+    return false;
   }
 
   @Override
