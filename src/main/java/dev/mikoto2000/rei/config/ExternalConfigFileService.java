@@ -505,6 +505,10 @@ public class ExternalConfigFileService {
           max-follow-up-turns: 2
           max-delegation-depth: 1
           timeout-seconds: 300
+      autonomous-action:
+        enabled: false
+        bluesky:
+          enabled: false
       bluesky:
         enabled: false
         handle: ${REI_BLUESKY_HANDLE:}
