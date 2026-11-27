@@ -14,6 +14,19 @@ final class LlmInputPolicy {
 
   private LlmInputPolicy() {}
 
+  static void requireFunctionCalling(
+      org.springframework.ai.model.tool.ToolCallingChatOptions options,
+      RunLlmConnection connection) {
+    var tools = options.getToolCallbacks();
+    if (tools == null || tools.isEmpty()) return;
+    if (connection == null
+        || !connection.named()
+        || connection.capabilities().get(LlmEndpointCapabilities.Capability.FUNCTION_CALLING)
+            != LlmEndpointCapabilities.Support.SUPPORTED)
+      throw new IllegalStateException(
+          "Input capability is unsupported or unconfirmed: FUNCTION_CALLING");
+  }
+
   static void requireMedia(Prompt prompt, RunLlmConnection connection) {
     for (var message : prompt.getInstructions()) {
       if (!(message instanceof UserMessage user)) continue;
