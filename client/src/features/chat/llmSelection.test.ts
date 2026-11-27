@@ -21,32 +21,44 @@ export const endpoint = (id = "local"): LlmEndpoint => ({
   diagnostics: [],
   selectionScope: "process-wide; next Run only",
 });
-const port = (): LlmPort => ({
-  endpoints: vi.fn().mockResolvedValue([endpoint()]),
-  select: vi.fn().mockImplementation(async (_server, id) => endpoint(id)),
-  models: vi.fn().mockResolvedValue({
-    endpoint: "local",
-    currentModel: "local-model",
-    models: ["local-model", "second"],
-  }),
-  selectModel: vi.fn().mockResolvedValue({
-    endpoint: "local",
-    currentModel: "second",
-    models: [],
-  }),
-});
+const port = (): LlmPort => {
+  let model = "local-model";
+  return {
+    endpoints: vi.fn().mockImplementation(async () => {
+      const current = endpoint();
+      current.profile.model = model;
+      return [current];
+    }),
+    select: vi.fn().mockImplementation(async (_server, id) => endpoint(id)),
+    models: vi.fn().mockResolvedValue({
+      endpoint: "local",
+      currentModel: "local-model",
+      models: ["local-model", "second"],
+    }),
+    selectModel: vi
+      .fn()
+      .mockImplementation(async (_server, endpoint, selected) => {
+        model = selected;
+        return { endpoint, currentModel: selected, models: [] };
+      }),
+  };
+};
 it("discards a model write result superseded by a CLI change on the same endpoint", async () => {
   const api = port();
   const latest = endpoint();
   latest.profile.model = "cli-newer-model";
-  vi.mocked(api.endpoints).mockResolvedValueOnce([endpoint()]).mockResolvedValueOnce([latest]);
+  vi.mocked(api.endpoints)
+    .mockResolvedValueOnce([endpoint()])
+    .mockResolvedValueOnce([latest]);
   const selection = new LlmSelection(api, "server");
   await selection.refresh();
   await selection.loadModels();
   await selection.selectModel("second");
   expect(selection.snapshot().models).toBeNull();
   expect(selection.snapshot().error).toBe("Conflict");
-  expect(selection.snapshot().endpoints.find((e) => e.active)?.profile.model).toBe("cli-newer-model");
+  expect(
+    selection.snapshot().endpoints.find((e) => e.active)?.profile.model,
+  ).toBe("cli-newer-model");
 });
 it("rejects missing IPC metadata without replacing the last valid display", async () => {
   const api = port();

@@ -127,8 +127,11 @@ export class LlmSelection {
       )
         throw "Conflict";
       const endpoints = await this.port.endpoints(this.server);
-      if (endpoints.find((e) => e.active)?.profile.id !== catalog.endpoint)
-        throw "Conflict";
+      const current = endpoints.find((e) => e.active)?.profile;
+      if (current?.id !== catalog.endpoint || current.model !== model) {
+        this.update({ endpoints, models: null, error: "Conflict" });
+        return;
+      }
       if (revision === this.revision)
         this.update({ endpoints, models: { ...catalog, currentModel: model } });
     } catch (error) {

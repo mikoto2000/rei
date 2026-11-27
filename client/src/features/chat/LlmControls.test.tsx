@@ -36,19 +36,25 @@ const row = (id: string, active = true): LlmEndpoint => ({
   selectionScope: "process-wide; next Run only; resets on restart",
 });
 function api(): LlmPort {
+  let model = "plan-model";
   return {
-    endpoints: vi.fn().mockResolvedValue([row("plan"), row("local", false)]),
+    endpoints: vi.fn().mockImplementation(async () => {
+      const current = row("plan");
+      current.profile.model = model;
+      return [current, row("local", false)];
+    }),
     select: vi.fn().mockImplementation(async (_server, id) => row(id)),
     models: vi.fn().mockResolvedValue({
       endpoint: "plan",
       currentModel: "plan-model",
       models: ["plan-model", "other"],
     }),
-    selectModel: vi.fn().mockResolvedValue({
-      endpoint: "plan",
-      currentModel: "other",
-      models: [],
-    }),
+    selectModel: vi
+      .fn()
+      .mockImplementation(async (_server, endpoint, selected) => {
+        model = selected;
+        return { endpoint, currentModel: selected, models: [] };
+      }),
   };
 }
 it("shows declared usage, authentication, restrictions and scope without model discovery", async () => {
