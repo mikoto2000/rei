@@ -72,16 +72,12 @@ it("blocks ordinary send synchronously until a connection mutation settles", asy
   fireEvent.submit(text.closest("form")!);
   expect(send).not.toHaveBeenCalled();
   expect(
-    screen
-      .getByRole("button", { name: "送信", exact: true })
-      .hasAttribute("disabled"),
+    screen.getByRole("button", { name: "送信" }).hasAttribute("disabled"),
   ).toBe(true);
   resolve(row("second"));
   await waitFor(() =>
     expect(
-      screen
-        .getByRole("button", { name: "送信", exact: true })
-        .hasAttribute("disabled"),
+      screen.getByRole("button", { name: "送信" }).hasAttribute("disabled"),
     ).toBe(false),
   );
   fireEvent.submit(text.closest("form")!);

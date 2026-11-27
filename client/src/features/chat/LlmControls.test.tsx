@@ -39,20 +39,16 @@ function api(): LlmPort {
   return {
     endpoints: vi.fn().mockResolvedValue([row("plan"), row("local", false)]),
     select: vi.fn().mockImplementation(async (_server, id) => row(id)),
-    models: vi
-      .fn()
-      .mockResolvedValue({
-        endpoint: "plan",
-        currentModel: "plan-model",
-        models: ["plan-model", "other"],
-      }),
-    selectModel: vi
-      .fn()
-      .mockResolvedValue({
-        endpoint: "plan",
-        currentModel: "other",
-        models: [],
-      }),
+    models: vi.fn().mockResolvedValue({
+      endpoint: "plan",
+      currentModel: "plan-model",
+      models: ["plan-model", "other"],
+    }),
+    selectModel: vi.fn().mockResolvedValue({
+      endpoint: "plan",
+      currentModel: "other",
+      models: [],
+    }),
   };
 }
 it("shows declared usage, authentication, restrictions and scope without model discovery", async () => {
