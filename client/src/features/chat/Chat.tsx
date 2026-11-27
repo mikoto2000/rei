@@ -16,7 +16,9 @@ import {
 import type { HistoryState } from "../history/pagination";
 import type { ArtifactSelection } from "../../entities/artifacts";
 import { emptyDraft, type Draft } from "./drafts";
+import type { Command } from "../../tauri/commands";
 interface Props {
+  llmCall?: Command;
   draft?: Draft;
   onDraft?: (draft: Draft) => void;
   onArtifacts?: (selection: ArtifactSelection) => void;
