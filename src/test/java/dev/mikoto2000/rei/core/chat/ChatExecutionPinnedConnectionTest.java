@@ -343,17 +343,18 @@ class ChatExecutionPinnedConnectionTest {
   }
 
   private Fixture fixture(Server first, Server second) {
+    var values = new java.util.HashMap<String, String>();
+    values.put("rei.llm.features.chat.active", "first");
+    for (var entry : Map.of("first", first.url(), "second", second.url()).entrySet()) {
+      var prefix = "rei.llm.features.chat.endpoints." + entry.getKey() + ".";
+      values.put(prefix + "base-url", entry.getValue());
+      values.put(prefix + "model", entry.getKey() + "-model");
+      values.put(prefix + "authentication", "none");
+      values.put(prefix + "server-capabilities.chat-completions", "supported");
+      values.put(prefix + "server-capabilities.streaming", "supported");
+    }
     var properties =
-        new Binder(
-                new MapConfigurationPropertySource(
-                    Map.of(
-                        "rei.llm.features.chat.active", "first",
-                        "rei.llm.features.chat.endpoints.first.base-url", first.url(),
-                        "rei.llm.features.chat.endpoints.first.model", "first-model",
-                        "rei.llm.features.chat.endpoints.first.authentication", "none",
-                        "rei.llm.features.chat.endpoints.second.base-url", second.url(),
-                        "rei.llm.features.chat.endpoints.second.model", "second-model",
-                        "rei.llm.features.chat.endpoints.second.authentication", "none")))
+        new Binder(new MapConfigurationPropertySource(values))
             .bind("rei.llm", LlmProperties.class)
             .get();
     var nativeModel = mock(ChatModel.class);
