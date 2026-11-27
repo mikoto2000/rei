@@ -35,7 +35,7 @@ class AutonomousDraftMigrationTest {
       sql.execute("DROP TABLE autonomous_drafts");
       sql.execute("DROP TABLE autonomous_opportunities");
       sql.execute("DROP TABLE autonomous_audit");
-      sql.execute("DELETE FROM storage_migrations WHERE version=23");
+      sql.execute("DELETE FROM storage_migrations WHERE version>=23");
       sql.execute("PRAGMA user_version=22");
     }
     try (var migration = new StorageMigrationCoordinator(root)) {
