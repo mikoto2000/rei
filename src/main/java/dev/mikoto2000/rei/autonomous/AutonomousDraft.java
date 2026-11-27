@@ -74,6 +74,7 @@ public record AutonomousDraft(
           || text.getBytes(StandardCharsets.UTF_8).length > 3000
           || GRAPHEME.matcher(text).results().limit(301).count() > 300)
         throw new IllegalArgumentException("Invalid Bluesky draft text");
+      AutonomousPostText.validate(text);
       if (!hash(text).equals(bodyHash)) throw new IllegalArgumentException("Draft hash mismatch");
       if (reason == null || reason.length() > 2048 || sourceIds == null || sourceIds.size() > 64)
         throw new IllegalArgumentException("Invalid draft evidence");

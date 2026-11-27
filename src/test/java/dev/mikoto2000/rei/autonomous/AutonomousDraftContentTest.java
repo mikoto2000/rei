@@ -48,4 +48,48 @@ class AutonomousDraftContentTest {
             new AutonomousDraft.Content(1, "別の本文", content.bodyHash(), "reason", List.of("source")))
         .isInstanceOf(IllegalArgumentException.class);
   }
+
+  @Test
+  void terminalAndBidirectionalOverridesCannotSpoofReviewText() {
+    for (String text :
+        new String[] {
+          "safe\u001b[2Jfake review", "a\u0000b", "hidden\roverwrite", "a\u202Eb", "a\u2066b"
+        }) {
+      assertThatThrownBy(() -> AutonomousDraft.Content.create(1, text, "reason", List.of()))
+          .isInstanceOf(IllegalArgumentException.class);
+    }
+  }
+
+  @Test
+  void mentionsAndObfuscatedMentionTokensAreRejected() {
+    for (String text :
+        new String[] {
+          "hi @alice",
+          "こんにちは@alice.bsky.social",
+          "＠alice.bsky.social",
+          "hello\u200B@\u200Balice.bsky.social"
+        }) {
+      assertThatThrownBy(() -> AutonomousDraft.Content.create(1, text, "reason", List.of()))
+          .isInstanceOf(IllegalArgumentException.class);
+    }
+  }
+
+  @Test
+  void ordinaryLinksAndEmailAddressesRemainLiteralText() {
+    for (String text :
+        new String[] {
+          "https://example.org/@profile と person@example.com を紹介します。",
+          "Contact person@example.com.",
+          "Contact person+tag@example.com, please."
+        }) {
+      assertThat(AutonomousDraft.Content.create(1, text, "reason", List.of()).text())
+          .isEqualTo(text);
+    }
+  }
+
+  @Test
+  void ordinaryWhitespaceAndJoinedEmojiArePreservedExactly() {
+    String text = "一行目\r\n二行目\t👩‍💻";
+    assertThat(AutonomousDraft.Content.create(1, text, "reason", List.of()).text()).isEqualTo(text);
+  }
 }
