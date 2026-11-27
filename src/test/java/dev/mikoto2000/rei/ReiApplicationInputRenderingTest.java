@@ -12,6 +12,7 @@ import dev.mikoto2000.rei.llm.LlmApiType;
 import dev.mikoto2000.rei.llm.LlmFeature;
 import dev.mikoto2000.rei.llm.LlmModelProvider;
 import dev.mikoto2000.rei.llm.LlmProperties;
+import dev.mikoto2000.rei.modeloptions.ChatModelSelection;
 import dev.mikoto2000.rei.ui.shell.RootCommand;
 import dev.mikoto2000.rei.ui.shell.sound.ChatResponseNarrator;
 import dev.mikoto2000.rei.ui.shell.sound.SoundNotificationService;
@@ -61,6 +62,31 @@ class ReiApplicationInputRenderingTest {
         new ChatModelResolver(new LlmModelProvider(null, properties)));
 
     assertEquals("09:42 gpt-6.2-sol> ", app.buildPrompt());
+  }
+
+  @Test
+  void promptFollowsTheActiveChatEndpointAndModel() {
+    var selected = new ModelHolderService("DeepSeek-V4.1-Flash-1017");
+    var app = newAppWithFixedTime(selected, LocalTime.of(9, 42));
+    var resolver = new ChatModelResolver(new LlmModelProvider(null, new LlmProperties()));
+    var selection = Mockito.mock(ChatModelSelection.class);
+    var beans = new org.springframework.beans.factory.support.StaticListableBeanFactory();
+    beans.addBean("chatSelection", selection);
+    org.springframework.test.util.ReflectionTestUtils.invokeMethod(
+        resolver,
+        "setChatSelection",
+        beans.getBeanProvider(ChatModelSelection.class));
+    org.springframework.test.util.ReflectionTestUtils.invokeMethod(
+        selected, "setChatModelResolver", resolver);
+    when(selection.selection())
+        .thenReturn(new ChatModelSelection.Selection("openai", "gpt-6.2-sol"));
+    assertEquals("09:42 gpt-6.2-sol> ", app.buildPrompt());
+    when(selection.selection())
+        .thenReturn(new ChatModelSelection.Selection("codex", "gpt-6.1-sol"));
+    assertEquals("09:42 gpt-6.1-sol> ", app.buildPrompt());
+    when(selection.selection())
+        .thenReturn(new ChatModelSelection.Selection("codex", "another-model"));
+    assertEquals("09:42 another-model> ", app.buildPrompt());
   }
 
   @Test
