@@ -3,6 +3,7 @@ package dev.mikoto2000.rei.autonomous;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import dev.mikoto2000.rei.application.state.OperationConflictException;
 import dev.mikoto2000.rei.storage.StorageDatabase;
 import dev.mikoto2000.rei.storage.StorageMigrationCoordinator;
 import java.nio.charset.StandardCharsets;
@@ -11,6 +12,10 @@ import java.sql.DriverManager;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -20,16 +25,14 @@ import org.junit.jupiter.api.io.TempDir;
 class AutonomousPublicSourcesTest {
   @TempDir Path root;
   AutonomousPublicSources sources;
+  final Clock clock = Clock.fixed(Instant.parse("2026-11-28T00:00:00Z"), ZoneOffset.UTC);
 
   @BeforeEach
   void prepare() throws Exception {
     try (var migration = new StorageMigrationCoordinator(root)) {
       migration.prepare();
     }
-    sources =
-        new AutonomousPublicSources(
-            new StorageDatabase(root),
-            Clock.fixed(Instant.parse("2026-11-28T00:00:00Z"), ZoneOffset.UTC));
+    sources = new AutonomousPublicSources(new StorageDatabase(root), clock);
   }
 
   @Test
@@ -122,5 +125,88 @@ class AutonomousPublicSourcesTest {
                 .mapToInt(item -> item.text().getBytes(StandardCharsets.UTF_8).length)
                 .sum())
         .isEqualTo(32768);
+  }
+
+  @Test
+  void editingCreatesAPrivateVersionAndRetainsEarlierEvidence() {
+    var initial = sources.register("previously permitted topic", true, "operator");
+    var before = sources.publicSnapshot();
+    var edited = sources.edit(initial.id(), 1, "new topic requires new permission", "editor");
+    assertThat(edited.revision()).isEqualTo(2);
+    assertThat(edited.publicUseAllowed()).isFalse();
+    assertThat(sources.get(initial.id())).isEqualTo(edited);
+    assertThat(sources.version(initial.id(), 1)).isEqualTo(initial);
+    assertThat(sources.publicSnapshot()).isEmpty();
+    assertThat(before)
+        .singleElement()
+        .satisfies(item -> assertThat(item.text()).isEqualTo("previously permitted topic"));
+  }
+
+  @Test
+  void permissionChangesAreVersionBoundAndSurviveRestart() {
+    var initial = sources.register("candidate topic", false, "operator");
+    var permitted = sources.permission(initial.id(), 1, true, "reviewer");
+    assertThat(permitted.revision()).isEqualTo(2);
+    sources = new AutonomousPublicSources(new StorageDatabase(root), clock);
+    assertThat(sources.publicSnapshot())
+        .singleElement()
+        .satisfies(item -> assertThat(item.id()).isEqualTo("topic:" + initial.id() + ":2"));
+    assertThatThrownBy(() -> sources.permission(initial.id(), 1, false, "stale reviewer"))
+        .isInstanceOf(OperationConflictException.class);
+    var revoked = sources.permission(initial.id(), 2, false, "reviewer");
+    assertThat(revoked.revision()).isEqualTo(3);
+    sources = new AutonomousPublicSources(new StorageDatabase(root), clock);
+    assertThat(sources.publicSnapshot()).isEmpty();
+    assertThat(sources.version(initial.id(), 2).publicUseAllowed()).isTrue();
+  }
+
+  @Test
+  void staleEditCannotOverwriteTheLatestVersion() {
+    var initial = sources.register("original", true, "operator");
+    var edited = sources.edit(initial.id(), 1, "latest", "editor");
+    assertThatThrownBy(() -> sources.edit(initial.id(), 1, "stale", "other editor"))
+        .isInstanceOf(OperationConflictException.class);
+    assertThat(sources.get(initial.id())).isEqualTo(edited);
+  }
+
+  @Test
+  void invalidChangesDoNotRemoveExistingPermissionOrCreateAVersion() {
+    var initial = sources.register("permitted", true, "operator");
+    assertThatThrownBy(() -> sources.edit(initial.id(), 1, "", "editor"))
+        .isInstanceOf(IllegalArgumentException.class);
+    assertThatThrownBy(() -> sources.permission(initial.id(), 1, false, " "))
+        .isInstanceOf(IllegalArgumentException.class);
+    assertThat(sources.get(initial.id())).isEqualTo(initial);
+    assertThat(sources.publicSnapshot()).hasSize(1);
+    assertThatThrownBy(() -> sources.version(initial.id(), 2))
+        .isInstanceOf(java.util.NoSuchElementException.class);
+  }
+
+  @Test
+  void concurrentRepositoriesCannotReplaceTheSameVersionTwice() throws Exception {
+    var initial = sources.register("original", true, "operator");
+    var other = new AutonomousPublicSources(new StorageDatabase(root), clock);
+    try (var pool = Executors.newFixedThreadPool(2)) {
+      var gate = new CountDownLatch(1);
+      var edits =
+          List.of(sources, other).stream()
+              .map(repository ->
+                  pool.submit(() -> {
+                    gate.await();
+                    try {
+                      repository.edit(initial.id(), 1, "concurrent change", "editor");
+                      return "changed";
+                    } catch (OperationConflictException stale) {
+                      return "conflict";
+                    }
+                  }))
+              .toList();
+      gate.countDown();
+      assertThat(
+              List.of(edits.get(0).get(5, TimeUnit.SECONDS), edits.get(1).get(5, TimeUnit.SECONDS)))
+          .containsExactlyInAnyOrder("changed", "conflict");
+    }
+    assertThat(sources.get(initial.id()).revision()).isEqualTo(2);
+    assertThat(sources.publicSnapshot()).isEmpty();
   }
 }
