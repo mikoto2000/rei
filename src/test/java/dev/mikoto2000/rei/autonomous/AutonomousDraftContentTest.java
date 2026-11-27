@@ -9,7 +9,7 @@ import org.junit.jupiter.api.Test;
 class AutonomousDraftContentTest {
   @Test
   void nullAndBlankTextAreRejectedAsInvalidInput() {
-    for (String text : new String[] {null, "", " \n　"}) {
+    for (String text : new String[] {null, "", " \n　", "\u00A0", "\u200B"}) {
       assertThatThrownBy(() -> AutonomousDraft.Content.create(1, text, "reason", List.of()))
           .isInstanceOf(IllegalArgumentException.class);
     }

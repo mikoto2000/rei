@@ -31,6 +31,8 @@ final class AutonomousPostText {
   }
 
   static void requireReadable(String text) {
+    if (Normalizer.normalize(text, Normalizer.Form.NFKC).replaceAll("\\p{Cf}", "").isBlank())
+      throw new IllegalArgumentException("Empty review text");
     for (int index = 0; index < text.length(); index++) {
       char value = text.charAt(index);
       boolean crlf = value == '\r' && index + 1 < text.length() && text.charAt(index + 1) == '\n';
