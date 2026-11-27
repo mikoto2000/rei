@@ -6,7 +6,13 @@ test("selects the next Run endpoint and model while keeping the current Run visi
   await page.locator(".conversation-card > button:first-child").click();
   const endpoint = page.getByRole("combobox", { name: "LLM接続先" });
   await expect(endpoint).toHaveValue("local");
-  await endpoint.selectOption("plan");
+  if (info.project.name === "desktop") {
+    await endpoint.focus();
+    await page.keyboard.press("ArrowDown");
+    await page.keyboard.press("Enter");
+  } else {
+    await endpoint.selectOption("plan");
+  }
   await expect(endpoint).toHaveValue("plan");
   await expect(
     page.getByText(/利用経路（設定による申告）: chatgpt-plan/),
