@@ -35,6 +35,19 @@ const port = (): LlmPort => ({
     models: [],
   }),
 });
+it("discards a model write result superseded by a CLI change on the same endpoint", async () => {
+  const api = port();
+  const latest = endpoint();
+  latest.profile.model = "cli-newer-model";
+  vi.mocked(api.endpoints).mockResolvedValueOnce([endpoint()]).mockResolvedValueOnce([latest]);
+  const selection = new LlmSelection(api, "server");
+  await selection.refresh();
+  await selection.loadModels();
+  await selection.selectModel("second");
+  expect(selection.snapshot().models).toBeNull();
+  expect(selection.snapshot().error).toBe("Conflict");
+  expect(selection.snapshot().endpoints.find((e) => e.active)?.profile.model).toBe("cli-newer-model");
+});
 it("rejects missing IPC metadata without replacing the last valid display", async () => {
   const api = port();
   const selection = new LlmSelection(api, "server");
