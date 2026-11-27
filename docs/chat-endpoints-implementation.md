@@ -1,17 +1,35 @@
 # 通常チャットの接続先切り替え・ChatGPT 利用枠: 実装記録
 
-調査日: 2026-11-25。Phase 0 の基準は main
-`42c40ea8f6d52d08cf3019c2915a567067b35c21`。
-この文書は既存実装の棚卸しと技術検証を記録する。名前付き接続先や通常チャットの
-ChatGPT 利用枠が利用可能になったという意味ではない。実アカウントへの要求は実行していない。
+この文書は段階的な実装と調査時点の記録を保持する。現在の利用手順は
+[共通接続ガイド](chat-llm-connections.md)、実接続とfixtureの区別は
+[互換性マトリクス](chat-llm-compatibility.md)を参照する。
 
-## 正本と参照資料
+## 現在の実装
 
-2026-11-26: 全体方針を [共通 LLM 接続基盤](llm-connection-foundation-design.md)として整理した。
-OpenAI API、ChatGPT Plan、local の責務を同じプロファイルで表し、Provider、API、認証、
-Capability、Replay を分離する。以下の Phase 0 の記録は調査時点の状態を表す。
-Phase 1 の接続先カタログはマージ済み。Phase 2 では Run の接続固定と通常チャットへの統合を実装中。
-利用者向けの切り替えコマンドは Phase 3、名前付き Responses の本番利用条件は Phase 4 で扱う。
+[共通 LLM 接続基盤](llm-connection-foundation-design.md)に従い、OpenAI API、
+ChatGPT Plan、ローカル LLM を同じカタログ・選択・Run固定・承認・履歴・再開で扱う。
+Provider、API、認証、Capability、Replayを分離し、既存のエージェントループを再利用した。
+
+| Phase | 内容 | マージ済みPR |
+| --- | --- | --- |
+| 0 | 棚卸し・SDK境界の技術検証 | [#640](https://github.com/mikoto2000/rei/pull/640) |
+| 1 | 共通カタログ・設定検証 | [#641](https://github.com/mikoto2000/rei/pull/641) |
+| 2 | Run受付時の接続固定・通常チャット統合 | [#642](https://github.com/mikoto2000/rei/pull/642) |
+| 3 | CLIの動的選択 | [#643](https://github.com/mikoto2000/rei/pull/643) |
+| 4 | 名前付きResponsesと接続先固有制約 | [#644](https://github.com/mikoto2000/rei/pull/644) |
+| 5 | 通常チャットのPlan経路・アカウント枠 | [#645](https://github.com/mikoto2000/rei/pull/645) |
+| 6 | 内容と宛先に結び付く推論承認 | [#646](https://github.com/mikoto2000/rei/pull/646) |
+| 7 | 実際のツールループ・別プロセス再開 | [#647](https://github.com/mikoto2000/rei/pull/647) |
+| 8 | 履歴投影・媒体・生成設定・再送制約 | [#648](https://github.com/mikoto2000/rei/pull/648) |
+| 9 | GUI・モデル単位の能力宣言・競合検出 | [#649](https://github.com/mikoto2000/rei/pull/649) |
+
+Phase 10で統合検証と運用資料を仕上げる。実アカウント・実ローカルモデルへの
+推論は実行していない。fixtureの成功を実サービスの互換性証明にしない。
+
+## Phase 0 当時の棚卸しと参照資料
+
+以下はmain `42c40ea8f6d52d08cf3019c2915a567067b35c21` を基準とする当時の記録。
+「既存」「現在」「必要」「未実装」はこの調査時点を示す。
 
 コードを正本として、以下を照合した。
 

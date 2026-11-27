@@ -8,6 +8,8 @@
 
 `<rei-data-dir>` は [README の保存先](../README.md#設定とデータの保存先) を表します。
 
+通常チャットのOpenAI API・ChatGPTサブスク・ローカルLLMは[共通接続の利用ガイド](chat-llm-connections.md)を参照してください。`rei.llm.features.chat.active/endpoints`、認証、モデル別の能力宣言、生成設定、CLI/GUIの切替と再開を説明しています。登録内容の変更には再起動が必要ですが、登録済み接続先・モデルの選択は次のRunから反映できます。実サービスの確認状況は[互換性マトリクス](chat-llm-compatibility.md)を参照してください。
+
 ## 外部設定ファイル
 
 Rei は起動時に、組み込みの `application.yaml` に加えて、グローバル Rei Data Directory 配下の `<rei-data-dir>/application.yaml` を自動で読み込みます。ファイルが存在しない場合は無視されます。

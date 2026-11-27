@@ -1,11 +1,12 @@
 # Rei
 
-Rei は、ターミナルで使う AI 秘書シェルです。OpenAI 互換 API を使った対話を中心に、調査、文書検索、予定・タスク管理などを一つの CLI で行えます。
+Rei は、ターミナルとデスクトップGUIで使う AI 秘書です。OpenAI API・ChatGPTサブスク・ローカルLLMを通常チャットの共通接続基盤で扱い、調査、文書検索、予定・タスク管理などを行えます。
 
 アプリは手元の PC で動作し、AI の処理には設定した API サーバーを利用します。ローカルのモデルサーバーにも接続できます。
 
 ## できること
 
+- [通常チャットの接続先・モデル切替](docs/chat-llm-connections.md)（CLI/GUI共通、受付済みRunの接続先を固定）
 - AI との対話、画像を添付した質問、画像生成
 - [論文検索・日本語要約・翻訳・Paper Library](docs/paper-research.md)（`/paper`）
 - Web 検索、URL の要約、登録した文書を参照した回答
@@ -40,6 +41,10 @@ sh ./build.sh -DskipTests=false
 ```
 
 ### 2. AI の接続先を設定する
+
+通常チャットの名前付き接続先、ChatGPTサブスク、認証なしのローカルResponsesは[共通接続の利用ガイド](docs/chat-llm-connections.md)を参照してください。[互換性マトリクス](docs/chat-llm-compatibility.md)ではfixtureによる検証と実サービス未確認を区別しています。
+
+以下は従来の静的接続を使う場合の例です。名前付き接続先では認証方式を個別に設定し、認証なしにdummy keyを補完しません。
 
 次の例は、同じ PC の `http://localhost:11434` で公開されている `qwen3.5:9b` に接続します。URL・モデル名・キーを実際の接続先に置き換えてください。キーが不要なローカルサーバーでは `dummy-key` を指定できます。
 

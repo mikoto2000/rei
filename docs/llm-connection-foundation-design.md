@@ -4,8 +4,10 @@
 全体の設計方針とする。既存の Responses、Run、承認、Checkpoint、動的ツール選択を再利用し、
 通常チャットのエージェントループは引き続き Rei が管理する。
 
-本文は実装の設計契約であり、機能の提供完了を示さない。
-実装状況・検証結果は [実装記録](chat-endpoints-implementation.md)で区別する。
+本文は実装の設計契約を記録する。現在の設定・操作は
+[共通接続ガイド](chat-llm-connections.md)、実装状況は
+[実装記録](chat-endpoints-implementation.md)、実接続の確認範囲は
+[互換性マトリクス](chat-llm-compatibility.md)を参照する。
 過去の [切り替え案](chat-endpoint-switching-design.md)と異なる点は本文を優先する。
 
 ## 接続プロファイルの責務
