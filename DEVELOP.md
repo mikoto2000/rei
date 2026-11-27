@@ -16,6 +16,10 @@ Backend が Session と Run を所有します。軽量 CLI の Project / Sessio
 
 ## 機能別の設計資料
 
+Bluesky 自発投稿案の調査・詳細設計・未解決の承認境界は
+[自発的行動 Phase 0](docs/autonomous-action-design.md) を参照してください。
+安全性ゲートは未通過であり、後続実装・機能の有効化は行っていません。
+
 Responses API の段階実装は [設計と安全境界](docs/responses-api-design.md) と
 [進捗・検証記録](docs/responses-api-implementation-progress.md) を参照してください。
 現行の Responses は明示設定された限定構成だけを本番 policy で許可します。
