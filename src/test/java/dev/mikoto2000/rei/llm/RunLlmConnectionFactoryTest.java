@@ -14,6 +14,137 @@ import org.springframework.boot.context.properties.source.MapConfigurationProper
 
 class RunLlmConnectionFactoryTest {
   @Test
+  void explicitOpenAiApiUsesTheCurrentCompletionTokenFieldWithoutGuessingFromTheUrl() {
+    var settings = local();
+    String prefix = "rei.llm.features.chat.endpoints.local.";
+    settings.put(prefix + "provider", "openai-api");
+    settings.put(prefix + "authentication", "api-key");
+    settings.put(prefix + "api-key", "fixture-only-key");
+    settings.put(prefix + "base-url", "https://api.openai.com/v1");
+    var snapshot = factory(properties(settings)).capture("local", null);
+    assertThat(snapshot.generation())
+        .containsEntry("max_completion_tokens", 2048)
+        .doesNotContainKey("max_tokens");
+  }
+
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(strings = {"chat", "summary"})
+  void namedGenerationConfigurationCannotBeSilentlyAppliedToAFlatOrHelperFeature(String feature) {
+    var settings = local();
+    String path = "rei.llm.features." + feature + ".generation";
+    settings.put(path + ".reasoning-effort", "low");
+    assertThatThrownBy(() -> factory(properties(settings)))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining(path);
+  }
+
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.CsvSource({
+    "server-capabilities,unknown", "server-capabilities,unsupported",
+    "model-capabilities,unknown", "model-capabilities,unsupported"
+  })
+  void namedGenerationNeedsBothServerAndModelConfirmation(String dimension, String support) {
+    var settings = generation("reasoning-effort", "low");
+    settings.put(
+        "rei.llm.features.chat.endpoints.local." + dimension + ".reasoning-effort", support);
+    assertThatThrownBy(() -> factory(properties(settings)).capture("local", null))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("reasoning_effort");
+  }
+
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.CsvSource({
+    "max-completion-tokens,12.5",
+    "max-completion-tokens,2049",
+    "max-completion-tokens,0",
+    "max-completion-tokens,2147483648",
+    "max-completion-tokens,NaN",
+    "max-output-tokens,32",
+    "top-p,1.1",
+    "top-p,-0.1",
+    "top-p,NaN",
+    "parallel-tool-calls,PRIVATE_VALUE",
+    "reasoning-effort,PRIVATE_VALUE",
+    "response-format,PRIVATE_VALUE",
+    "service-tier,default",
+    "store,true"
+  })
+  void invalidOrControlledGenerationIsRejectedBeforeAnyClient(String field, String value) {
+    var settings = generation(field, value);
+    assertThatThrownBy(() -> factory(properties(settings)).capture("local", null))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageNotContaining("PRIVATE_VALUE");
+  }
+
+  @Test
+  void configuredNativeTokenChoiceAndScalarsAreCanonicalAndIndependent() {
+    var settings = generation("max-completion-tokens", "32");
+    String prefix = "rei.llm.features.chat.endpoints.local.";
+    settings.put(prefix + "generation.top-p", "0.5");
+    settings.put(prefix + "server-capabilities.top-p", "supported");
+    settings.put(prefix + "model-capabilities.top-p", "supported");
+    var snapshot = factory(properties(settings)).capture("local", null);
+    assertThat(snapshot.generation())
+        .containsEntry("max_completion_tokens", 32)
+        .containsEntry("top_p", 0.5)
+        .doesNotContainKey("max_tokens");
+    var nativeOptions =
+        (org.springframework.ai.openai.OpenAiChatOptions) RunNativeOptions.options(snapshot);
+    assertThat(nativeOptions.getMaxCompletionTokens()).isEqualTo(32);
+    assertThat(nativeOptions.getMaxTokens()).isNull();
+    assertThatThrownBy(() -> factory(properties(settings)).capture("local", "other-model"))
+        .isInstanceOf(IllegalStateException.class);
+  }
+
+  private HashMap<String, String> generation(String option, String value) {
+    var settings = local();
+    String prefix = "rei.llm.features.chat.endpoints.local.";
+    String capability =
+        switch (option) {
+          case "reasoning-effort" -> "reasoning-effort";
+          case "response-format" -> "structured-output";
+          case "top-p" -> "top-p";
+          case "parallel-tool-calls" -> "parallel-tool-calls";
+          default -> "max-output-tokens";
+        };
+    settings.put(prefix + "server-capabilities." + capability, "supported");
+    settings.put(prefix + "model-capabilities." + capability, "supported");
+    settings.put(
+        prefix + "generation." + option + (option.equals("response-format") ? ".type" : ""), value);
+    return settings;
+  }
+
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.CsvSource({
+    "chat-completions,reasoning-effort,reasoning-effort",
+    "responses,reasoning-effort,reasoning-effort",
+    "chat-completions,response-format,structured-output",
+    "responses,response-format,structured-output"
+  })
+  void confirmedNamedGenerationIsFrozenAndRebuiltInsteadOfBeingSilentlyIgnored(
+      String api, String option, String capability) {
+    var settings = local();
+    String prefix = "rei.llm.features.chat.endpoints.local.";
+    settings.put(prefix + "api", api);
+    settings.put(prefix + "reasoning-replay", "none");
+    settings.put(prefix + "server-capabilities." + capability, "supported");
+    settings.put(prefix + "model-capabilities." + capability, "supported");
+    Object expected;
+    if (option.equals("reasoning-effort")) {
+      settings.put(prefix + "generation.reasoning-effort", "low");
+      expected = "low";
+    } else {
+      settings.put(prefix + "generation.response-format.type", "json_object");
+      expected = Map.of("type", "json_object");
+    }
+    var snapshot = factory(properties(settings)).capture("local", null);
+    String field = option.replace('-', '_');
+    assertThat(snapshot.generation()).containsEntry(field, expected);
+    assertThat(RunNativeOptions.generation(RunNativeOptions.options(snapshot)))
+        .containsEntry(field, expected);
+  }
+
+  @Test
   void modelOverrideDoesNotBorrowCapabilitiesFromTheConfiguredModel() {
     var settings = local();
     var prefix = "rei.llm.features.chat.endpoints.local.";

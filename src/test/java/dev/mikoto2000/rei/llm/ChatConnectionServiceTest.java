@@ -33,6 +33,147 @@ import org.springframework.boot.context.properties.source.MapConfigurationProper
 class ChatConnectionServiceTest {
   @TempDir Path root;
 
+  @Test
+  void independentStaticLocalInferencePreservesItsConfiguredModelAndNoAuth() throws Exception {
+    try (var fixture = new PinnedChatModelsTest.Fixture()) {
+      var properties = named("http://first.invalid/v1", "http://second.invalid/v1");
+      var chat = properties.feature(LlmFeature.CHAT);
+      chat.setBaseUrl(
+          fixture
+              .pin("static", "dedicated-background", LlmAuthentication.NONE)
+              .endpoint()
+              .baseUrl());
+      chat.setModel("dedicated-background");
+      properties.setFeature(LlmFeature.CHAT, chat);
+      var accounts = mock(dev.mikoto2000.rei.modeloptions.ChatPlanAccounts.class);
+      try (var service =
+          service(properties, new ModelHolderService("static-holder"), new ArrayList<>(), true)) {
+        service.setPlanAccounts(
+            provider(dev.mikoto2000.rei.modeloptions.ChatPlanAccounts.class, accounts));
+        service.selectModel("normal-chat-choice");
+        service.select("second");
+        var owner = owner("owned-independent", AgentRunContext.Mode.EXCLUSIVE);
+        var pin = service.acceptIndependent(owner);
+        assertThat(pin.endpoint().model()).isEqualTo("dedicated-background");
+        assertThat(pin.authentication()).isEqualTo(LlmAuthentication.NONE);
+        assertThat(
+                service
+                    .model()
+                    .call(new Prompt("fixture", service.options(owner)))
+                    .getResult()
+                    .getOutput()
+                    .getText())
+            .isEqualTo("fixture-answer");
+        assertThat(fixture.headers).containsExactly("<none>");
+        assertThat(fixture.bodies.getFirst().path("model").asText())
+            .isEqualTo("dedicated-background");
+        org.mockito.Mockito.verifyNoInteractions(accounts);
+      }
+    }
+  }
+
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(
+      strings = {"unchanged", "base-url", "api-key", "generation"})
+  void restoredIndependentConnectionsRetainTheirBindingInsteadOfTheCurrentSelection(String change) {
+    var properties = named("http://first.invalid/v1", "http://second.invalid/v1");
+    var chat = properties.feature(LlmFeature.CHAT);
+    chat.setBaseUrl("http://static-background.invalid/v1");
+    chat.setModel("static-background");
+    properties.setFeature(LlmFeature.CHAT, chat);
+    RunLlmConnection saved;
+    try (var service =
+        service(properties, new ModelHolderService("holder"), new ArrayList<>(), true)) {
+      saved = service.acceptIndependent(owner("old-independent", AgentRunContext.Mode.EXCLUSIVE));
+    }
+    if (!change.equals("unchanged")) {
+      chat = properties.feature(LlmFeature.CHAT);
+      if (change.equals("base-url")) chat.setBaseUrl("http://changed-background.invalid/v1");
+      if (change.equals("api-key")) chat.setApiKey("PRIVATE_CHANGED_KEY");
+      if (change.equals("generation")) chat.setEndpointGeneration(2);
+      properties.setFeature(LlmFeature.CHAT, chat);
+    }
+    try (var service =
+        service(properties, new ModelHolderService("new-holder"), new ArrayList<>(), true)) {
+      service.select("second");
+      var owner = owner("resumed-independent", AgentRunContext.Mode.EXCLUSIVE);
+      if (!change.equals("unchanged")) {
+        assertThatThrownBy(() -> service.restore(owner, saved))
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("static connection binding")
+            .hasMessageNotContaining("PRIVATE_CHANGED_KEY");
+        assertThatThrownBy(() -> service.require(owner)).isInstanceOf(IllegalStateException.class);
+      } else {
+        service.restore(owner, saved);
+        assertThat(service.acceptIndependent(owner)).isEqualTo(saved);
+        assertThat(service.selection().endpoint()).isEqualTo("second");
+      }
+    }
+  }
+
+  @Test
+  void anIndependentEntryCannotRelabelAnAlreadyAcceptedNamedRun() {
+    var properties = named("http://first.invalid/v1", "http://second.invalid/v1");
+    try (var service = service(properties, new ModelHolderService("holder"), new ArrayList<>())) {
+      var owner = owner("already-normal", AgentRunContext.Mode.EXCLUSIVE);
+      var pin = service.accept(owner);
+      assertThatThrownBy(() -> service.acceptIndependent(owner))
+          .isInstanceOf(IllegalStateException.class)
+          .hasMessageContaining("normal chat Run");
+      assertThat(service.require(owner)).isSameAs(pin);
+    }
+  }
+
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(booleans = {false, true})
+  void independentInferenceCannotInheritASelectedLocalOrSubscriptionProfile(boolean plan)
+      throws Exception {
+    var properties = named("http://first.invalid/v1", "http://second.invalid/v1");
+    if (plan) {
+      var chat = properties.feature(LlmFeature.CHAT);
+      var endpoints = new java.util.HashMap<>(chat.getEndpoints());
+      var subscription = new LlmProperties.Server();
+      subscription.setProvider("chatgpt-plan");
+      subscription.setApi(LlmApiType.RESPONSES);
+      subscription.setAccountRef("personal");
+      subscription.setModel("plan-model");
+      subscription.setServerCapabilities(
+          Map.of(
+              "responses", "supported", "streaming", "supported", "reasoning-replay", "supported"));
+      subscription.setModelCapabilities(Map.of("reasoning-replay", "supported"));
+      endpoints.put("second", subscription);
+      chat.setEndpoints(endpoints);
+      properties.setFeature(LlmFeature.CHAT, chat);
+    }
+    var accounts = mock(dev.mikoto2000.rei.modeloptions.ChatPlanAccounts.class);
+    when(accounts.registration("personal")).thenReturn("fixture-registration");
+    try (var service =
+        service(properties, new ModelHolderService("static-helper"), new ArrayList<>(), true)) {
+      service.setPlanAccounts(
+          provider(dev.mikoto2000.rei.modeloptions.ChatPlanAccounts.class, accounts));
+      service.select("second");
+      var owner = owner("independent", AgentRunContext.Mode.EXCLUSIVE);
+      var pin = service.acceptIndependent(owner);
+      assertThat(pin.profileId()).isEqualTo("_static-chat");
+      assertThat(pin.named()).isFalse();
+      assertThat(pin.endpoint().baseUrl()).isEqualTo("http://actual-global.invalid/v1");
+      assertThat(pin.endpoint().model()).isEqualTo("static-helper");
+      assertThat(pin.authentication()).isEqualTo(LlmAuthentication.API_KEY);
+      assertThat(pin.accountRef()).isNull();
+      assertThat(pin.accountRegistration()).isNull();
+      assertThat(
+              new com.fasterxml.jackson.databind.ObjectMapper()
+                  .registerModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule())
+                  .writeValueAsString(pin))
+          .doesNotContain("PRIVATE_");
+      assertThat(service.accept(owner)).isSameAs(pin);
+      service.select("first");
+      assertThat(service.acceptIndependent(owner)).isSameAs(pin);
+      assertThat(service.selection().endpoint()).isEqualTo("first");
+      org.mockito.Mockito.verifyNoInteractions(accounts);
+    }
+  }
+
   @ParameterizedTest
   @EnumSource(AgentRunContext.Mode.class)
   void acceptedOptionsKeepTheirProfileAfterTheGlobalSelectionChanges(AgentRunContext.Mode mode) {
@@ -243,8 +384,16 @@ class ChatConnectionServiceTest {
 
   private ChatConnectionService service(
       LlmProperties properties, ModelHolderService holder, List<AgentEvent> events) {
+    return service(properties, holder, events, false);
+  }
+
+  private ChatConnectionService service(
+      LlmProperties properties,
+      ModelHolderService holder,
+      List<AgentEvent> events,
+      boolean independentFixture) {
     var nativeModel = mock(ChatModel.class);
-    if (new ChatEndpointCatalog(properties).hasNamedProfiles())
+    if (new ChatEndpointCatalog(properties).hasNamedProfiles() && !independentFixture)
       when(nativeModel.getOptions())
           .thenThrow(new AssertionError("Named chat read ambient model settings"));
     else
@@ -287,16 +436,17 @@ class ChatConnectionServiceTest {
   }
 
   private LlmProperties named(String first, String second) {
-    return new Binder(
-            new MapConfigurationPropertySource(
-                Map.of(
-                    "rei.llm.features.chat.active", "first",
-                    "rei.llm.features.chat.endpoints.first.base-url", first,
-                    "rei.llm.features.chat.endpoints.first.model", "first-model",
-                    "rei.llm.features.chat.endpoints.first.authentication", "none",
-                    "rei.llm.features.chat.endpoints.second.base-url", second,
-                    "rei.llm.features.chat.endpoints.second.model", "second-model",
-                    "rei.llm.features.chat.endpoints.second.authentication", "none")))
+    var values = new java.util.HashMap<String, String>();
+    values.put("rei.llm.features.chat.active", "first");
+    for (var entry : Map.of("first", first, "second", second).entrySet()) {
+      var prefix = "rei.llm.features.chat.endpoints." + entry.getKey() + ".";
+      values.put(prefix + "base-url", entry.getValue());
+      values.put(prefix + "model", entry.getKey() + "-model");
+      values.put(prefix + "authentication", "none");
+      values.put(prefix + "server-capabilities.chat-completions", "supported");
+      values.put(prefix + "server-capabilities.streaming", "supported");
+    }
+    return new Binder(new MapConfigurationPropertySource(values))
         .bind("rei.llm", LlmProperties.class)
         .get();
   }

@@ -21,6 +21,8 @@ public final class ChatEndpointCatalog {
     features.forEach((feature, server) -> {
       if (server != null) {
         var field = PREFIX + feature;
+        if (!server.getGeneration().isEmpty())
+          throw invalid(field + ".generation", "is only supported on named chat endpoints");
         requireNamedTransportControls(server, field);
         if (server.getAuthentication() != null)
           throw invalid(field + ".authentication", "is only supported for named chat profiles");

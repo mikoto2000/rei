@@ -1,6 +1,7 @@
 package dev.mikoto2000.rei.llm;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import dev.mikoto2000.rei.core.chat.AgentRunContext;
 import dev.mikoto2000.rei.core.stagnation.ProgressEvaluator;
@@ -28,6 +29,124 @@ import org.springframework.ai.openai.OpenAiChatOptions;
 /** Production pinned models and canonical storage, using only an owned loopback HTTP fixture. */
 class NamedChatInputRoundTripTest {
   @TempDir Path directory;
+
+  @ParameterizedTest
+  @EnumSource(LlmEndpointCapabilities.Support.class)
+  void explicitlyRequestedNativeReplayRequiresConfirmedCapability(
+      LlmEndpointCapabilities.Support support) throws Exception {
+    try (var fixture = new Fixture(false, true, support, true)) {
+      var prompt = new Prompt("fixture", fixture.options);
+      if (support != LlmEndpointCapabilities.Support.SUPPORTED) {
+        assertThatThrownBy(() -> fixture.model.call(prompt))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("unsupported or unconfirmed");
+        assertThat(fixture.requests).hasValue(0);
+        return;
+      }
+      var codec = new ModelMessageCodec();
+      var stored = codec.encode(fixture.model.call(prompt).getResult().getOutput());
+      var restored = codec.decode(stored);
+      fixture.model.call(
+          new Prompt(
+              java.util.List.of(
+                  restored, new org.springframework.ai.chat.messages.UserMessage("next question")),
+              fixture.options));
+      assertThat(fixture.requests).hasValue(2);
+      assertThat(fixture.bodies.get(1).path("messages").toString())
+          .contains("reasoning_content", "PRIVATE_NATIVE_REASONING", "done", "next question");
+      assertThat(codec.encode(restored)).isEqualTo(stored);
+    }
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"owner", "endpoint", "payload", "missingOrigin"})
+  void nativeReasoningNeverCrossesAnUnverifiedOriginOrPayload(String change) throws Exception {
+    try (var fixture = new Fixture(false, true)) {
+      var original =
+          fixture.model.call(new Prompt("fixture", fixture.options)).getResult().getOutput();
+      var codec = new ModelMessageCodec();
+      var stored = codec.encode(original);
+      var metadata = new java.util.HashMap<>(original.getMetadata());
+      if (change.equals("owner"))
+        metadata.put(ResponsesReasoningReplay.ORIGIN_OWNER, "other-owner");
+      if (change.equals("endpoint"))
+        metadata.put(ResponsesReasoningReplay.ORIGIN_ENDPOINT, "other-endpoint");
+      if (change.equals("missingOrigin")) {
+        metadata.remove(ResponsesReasoningReplay.ORIGIN_OWNER);
+        metadata.remove(ResponsesReasoningReplay.ORIGIN_ENDPOINT);
+      }
+      var parts =
+          original.getParts().stream()
+              .map(part -> {
+                if (change.equals("payload")
+                    && part
+                        instanceof
+                        org.springframework.ai.chat.messages.part.ReasoningPart reasoning)
+                  return (org.springframework.ai.chat.messages.part.MessagePart)
+                      new org.springframework.ai.chat.messages.part.ReasoningPart(
+                          reasoning.text(),
+                          null,
+                          new org.springframework.ai.chat.messages.part.OpaquePayload(
+                              "foreign", "signed", "PRIVATE_PAYLOAD"),
+                          Map.of());
+                return part;
+              })
+              .toList();
+      var unverified =
+          org.springframework.ai.chat.messages.AssistantMessage.builder()
+              .parts(parts)
+              .properties(metadata)
+              .build();
+      assertThatThrownBy(() ->
+              fixture.model.call(
+                  new Prompt(
+                      java.util.List.of(
+                          unverified, new org.springframework.ai.chat.messages.UserMessage("next")),
+                      fixture.options)))
+          .isInstanceOf(IllegalArgumentException.class)
+          .hasMessageNotContaining("PRIVATE_PAYLOAD")
+          .hasMessageNotContaining("PRIVATE_NATIVE_REASONING");
+      assertThat(fixture.requests).hasValue(1);
+      assertThat(codec.encode(original)).isEqualTo(stored);
+    }
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  void nativeReasoningIsRetainedInStorageButNoneReplayStillAllowsTheNextRequest(boolean streaming)
+      throws Exception {
+    try (var fixture = new Fixture(streaming, true)) {
+      var first = new Prompt("fixture", fixture.options);
+      ChatResponse response;
+      if (streaming) {
+        var aggregate = new AtomicReference<ChatResponse>();
+        new MessageAggregator()
+            .aggregate(fixture.model.stream(first), aggregate::set)
+            .blockLast(Duration.ofSeconds(5));
+        response = aggregate.get();
+      } else response = fixture.model.call(first);
+      var codec = new ModelMessageCodec();
+      var stored = codec.encode(response.getResult().getOutput());
+      assertThat(new String(stored, java.nio.charset.StandardCharsets.UTF_8))
+          .contains("PRIVATE_NATIVE_REASONING");
+      var restored = codec.decode(stored);
+      assertThat(restored).isEqualTo(response.getResult().getOutput());
+      var next =
+          new Prompt(
+              java.util.List.of(
+                  new org.springframework.ai.chat.messages.UserMessage("fixture"),
+                  restored,
+                  new org.springframework.ai.chat.messages.UserMessage("next question")),
+              fixture.options);
+      if (streaming) fixture.model.stream(next).blockLast(Duration.ofSeconds(5));
+      else fixture.model.call(next);
+      assertThat(fixture.requests).hasValue(2);
+      assertThat(fixture.bodies.get(1).path("messages").toString())
+          .contains("done", "next question")
+          .doesNotContain("PRIVATE_NATIVE_REASONING", "reasoning_content", "reasoningContent");
+      assertThat(codec.encode(restored)).isEqualTo(stored);
+    }
+  }
 
   @ParameterizedTest
   @ValueSource(booleans = {false, true})
@@ -98,19 +217,36 @@ class NamedChatInputRoundTripTest {
   private static final class Fixture implements AutoCloseable {
     final com.sun.net.httpserver.HttpServer server;
     final AtomicInteger requests = new AtomicInteger();
+    final java.util.List<com.fasterxml.jackson.databind.JsonNode> bodies =
+        new java.util.concurrent.CopyOnWriteArrayList<>();
     final RunLlmConnection pin;
     final OpenAiChatOptions options;
     final PinnedChatModels models;
     final org.springframework.ai.chat.model.ChatModel model;
 
     Fixture(boolean streaming) throws Exception {
+      this(streaming, false);
+    }
+
+    Fixture(boolean streaming, boolean reasoning) throws Exception {
+      this(streaming, reasoning, LlmEndpointCapabilities.Support.UNKNOWN, null);
+    }
+
+    Fixture(
+        boolean streaming,
+        boolean reasoning,
+        LlmEndpointCapabilities.Support replaySupport,
+        Boolean replaySetting)
+        throws Exception {
       server =
           com.sun.net.httpserver.HttpServer.create(
               new java.net.InetSocketAddress("127.0.0.1", 0), 0);
       server.createContext(
           "/v1/chat/completions",
           exchange -> {
-            exchange.getRequestBody().readAllBytes();
+            bodies.add(
+                new com.fasterxml.jackson.databind.ObjectMapper()
+                    .readTree(exchange.getRequestBody().readAllBytes()));
             requests.incrementAndGet();
             String reply =
                 streaming
@@ -125,6 +261,11 @@ class NamedChatInputRoundTripTest {
                     : """
                     {"id":"fixture","object":"chat.completion","created":0,"model":"fixture-model","choices":[{"index":0,"message":{"role":"assistant","content":"done"},"finish_reason":"stop"}]}
                     """;
+            if (reasoning)
+              reply =
+                  reply.replace(
+                      "\"content\":\"done\"",
+                      "\"reasoning_content\":\"PRIVATE_NATIVE_REASONING\",\"content\":\"done\"");
             var bytes = reply.getBytes(java.nio.charset.StandardCharsets.UTF_8);
             exchange
                 .getResponseHeaders()
@@ -156,9 +297,15 @@ class NamedChatInputRoundTripTest {
                   null,
                   null,
                   Duration.ofSeconds(5)),
-              Map.of(),
-              Map.of());
-      options = (OpenAiChatOptions) RunNativeOptions.options(pin);
+              Map.of(LlmEndpointCapabilities.Capability.REASONING_REPLAY, replaySupport),
+              replaySetting == null ? Map.of() : Map.of("replay_reasoning_content", replaySetting));
+      var nativeOptions = (OpenAiChatOptions) RunNativeOptions.options(pin);
+      var context = new java.util.HashMap<>(nativeOptions.getToolContext());
+      context.put(ResponsesReasoningReplay.OWNER_CONTEXT_KEY, "fixture-owner");
+      options =
+          reasoning
+              ? nativeOptions.mutate().toolContext(null).toolContext(context).build()
+              : nativeOptions;
       models =
           new PinnedChatModels(
               connection -> {

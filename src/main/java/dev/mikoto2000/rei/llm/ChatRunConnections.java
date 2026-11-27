@@ -49,6 +49,14 @@ final class ChatRunConnections {
   }
 
   RunLlmConnection accept(AgentRunContext owner) {
+    return accept(owner, false);
+  }
+
+  RunLlmConnection acceptIndependent(AgentRunContext owner) {
+    return accept(owner, true);
+  }
+
+  private RunLlmConnection accept(AgentRunContext owner, boolean independent) {
     java.util.Objects.requireNonNull(owner, "owner");
     return accepted
         .compute(
@@ -57,11 +65,16 @@ final class ChatRunConnections {
               if (prior != null) {
                 if (!prior.owner().equals(owner))
                   throw new IllegalStateException("Run connection owner mismatch");
+                if (independent && prior.connection().named())
+                  throw new IllegalStateException(
+                      "Independent inference cannot inherit a normal chat Run");
                 return prior;
               }
               var chosen = selection.get();
               var connection =
-                  factory.capture(chosen.endpoint(), chosen.models().get(chosen.endpoint()));
+                  independent
+                      ? factory.captureIndependent(null)
+                      : factory.capture(chosen.endpoint(), chosen.models().get(chosen.endpoint()));
               requireSupportedProfile(connection);
               return new Accepted(owner, connection);
             })
@@ -87,6 +100,15 @@ final class ChatRunConnections {
   }
 
   private static void requireSupportedProfile(RunLlmConnection connection) {
+    if (connection.named() && connection.endpoint().apiType() == LlmApiType.CHAT_COMPLETIONS) {
+      for (var capability :
+          java.util.List.of(
+              LlmEndpointCapabilities.Capability.CHAT_COMPLETIONS,
+              LlmEndpointCapabilities.Capability.STREAMING))
+        if (connection.capabilities().get(capability) != LlmEndpointCapabilities.Support.SUPPORTED)
+          throw new IllegalStateException(
+              "Chat capability is unsupported or unconfirmed: " + capability);
+    }
     if (connection.named() && connection.endpoint().apiType() == LlmApiType.RESPONSES) {
       ResponsesProfilePolicy.requireConnection(connection);
       ResponsesProfilePolicy.requireCapability(

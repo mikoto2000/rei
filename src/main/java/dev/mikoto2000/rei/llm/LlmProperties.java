@@ -165,6 +165,7 @@ public class LlmProperties {
       copy.usagePath = usagePath;
       copy.modelCapabilities = modelCapabilities;
       copy.serverCapabilities = serverCapabilities;
+      copy.generation = RunGenerationSettings.copy(generation);
       return copy;
     }
 
@@ -225,6 +226,15 @@ public class LlmProperties {
     private String usagePath;
     private Map<String, String> modelCapabilities = Map.of();
     private Map<String, String> serverCapabilities = Map.of();
+    private Map<String, Object> generation = Map.of();
+
+    public Map<String, Object> getGeneration() {
+      return RunGenerationSettings.copy(generation);
+    }
+
+    public void setGeneration(Map<String, Object> generation) {
+      this.generation = RunGenerationSettings.configuredCopy(generation);
+    }
 
     public Map<String, String> getServerCapabilities() {
       return Map.copyOf(serverCapabilities);

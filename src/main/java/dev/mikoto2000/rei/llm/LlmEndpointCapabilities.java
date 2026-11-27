@@ -124,10 +124,9 @@ public record LlmEndpointCapabilities(
           Capability.RESPONSES,
           api == LlmApiType.RESPONSES ? Support.SUPPORTED : Support.UNSUPPORTED);
       transport.put(Capability.TOOL_NAMESPACE, Support.UNSUPPORTED);
-      transport.put(Capability.FILE_INPUT, Support.UNSUPPORTED);
       if (api == LlmApiType.CHAT_COMPLETIONS) {
         transport.put(Capability.REASONING_REPLAY, Support.UNSUPPORTED);
-        transport.put(Capability.REASONING_EFFORT, Support.UNKNOWN);
+        transport.put(Capability.REASONING_EFFORT, Support.SUPPORTED);
         transport.put(Capability.REASONING_SUMMARY, Support.UNKNOWN);
         transport.put(Capability.TEXT_VERBOSITY, Support.UNKNOWN);
       } else {
@@ -147,7 +146,11 @@ public record LlmEndpointCapabilities(
               Capability.STREAMING,
               Capability.FUNCTION_CALLING,
               Capability.TOOL_NAMESPACE,
-              Capability.REASONING_REPLAY)) transport.put(capability, Support.SUPPORTED);
+              Capability.REASONING_REPLAY,
+              Capability.VISION,
+              Capability.FILE_INPUT,
+              Capability.REASONING_EFFORT,
+              Capability.STRUCTURED_OUTPUT)) transport.put(capability, Support.SUPPORTED);
       transport.put(Capability.CHAT_COMPLETIONS, Support.UNSUPPORTED);
       for (var capability :
           EnumSet.of(Capability.TEMPERATURE, Capability.TOP_P, Capability.MAX_OUTPUT_TOKENS))

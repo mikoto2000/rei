@@ -12,6 +12,79 @@ import org.springframework.boot.context.properties.bind.Binder;
 import org.springframework.boot.context.properties.source.MapConfigurationPropertySource;
 
 class ChatRunConnectionsTest {
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.CsvSource({
+    "chat-completions,UNKNOWN,false", "chat-completions,UNSUPPORTED,false",
+    "streaming,UNKNOWN,false", "streaming,UNSUPPORTED,false",
+    "chat-completions,UNKNOWN,true", "chat-completions,UNSUPPORTED,true",
+    "streaming,UNKNOWN,true", "streaming,UNSUPPORTED,true"
+  })
+  void namedChatAdmissionAndRestorationRequireConfirmedApiAndStreaming(
+      String capability, LlmEndpointCapabilities.Support support, boolean restoring) {
+    var connections = declaredChatConnections(restoring ? null : capability, support);
+    var owner = owner("candidate", "session");
+    if (restoring) {
+      var original =
+          declaredChatConnections(null, LlmEndpointCapabilities.Support.SUPPORTED)
+              .accept(owner("original", "session"));
+      var capabilities = new HashMap<>(original.capabilities());
+      capabilities.put(
+          LlmEndpointCapabilities.Capability.valueOf(
+              capability.toUpperCase(java.util.Locale.ROOT).replace('-', '_')),
+          support);
+      var saved =
+          new RunLlmConnection(
+              original.profileId(),
+              original.named(),
+              original.provider(),
+              original.authentication(),
+              original.accountRef(),
+              original.accountRegistration(),
+              original.endpoint(),
+              capabilities,
+              original.generation(),
+              original.transport());
+      assertThatThrownBy(() -> connections.restore(owner, saved))
+          .isInstanceOf(IllegalStateException.class)
+          .hasMessageContaining(capability.toUpperCase(java.util.Locale.ROOT).replace('-', '_'));
+    } else {
+      assertThatThrownBy(() -> connections.accept(owner))
+          .isInstanceOf(IllegalStateException.class)
+          .hasMessageContaining(capability.toUpperCase(java.util.Locale.ROOT).replace('-', '_'));
+    }
+    assertThatThrownBy(() -> connections.require(owner))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("unavailable");
+  }
+
+  private ChatRunConnections declaredChatConnections(
+      String changed, LlmEndpointCapabilities.Support support) {
+    var server = new LlmProperties.Server();
+    server.setBaseUrl("http://owned-fixture.invalid/v1");
+    server.setModel("fixture-model");
+    server.setAuthentication("none");
+    var capabilities = new HashMap<String, String>();
+    capabilities.put("chat-completions", "supported");
+    capabilities.put("streaming", "supported");
+    if (changed != null) capabilities.put(changed, support.name());
+    server.setServerCapabilities(capabilities);
+    var chat = new LlmProperties.Server();
+    chat.setActive("fixture");
+    chat.setEndpoints(java.util.Map.of("fixture", server));
+    var properties = new LlmProperties();
+    properties.setFeature(LlmFeature.CHAT, chat);
+    var catalog = new ChatEndpointCatalog(properties);
+    return new ChatRunConnections(
+        catalog,
+        new RunLlmConnectionFactory(
+            catalog,
+            properties,
+            ignored -> {
+              throw new AssertionError("No fallback");
+            },
+            ignored -> null));
+  }
+
   @Test
   void continuationWithoutAnAcceptedConnectionMustStopInsteadOfSamplingSelection() {
     var connections = connections();
@@ -263,6 +336,8 @@ class ChatRunConnectionsTest {
       var prefix = "rei.llm.features.chat.endpoints." + name + ".";
       values.put(prefix + "base-url", "http://" + name + ".invalid");
       values.put(prefix + "authentication", "none");
+      values.put(prefix + "server-capabilities.chat-completions", "supported");
+      values.put(prefix + "server-capabilities.streaming", "supported");
       values.put(prefix + "model", name + "-model");
     }
     var props =

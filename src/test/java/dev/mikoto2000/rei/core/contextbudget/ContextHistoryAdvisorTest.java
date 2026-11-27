@@ -104,6 +104,21 @@ class ContextHistoryAdvisorTest {
     "COMPLETED,true,ok",
     "COMPLETED,true,checkpointGrant",
     "COMPLETED,false,ok",
+    "COMPLETED,false,mediaPng",
+    "COMPLETED,false,mediaProviderId",
+    "COMPLETED,false,mediaMissingReference",
+    "COMPLETED,false,mediaCount",
+    "COMPLETED,false,mediaScope",
+    "COMPLETED,false,mediaPdf",
+    "FAILED,false,mediaPng",
+    "COMPLETED,false,completedTool",
+    "FAILED,false,completedTool",
+    "COMPLETED,false,completedToolName",
+    "COMPLETED,false,completedToolId",
+    "COMPLETED,false,completedToolPartial",
+    "COMPLETED,false,completedToolBytes",
+    "COMPLETED,false,completedToolMissingReference",
+    "COMPLETED,false,completedToolCount",
     "FAILED,true,ok",
     "CANCELLED,true,ok",
     "RUNNING,true,ok",
@@ -124,7 +139,12 @@ class ContextHistoryAdvisorTest {
     var old = new AgentRunContext("old", "chat", dir, "project");
     var current =
         new AgentRunContext(
-            "current", "chat", dir, scenario.equals("scope") ? "other-project" : "project");
+            "current",
+            "chat",
+            dir,
+            (scenario.equals("scope") || scenario.equals("mediaScope"))
+                ? "other-project"
+                : "project");
     var source = new org.sqlite.SQLiteDataSource();
     source.setUrl("jdbc:sqlite:" + dir.resolve("protocol.db"));
     var payloads = new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore(source);
@@ -156,8 +176,94 @@ class ContextHistoryAdvisorTest {
                     "rei.llm.replay-origin-endpoint",
                     "endpoint-a"))
             .build();
-    var userRef = previousExchange.withKey("input").reference(new UserMessage("old actual input"));
+    if (scenario.startsWith("completedTool"))
+      original =
+          original
+              .mutate()
+              .parts(
+                  java.util.stream.Stream.concat(
+                          original.getParts().stream(),
+                          java.util.stream.Stream.of(
+                              org.springframework.ai.chat.messages.part.ToolCallPart.of(
+                                  new AssistantMessage.ToolCall(
+                                      "successful-call",
+                                      "function",
+                                      "fixtureOperation",
+                                      "{\"target\":\"fixture\"}"))))
+                      .toList())
+              .build();
+    if (scenario.equals("completedToolPartial"))
+      original =
+          AssistantMessage.builder()
+              .parts(
+                  java.util.stream.Stream.concat(
+                          original.getParts().stream(),
+                          java.util.stream.Stream.of(
+                              org.springframework.ai.chat.messages.part.ToolCallPart.of(
+                                  new AssistantMessage.ToolCall(
+                                      "unresolved-call", "function", "fixtureOperation", "{}"))))
+                      .toList())
+              .properties(original.getMetadata())
+              .build();
+    var originalInput = new UserMessage("old actual input");
+    if (scenario.startsWith("media")) {
+      var attachment = dir.resolve(scenario.equals("mediaPdf") ? "fixture.pdf" : "fixture.png");
+      if (scenario.equals("mediaPdf"))
+        java.nio.file.Files.writeString(attachment, "%PDF-1.4\nfixture-only\n%%EOF");
+      else
+        javax.imageio.ImageIO.write(
+            new java.awt.image.BufferedImage(1, 1, java.awt.image.BufferedImage.TYPE_INT_RGB),
+            "png",
+            attachment.toFile());
+      var resolved =
+          new dev.mikoto2000.rei.core.command.InlineFileAttachmentResolver()
+              .resolve("old actual input `@file:" + attachment + "`");
+      assertThat(resolved.warnings()).isEmpty();
+      assertThat(resolved.media()).hasSize(1);
+      var attachments = resolved.media();
+      if (scenario.equals("mediaProviderId")) {
+        var attachmentData = attachments.getFirst();
+        attachments =
+            java.util.List.of(
+                org.springframework.ai.content.Media.builder()
+                    .id("PRIVATE_SOURCE_FILE_ID")
+                    .mimeType(attachmentData.getMimeType())
+                    .name(attachmentData.getName())
+                    .data(attachmentData.getDataAsByteArray())
+                    .build());
+      }
+      originalInput = UserMessage.builder().text(resolved.prompt()).media(attachments).build();
+    }
+    var inputBytes = new dev.mikoto2000.rei.modelmessage.ModelMessageCodec().encode(originalInput);
+    var userRef = previousExchange.withKey("input").reference(originalInput);
     var assistantRef = previousExchange.withKey("answer").reference(original);
+    var protocolEntries =
+        new java.util.ArrayList<
+            dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.History.Entry>();
+    protocolEntries.add(
+        new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.History.Entry(
+            "input", userRef));
+    protocolEntries.add(
+        new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.History.Entry(
+            "answer", assistantRef));
+    if (scenario.startsWith("completedTool")) {
+      var result =
+          org.springframework.ai.chat.messages.ToolResponseMessage.builder()
+              .responses(
+                  java.util.List.of(
+                      new org.springframework.ai.chat.messages.ToolResponseMessage.ToolResponse(
+                          scenario.equals("completedToolId") ? "other-call" : "successful-call",
+                          scenario.equals("completedToolName")
+                              ? "otherOperation"
+                              : "fixtureOperation",
+                          scenario.equals("completedToolBytes")
+                              ? "PRIVATE_RESULT".repeat(12000)
+                              : "SUCCESSFUL_OPERATION_RESULT")))
+              .build();
+      protocolEntries.add(
+          new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.History.Entry(
+              "result", previousExchange.withKey("result").reference(result)));
+    }
     var pointers =
         payloads.historyReferences(
             previousExchange.scope(),
@@ -166,11 +272,7 @@ class ContextHistoryAdvisorTest {
                 old.runId(),
                 new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Origin(
                     previousExchange.ownerKey(), "endpoint-a"),
-                java.util.List.of(
-                    new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.History.Entry(
-                        "input", userRef),
-                    new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.History.Entry(
-                        "answer", assistantRef))),
+                protocolEntries),
             "turn:old");
     var logs =
         new dev.mikoto2000.rei.conversation.ConversationLogStore(
@@ -185,6 +287,32 @@ class ContextHistoryAdvisorTest {
         new java.util.HashMap<>(logs.appendProtocolHistory("chat", old.runId(), pointers));
     manifest.put("rei.modelMessage.endpoint", "endpoint-a");
     turns.recordMetadata(old, manifest);
+    if (scenario.equals("mediaCount"))
+      turns.recordMetadata(
+          old, Map.of(dev.mikoto2000.rei.conversation.ConversationLogStore.PROTOCOL_COUNT, "3"));
+    if (scenario.equals("mediaMissingReference")) {
+      var pointer = pointers.getFirst();
+      payloads.release(
+          previousExchange.scope(),
+          new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Ref(
+              pointer.get(dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.HISTORY_ID),
+              pointer.get(dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.HISTORY_HASH)),
+          dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ReferenceKind.HISTORY,
+          "turn:old");
+    }
+    if (scenario.equals("completedToolCount"))
+      turns.recordMetadata(
+          old, Map.of(dev.mikoto2000.rei.conversation.ConversationLogStore.PROTOCOL_COUNT, "4"));
+    if (scenario.equals("completedToolMissingReference")) {
+      var pointer = pointers.get(2);
+      payloads.release(
+          previousExchange.scope(),
+          new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Ref(
+              pointer.get(dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.HISTORY_ID),
+              pointer.get(dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.HISTORY_HASH)),
+          dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ReferenceKind.HISTORY,
+          "turn:old");
+    }
     if (status != ConversationTurnStore.Status.RUNNING)
       turns.finish(old, status, "old display answer");
     logs.append(
@@ -311,11 +439,28 @@ class ContextHistoryAdvisorTest {
                     AgentRunContext.class.getName(),
                     current))
             .build();
+    if (java.util.Set.of("mediaMissingReference", "mediaCount", "mediaScope").contains(scenario)) {
+      org.assertj.core.api.Assertions.assertThatThrownBy(() -> advisor.before(request, null))
+          .isInstanceOf(IllegalStateException.class)
+          .hasMessageNotContaining("PRIVATE_SOURCE_FILE_ID");
+      assertThat(payloads.restoreHistory(previousExchange.scope(), pointers.get(1)).orElseThrow())
+          .isEqualTo(original);
+      return;
+    }
     if (java.util.Set.of("missing", "count", "range", "version", "scope", "missingLog")
         .contains(scenario)) {
       org.assertj.core.api.Assertions.assertThatThrownBy(() -> advisor.before(request, null))
           .isInstanceOf(IllegalStateException.class)
           .hasMessage("Model message persistence rejected");
+      return;
+    }
+    if (scenario.startsWith("completedTool") && !scenario.equals("completedTool")) {
+      org.assertj.core.api.Assertions.assertThatThrownBy(() -> advisor.before(request, null))
+          .isInstanceOf(IllegalStateException.class)
+          .hasMessageNotContaining("PRIVATE_RESULT")
+          .hasMessageNotContaining("opaque-native-history");
+      assertThat(payloads.restoreHistory(previousExchange.scope(), pointers.get(1)).orElseThrow())
+          .isEqualTo(original);
       return;
     }
     var projected = advisor.before(request, null).prompt();
@@ -368,6 +513,58 @@ class ContextHistoryAdvisorTest {
           .doesNotContain("old actual", "opaque-native-history");
       return;
     }
+    if (scenario.startsWith("media") && status == ConversationTurnStore.Status.COMPLETED) {
+      assertThat(projected.getContents())
+          .contains("old display request", "old display answer", "current request")
+          .doesNotContain("opaque-native-history");
+      var media =
+          projected.getInstructions().stream()
+              .filter(UserMessage.class::isInstance)
+              .map(UserMessage.class::cast)
+              .flatMap(message -> message.getMedia().stream())
+              .toList();
+      assertThat(media).hasSize(1);
+      assertThat(media.getFirst().getDataAsByteArray())
+          .isEqualTo(originalInput.getMedia().getFirst().getDataAsByteArray());
+      assertThat(media.getFirst().getMimeType())
+          .isEqualTo(originalInput.getMedia().getFirst().getMimeType());
+      assertThat(media.getFirst().getName())
+          .isEqualTo(originalInput.getMedia().getFirst().getName());
+      assertThat(media.getFirst().getId()).isNull();
+      ((byte[]) media.getFirst().getData())[0] ^= 1;
+
+      assertThat(
+              new dev.mikoto2000.rei.modelmessage.ModelMessageCodec()
+                  .encode(
+                      payloads
+                          .restoreHistory(previousExchange.scope(), pointers.getFirst())
+                          .orElseThrow()))
+          .isEqualTo(inputBytes);
+      assertThat(payloads.restoreHistory(previousExchange.scope(), pointers.get(1)).orElseThrow())
+          .isEqualTo(original);
+      return;
+    }
+    if (scenario.equals("completedTool") && status == ConversationTurnStore.Status.COMPLETED) {
+      assertThat(projected.getContents())
+          .contains(
+              "old display request",
+              "old display answer",
+              "fixtureOperation",
+              "SUCCESSFUL_OPERATION_RESULT",
+              "current request")
+          .doesNotContain("opaque-native-history");
+      assertThat(
+              projected.getInstructions().stream()
+                  .filter(AssistantMessage.class::isInstance)
+                  .map(AssistantMessage.class::cast)
+                  .flatMap(message -> message.getParts().stream()))
+          .noneMatch(part ->
+              part instanceof org.springframework.ai.chat.messages.part.ReasoningPart
+                  || part instanceof org.springframework.ai.chat.messages.part.ToolCallPart);
+      assertThat(payloads.restoreHistory(previousExchange.scope(), pointers.get(1)).orElseThrow())
+          .isEqualTo(original);
+      return;
+    }
     if (status != ConversationTurnStore.Status.COMPLETED) {
       assertThat(projected.getContents())
           .doesNotContain("old actual", "old display", "opaque-native-history");
@@ -376,7 +573,8 @@ class ContextHistoryAdvisorTest {
       assertThat(projected.getContents())
           .contains("old display request", "old display answer", "current request")
           .doesNotContain("old actual", "opaque-native-history");
-      assertThat(loads).hasValue(0);
+      // Foreign completed history must inspect protected inputs to avoid silently dropping media.
+      assertThat(loads).hasValue(scenario.equals("legacyApi") ? 0 : 1);
       assertThat(
               projected.getInstructions().stream()
                   .filter(AssistantMessage.class::isInstance)

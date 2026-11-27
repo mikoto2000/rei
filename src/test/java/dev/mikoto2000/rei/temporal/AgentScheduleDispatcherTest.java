@@ -195,7 +195,7 @@ class AgentScheduleDispatcherTest {
                     "s", project, "test", Instant.EPOCH, Instant.EPOCH)));
     var chat = org.mockito.Mockito.mock(ChatExecutionService.class);
     org.mockito.Mockito.when(
-            chat.execute(
+            chat.executeIndependent(
                 org.mockito.ArgumentMatchers.any(),
                 org.mockito.ArgumentMatchers.eq("inspect build"),
                 org.mockito.ArgumentMatchers.any()))
@@ -223,7 +223,7 @@ class AgentScheduleDispatcherTest {
     jobs.remove().run();
     var context = org.mockito.ArgumentCaptor.forClass(AgentRunContext.class);
     org.mockito.Mockito.verify(chat)
-        .execute(
+        .executeIndependent(
             context.capture(),
             org.mockito.ArgumentMatchers.eq("inspect build"),
             org.mockito.ArgumentMatchers.any());
@@ -263,12 +263,13 @@ class AgentScheduleDispatcherTest {
             })
         .when(continuation)
         .attachParent(any(), isNull(), any());
-    when(h.chat().execute(any(), anyString(), any())).thenReturn(ChatExecutionResult.waiting());
+    when(h.chat().executeIndependent(any(), anyString(), any()))
+        .thenReturn(ChatExecutionResult.waiting());
     h.dispatcher().tick();
     h.jobs().remove().run();
     h.dispatcher().tick();
     assertEquals("RUNNING", schedules.get("00000000-0000-0000-0000-000000000001", id).status());
-    verify(h.chat(), times(1)).execute(any(), anyString(), any());
+    verify(h.chat(), times(1)).executeIndependent(any(), anyString(), any());
     verify(continuation, never()).detachParent(any());
     completed.get().accept(ChatExecutionResult.success("integrated reply", false));
     assertEquals("COMPLETED", schedules.get("00000000-0000-0000-0000-000000000001", id).status());
@@ -320,7 +321,7 @@ class AgentScheduleDispatcherTest {
             new dev.mikoto2000.rei.core.service.CommandCancellationService(),
             h.router()::cancelQueued)) {
       h.dispatcher().configureRunTracking(registry, lifecycle);
-      when(h.chat().execute(any(), anyString(), any()))
+      when(h.chat().executeIndependent(any(), anyString(), any()))
           .thenAnswer(invocation -> {
             var owner = invocation.getArgument(0, AgentRunContext.class);
             assertEquals(
@@ -338,7 +339,7 @@ class AgentScheduleDispatcherTest {
       assertEquals("COMPLETED", schedules.get(project, id).status());
       assertEquals(
           dev.mikoto2000.rei.application.run.RunStatus.COMPLETED, lifecycle.get(run).status());
-      verify(h.chat(), times(1)).execute(any(), anyString(), any());
+      verify(h.chat(), times(1)).executeIndependent(any(), anyString(), any());
     }
   }
 
@@ -424,7 +425,7 @@ class AgentScheduleDispatcherTest {
             new dev.mikoto2000.rei.core.service.CommandCancellationService(),
             h.router()::cancelQueued)) {
       h.dispatcher().configureRunTracking(registry, lifecycle);
-      when(h.chat().execute(any(), anyString(), any()))
+      when(h.chat().executeIndependent(any(), anyString(), any()))
           .thenReturn(ChatExecutionResult.failed("failed"));
       h.dispatcher().tick();
       String run = schedules.get(project, id).runId();
@@ -440,7 +441,7 @@ class AgentScheduleDispatcherTest {
                       && event.type() == dev.mikoto2000.rei.event.AgentEventType.AGENT_RUN_FAILED)
               .count());
       h.dispatcher().tick();
-      verify(h.chat(), times(1)).execute(any(), anyString(), any());
+      verify(h.chat(), times(1)).executeIndependent(any(), anyString(), any());
     }
   }
 
@@ -452,7 +453,7 @@ class AgentScheduleDispatcherTest {
     h.dispatcher().tick();
     String run = schedules.get(project, id).runId();
     assertThrows(IllegalStateException.class, () -> h.dispatcher().reconcile(project, id, run));
-    when(h.chat().execute(any(), anyString(), any()))
+    when(h.chat().executeIndependent(any(), anyString(), any()))
         .thenAnswer(invocation -> {
           assertThrows(
               IllegalStateException.class, () -> h.dispatcher().reconcile(project, id, run));
@@ -491,7 +492,7 @@ class AgentScheduleDispatcherTest {
     h.dispatcher().tick();
     h.jobs().remove().run();
     verifyNoInteractions(h.chat());
-    when(h.chat().execute(any(), eq("next"), any()))
+    when(h.chat().executeIndependent(any(), eq("next"), any()))
         .thenReturn(ChatExecutionResult.success("new", false));
     h.jobs().remove().run();
     assertEquals("COMPLETED", schedules.get(project, next).status());

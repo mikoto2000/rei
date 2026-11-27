@@ -20,6 +20,48 @@ import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.prompt.Prompt;
 
 class PinnedChatModelsTest {
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(strings = {"reasoning_effort", "response_format"})
+  void confirmedGenerationFieldsUseTheirTypedChatWireShape(String field) throws Exception {
+    try (var fixture = new Fixture();
+        var models =
+            new PinnedChatModels(
+                pin -> {
+                  throw new AssertionError("No-auth generation read a credential");
+                },
+                pin -> {},
+                null,
+                2)) {
+      var base = fixture.pin("generation", "fixture-model", LlmAuthentication.NONE);
+      var generation = new java.util.HashMap<>(base.generation());
+      generation.put(
+          field, field.equals("reasoning_effort") ? "low" : Map.of("type", "json_object"));
+      var connection =
+          new RunLlmConnection(
+              base.profileId(),
+              true,
+              base.provider(),
+              base.authentication(),
+              null,
+              null,
+              base.endpoint(),
+              Map.of(
+                  field.equals("reasoning_effort")
+                      ? LlmEndpointCapabilities.Capability.REASONING_EFFORT
+                      : LlmEndpointCapabilities.Capability.STRUCTURED_OUTPUT,
+                  LlmEndpointCapabilities.Support.SUPPORTED),
+              generation);
+      models
+          .model(connection)
+          .call(new Prompt("Return JSON fixture", RunNativeOptions.options(connection)));
+      assertThat(fixture.bodies).hasSize(1);
+      assertThat(fixture.headers).containsExactly("<none>");
+      var sent = fixture.bodies.getFirst().path(field);
+      assertThat(field.equals("reasoning_effort") ? sent.asText() : sent.path("type").asText())
+          .isEqualTo(field.equals("reasoning_effort") ? "low" : "json_object");
+    }
+  }
+
   @Test
   void cachedModelsKeepTheirOwnReceiverAndReadTheFreshKey() throws Exception {
     try (var first = new Fixture();
@@ -182,12 +224,20 @@ class PinnedChatModelsTest {
             headers.add(
                 java.util.Objects.toString(
                     exchange.getRequestHeaders().getFirst("Authorization"), "<none>"));
-            bodies.add(new ObjectMapper().readTree(exchange.getRequestBody().readAllBytes()));
+            var request = new ObjectMapper().readTree(exchange.getRequestBody().readAllBytes());
+            bodies.add(request);
+            boolean streaming = request.path("stream").asBoolean();
             var body =
-                ("{\"id\":\"fixture\",\"object\":\"chat.completion\",\"created\":0,\"model\":\"fixture\","
-                        + "\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"fixture-answer\"},\"finish_reason\":\"stop\"}]}")
+                (streaming
+                        ? "data: {\"id\":\"fixture\",\"object\":\"chat.completion.chunk\",\"created\":0,\"model\":\"fixture\","
+                            + "\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\"fixture-answer\"},\"finish_reason\":\"stop\"}],"
+                            + "\"usage\":{\"prompt_tokens\":3,\"completion_tokens\":2,\"total_tokens\":5}}\n\ndata: [DONE]\n\n"
+                        : "{\"id\":\"fixture\",\"object\":\"chat.completion\",\"created\":0,\"model\":\"fixture\","
+                            + "\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"fixture-answer\"},\"finish_reason\":\"stop\"}]}")
                     .getBytes(StandardCharsets.UTF_8);
-            exchange.getResponseHeaders().set("Content-Type", "application/json");
+            exchange
+                .getResponseHeaders()
+                .set("Content-Type", streaming ? "text/event-stream" : "application/json");
             exchange.sendResponseHeaders(200, body.length);
             try (var output = exchange.getResponseBody()) {
               output.write(body);

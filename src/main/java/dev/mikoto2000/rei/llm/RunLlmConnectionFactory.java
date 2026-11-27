@@ -4,6 +4,8 @@ import java.util.function.Function;
 
 /** Resolves immutable settings only; credentials are obtained at the HTTP boundary. */
 final class RunLlmConnectionFactory {
+  static final String STATIC_CHAT = "_static-chat";
+
   record LegacySettings(
       ResolvedLlmEndpoint endpoint,
       java.util.Map<String, Object> generation,
@@ -110,6 +112,45 @@ final class RunLlmConnectionFactory {
         transport(source));
   }
 
+  /**
+   * Existing static chat settings used by autonomous inference, independent of normal selection.
+   */
+  RunLlmConnection captureIndependent(String model) {
+    var source = catalog.feature(LlmFeature.CHAT);
+    var settings = legacy.resolve(model == null && source != null ? source.getModel() : model);
+    if (settings.authentication() != LlmAuthentication.API_KEY
+        && settings.authentication() != LlmAuthentication.NONE)
+      throw new IllegalStateException("Independent inference static authentication is unavailable");
+    var provider =
+        LlmProvider.configured(source == null ? null : source.getProvider(), "static chat");
+    if (provider == LlmProvider.CHATGPT_PLAN)
+      throw new IllegalStateException("Independent inference cannot inherit a ChatGPT account");
+    var endpoint = settings.endpoint();
+    var capabilities =
+        LlmEndpointCapabilities.resolve(
+                source,
+                provider,
+                endpoint.apiType(),
+                endpoint.capabilities().maxTools(),
+                "static chat",
+                false)
+            .effective();
+    var snapshot =
+        new RunLlmConnection(
+            STATIC_CHAT,
+            false,
+            provider,
+            settings.authentication(),
+            null,
+            null,
+            endpoint,
+            capabilities,
+            settings.generation(),
+            RunTransportSettings.defaults(settings.transport()));
+    RunNativeOptions.options(snapshot);
+    return snapshot;
+  }
+
   RunLlmConnection capture(String profile, String modelOverride) {
     var connection = catalog.connection(profile);
     var metadata =
@@ -187,23 +228,46 @@ final class RunLlmConnectionFactory {
         metadata.accountRef() == null ? null : registration.apply(metadata.accountRef());
     if (metadata.provider() == LlmProvider.CHATGPT_PLAN && accountRegistration == null)
       throw new IllegalStateException("ChatGPT account registration is unavailable");
-    return new RunLlmConnection(
-        profile,
-        true,
-        metadata.provider(),
-        metadata.authentication(),
-        metadata.accountRef(),
-        accountRegistration,
-        resolved,
-        capabilities,
-        generation(resolved),
-        transport(connection));
+    var snapshot =
+        new RunLlmConnection(
+            profile,
+            true,
+            metadata.provider(),
+            metadata.authentication(),
+            metadata.accountRef(),
+            accountRegistration,
+            resolved,
+            capabilities,
+            RunGenerationSettings.named(
+                generation(resolved, metadata.provider()),
+                connection.getGeneration(),
+                resolved,
+                capabilities),
+            transport(connection));
+    RunNativeOptions.options(snapshot);
+    return snapshot;
   }
 
   /**
    * Validate the credential binding, retaining the saved model/options rather than current choices.
    */
   void verifyBinding(RunLlmConnection saved) {
+    if (!saved.named() && STATIC_CHAT.equals(saved.profileId())) {
+      var current = captureIndependent(saved.endpoint().model());
+      if (saved.provider() != current.provider()
+          || saved.authentication() != current.authentication()
+          || saved.accountRef() != null
+          || saved.accountRegistration() != null
+          || saved.endpoint().generation() != current.endpoint().generation()
+          || saved.endpoint().apiType() != current.endpoint().apiType()
+          || !saved.endpoint().endpointId().equals(current.endpoint().endpointId())
+          || !saved.endpoint().baseUrl().equals(current.endpoint().baseUrl())
+          || !saved.endpoint().credentialRef().equals(current.endpoint().credentialRef())
+          || !RunTransportSettings.binding(saved.transport())
+              .equals(RunTransportSettings.binding(current.transport())))
+        throw new IllegalStateException("Independent inference static connection binding changed");
+      return;
+    }
     var source = catalog.connection(saved.profileId());
     var metadata =
         catalog.profiles().stream()
@@ -254,6 +318,16 @@ final class RunLlmConnectionFactory {
     if (source.getRequestTimeout() != null)
       values.put("request_timeout", source.getRequestTimeout().toString());
     return RunTransportSettings.defaults(values);
+  }
+
+  private static java.util.Map<String, Object> generation(
+      ResolvedLlmEndpoint endpoint, LlmProvider provider) {
+    var values = new java.util.LinkedHashMap<>(generation(endpoint));
+    if (provider == LlmProvider.OPENAI_API
+        && endpoint.apiType() == LlmApiType.CHAT_COMPLETIONS
+        && values.containsKey("max_tokens"))
+      values.put("max_completion_tokens", values.remove("max_tokens"));
+    return values;
   }
 
   private static java.util.Map<String, Object> generation(ResolvedLlmEndpoint endpoint) {

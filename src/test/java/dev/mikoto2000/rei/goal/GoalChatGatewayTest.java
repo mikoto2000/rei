@@ -139,7 +139,7 @@ class GoalChatGatewayTest {
             })
         .when(continuation)
         .attachParent(any(), any(), any());
-    when(chat.execute(any(), anyString(), any(), any()))
+    when(chat.executeIndependent(any(), anyString(), any(), any()))
         .thenAnswer(inv -> {
           var owner = inv.getArgument(0, AgentRunContext.class);
           assertSame(reservation.get(), inv.getArgument(3));
@@ -158,7 +158,7 @@ class GoalChatGatewayTest {
     callback.get().accept(ChatExecutionResult.success("verified result", false));
     assertEquals("COMPLETED", goals.get(project, goal.id()).status());
     assertEquals(running.currentRunId(), goals.attempts(project, goal.id()).getFirst().runId());
-    verify(chat, times(1)).execute(any(), anyString(), any(), any());
+    verify(chat, times(1)).executeIndependent(any(), anyString(), any(), any());
   }
 
   /** 目標の達成管理で、入力や保存形式を契約に従って解釈し、情報を受け渡すことを確認する。 */
@@ -171,7 +171,7 @@ class GoalChatGatewayTest {
             List.of(new GoalRepository.FileCriterion("result.json", null, "/ready", "true")),
             1,
             5);
-    when(chat.execute(any(), anyString(), any(), any()))
+    when(chat.executeIndependent(any(), anyString(), any(), any()))
         .thenAnswer(invocation -> {
           String prompt = invocation.getArgument(1);
           assertTrue(prompt.contains("JSON Pointer"));
@@ -182,7 +182,7 @@ class GoalChatGatewayTest {
     loop.run(project, structured.id());
     jobs.removeFirst().run();
     assertEquals("BLOCKED", goals.get(project, structured.id()).status());
-    verify(chat).execute(any(), anyString(), any(), any());
+    verify(chat).executeIndependent(any(), anyString(), any(), any());
   }
 
   /** 目標の達成管理で、指定した条件に対する結果と状態の変化を確認する。 */
@@ -195,7 +195,7 @@ class GoalChatGatewayTest {
     var execution = new dev.mikoto2000.rei.timing.TimingExecution(timings);
     gateway.setTiming(execution);
     verifier.setTiming(execution);
-    when(chat.execute(any(), anyString(), any(), any()))
+    when(chat.executeIndependent(any(), anyString(), any(), any()))
         .thenAnswer(invocation -> {
           tick.set(10);
           Files.writeString(dir.resolve("out.txt"), "correct");
@@ -291,7 +291,7 @@ class GoalChatGatewayTest {
   /** 目標の達成管理で、保存した情報を、再起動や復元後の処理へ正しく引き継ぐことを確認する。 */
   @Test
   void actualGatewayPassesCapturedOwnerAndPersistentReservationThroughFifo() throws Exception {
-    when(chat.execute(any(), anyString(), any(), any()))
+    when(chat.executeIndependent(any(), anyString(), any(), any()))
         .thenAnswer(invocation -> {
           var owner = invocation.getArgument(0, AgentRunContext.class);
           assertEquals(project, owner.projectId());
@@ -323,7 +323,7 @@ class GoalChatGatewayTest {
   @Test
   void trackedGoalRetainsSessionAndReachesTerminalRunWithoutDuplicateExecution() throws Exception {
     trackRuns();
-    when(chat.execute(any(), anyString(), any(), any()))
+    when(chat.executeIndependent(any(), anyString(), any(), any()))
         .thenAnswer(invocation -> {
           var owner = invocation.getArgument(0, AgentRunContext.class);
           assertEquals(
@@ -342,7 +342,7 @@ class GoalChatGatewayTest {
         dev.mikoto2000.rei.application.run.RunStatus.COMPLETED,
         tracking.get(running.currentRunId()).status());
     assertEquals("COMPLETED", goals.get(project, goal.id()).status());
-    verify(chat, times(1)).execute(any(), anyString(), any(), any());
+    verify(chat, times(1)).executeIndependent(any(), anyString(), any(), any());
   }
 
   /** 目標の達成管理の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
@@ -412,7 +412,7 @@ class GoalChatGatewayTest {
   /** 目標の達成管理の操作が、指定された権限・承認条件に従うことを確認する。 */
   @Test
   void actualPermissionFailureStopsAndShellCannotChangeGoalFromAnotherProject() {
-    when(chat.execute(any(), anyString(), any(), any()))
+    when(chat.executeIndependent(any(), anyString(), any(), any()))
         .thenThrow(
             new ToolPermissionException("writeMultiFile", PermissionDecision.REQUIRE_APPROVAL));
     loop.run(project, goal.id());
@@ -452,7 +452,7 @@ class GoalChatGatewayTest {
             .findFirst()
             .orElseThrow();
     var calls = new java.util.concurrent.atomic.AtomicInteger();
-    when(chat.execute(any(), anyString(), any(), any()))
+    when(chat.executeIndependent(any(), anyString(), any(), any()))
         .thenAnswer(invocation -> {
           String prompt = invocation.getArgument(1);
           assertTrue(prompt.contains("ALL"));
@@ -518,7 +518,7 @@ class GoalChatGatewayTest {
     String run = goals.get(project, goal.id()).currentRunId();
     assertThrows(IllegalStateException.class, () -> loop.reconcile(project, goal.id(), run));
     assertEquals("RUNNING", goals.get(project, goal.id()).status());
-    when(chat.execute(any(), anyString(), any(), any()))
+    when(chat.executeIndependent(any(), anyString(), any(), any()))
         .thenAnswer(invocation -> {
           assertThrows(IllegalStateException.class, () -> loop.reconcile(project, goal.id(), run));
           return ChatExecutionResult.failed("stop");
@@ -549,7 +549,7 @@ class GoalChatGatewayTest {
     // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(chat);
     assertTrue(jobs.isEmpty());
-    when(chat.execute(any(), anyString(), any(), any()))
+    when(chat.executeIndependent(any(), anyString(), any(), any()))
         .thenAnswer(invocation -> {
           assertTrue(invocation.getArgument(1, String.class).contains("unknown side effects"));
           return ChatExecutionResult.failed("stop");
@@ -583,7 +583,7 @@ class GoalChatGatewayTest {
             goal.id(),
             new GoalCompletionGate.Definition(goal.criteria(), null, List.of(), List.of(), null));
     var attempts = new java.util.concurrent.atomic.AtomicInteger();
-    when(chat.execute(any(), anyString(), any(), any()))
+    when(chat.executeIndependent(any(), anyString(), any(), any()))
         .thenAnswer(inv -> {
           var reservation = inv.getArgument(3, OutputLimitRunBudget.LlmCallReservation.class);
           if (attempts.incrementAndGet() == 1) {
@@ -630,7 +630,7 @@ class GoalChatGatewayTest {
     var outcome =
         new java.util.concurrent.atomic.AtomicReference<
             dev.mikoto2000.rei.secretary.SecretaryPreparationRuntime.Outcome>();
-    when(chat.execute(any(), anyString(), any(), any()))
+    when(chat.executeIndependent(any(), anyString(), any(), any()))
         .thenAnswer(inv -> {
           var owner = inv.getArgument(0, AgentRunContext.class);
           assertEquals(AgentRunContext.Mode.READ_ONLY, owner.mode());
@@ -658,7 +658,7 @@ class GoalChatGatewayTest {
         IllegalStateException.class,
         () -> loop.start(project, goal.id(), descriptor.fingerprint(), () -> false));
     verifyNoInteractions(chat);
-    when(chat.execute(any(), anyString(), any(), any()))
+    when(chat.executeIndependent(any(), anyString(), any(), any()))
         .thenAnswer(inv -> {
           assertTrue(
               inv.getArgument(3, OutputLimitRunBudget.LlmCallReservation.class).tryReserve());
@@ -680,7 +680,7 @@ class GoalChatGatewayTest {
     loop.reconcile(project, goal.id(), old);
     assertEquals("PAUSED", goals.get(project, goal.id()).status());
     var allowed = new java.util.concurrent.atomic.AtomicBoolean(true);
-    when(chat.execute(any(), anyString(), any(), any()))
+    when(chat.executeIndependent(any(), anyString(), any(), any()))
         .thenAnswer(inv -> {
           allowed.set(false);
           assertFalse(

@@ -66,6 +66,27 @@ final class NamedChatMessages implements ChatModel {
 
   private Prompt nativeInput(Prompt prompt) {
     var checked = ResponsesReasoningReplay.prepare(prompt, endpoint);
+    if (!(checked.getOptions() instanceof org.springframework.ai.openai.OpenAiChatOptions options))
+      throw invalid();
+    var accepted = options.getToolContext();
+    LlmInputPolicy.requireMedia(
+        checked,
+        accepted != null
+                && accepted.get(
+                        dev.mikoto2000.rei.modeloptions.ModelOptions.RUN_CONNECTION_CONTEXT_KEY)
+                    instanceof RunLlmConnection connection
+            ? connection
+            : null);
+    if (Boolean.TRUE.equals(options.getReplayReasoningContent())) {
+      var context = options.getToolContext();
+      if (context == null
+          || !(context.get(dev.mikoto2000.rei.modeloptions.ModelOptions.RUN_CONNECTION_CONTEXT_KEY)
+              instanceof RunLlmConnection connection)
+          || connection.capabilities().get(LlmEndpointCapabilities.Capability.REASONING_REPLAY)
+              != LlmEndpointCapabilities.Support.SUPPORTED)
+        throw new IllegalArgumentException(
+            "Chat Completions reasoning replay is unsupported or unconfirmed");
+    }
     var messages =
         checked.getInstructions().stream()
             .map(message -> {
@@ -96,7 +117,11 @@ final class NamedChatMessages implements ChatModel {
                       .build();
             })
             .toList();
-    return new Prompt(messages, checked.getOptions());
+    return new Prompt(
+        messages,
+        options.getReplayReasoningContent() == null
+            ? options.mutate().replayReasoningContent(false).build()
+            : options);
   }
 
   private ChatResponse canonical(ChatResponse response, Prompt prompt) {

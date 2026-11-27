@@ -83,6 +83,19 @@ final class ResponsesReasoningReplay {
         if (status != null && !"completed".equals(status))
           throw new IllegalArgumentException("Responses replay part is not complete");
         if (!(part instanceof ReasoningPart reasoning)) continue;
+        if (endpoint.apiType() == LlmApiType.CHAT_COMPLETIONS) {
+          var text = reasoning.text();
+          var summary = reasoning.summary();
+          if (!ownerPermitted
+              || reasoning.payload() != null
+              || !reasoning.attributes().isEmpty()
+              || text == null
+              || text.isBlank()
+              || text.length() > 4_194_304
+              || summary != null && !summary.isBlank())
+            throw new IllegalArgumentException("Chat Completions reasoning is incompatible");
+          continue;
+        }
         if (endpoint.capabilities().reasoningReplay() == ReasoningReplayMode.NONE)
           throw new IllegalArgumentException("Responses reasoning replay mode is incompatible");
         var payload = reasoning.payload();

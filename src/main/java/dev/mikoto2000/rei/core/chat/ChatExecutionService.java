@@ -78,6 +78,10 @@ public class ChatExecutionService implements ChatRunAdmission {
 
   @Override
   public void accept(AgentRunContext owner, String prompt) {
+    accept(owner, prompt, false);
+  }
+
+  private void accept(AgentRunContext owner, String prompt, boolean independent) {
     if (chatConnections == null || structuredCommand(prompt)) return;
     var continuations = continuationProvider == null ? null : continuationProvider.getIfAvailable();
     var resumed = continuations == null ? null : continuations.restore(owner);
@@ -87,11 +91,15 @@ public class ChatExecutionService implements ChatRunAdmission {
     if (saved != null && checkpoint != null && !saved.equals(checkpoint))
       throw new IllegalStateException("Saved Run connection records disagree");
     var connection = saved == null ? checkpoint : saved;
+    if (independent && connection != null && connection.named())
+      throw new IllegalStateException(
+          "Saved Run uses normal chat selection; start a new independent Run");
     if (connection != null) chatConnections.restore(owner, connection);
     else if (resumed != null
         || progress != null
         || checkpoints != null && checkpoints.hasProgressHistory(owner))
       throw new IllegalStateException("Saved Run connection proof is unavailable; start a new Run");
+    else if (independent) chatConnections.acceptIndependent(owner);
     else chatConnections.accept(owner);
   }
 
@@ -473,6 +481,30 @@ public class ChatExecutionService implements ChatRunAdmission {
       UserInterventionQueue interventions,
       OutputLimitRunBudget.LlmCallReservation reservation) {
     accept(context, promptText);
+    return executeAccepted(context, promptText, interventions, reservation);
+  }
+
+  /** Autonomous execution retains static settings instead of normal chat's runtime selection. */
+  public ChatExecutionResult executeIndependent(
+      AgentRunContext context, String promptText, UserInterventionQueue interventions) {
+    return executeIndependent(context, promptText, interventions, null);
+  }
+
+  /** Independent execution shares the existing reservation, ownership and cleanup lifecycle. */
+  public ChatExecutionResult executeIndependent(
+      AgentRunContext context,
+      String promptText,
+      UserInterventionQueue interventions,
+      OutputLimitRunBudget.LlmCallReservation reservation) {
+    accept(context, promptText, true);
+    return executeAccepted(context, promptText, interventions, reservation);
+  }
+
+  private ChatExecutionResult executeAccepted(
+      AgentRunContext context,
+      String promptText,
+      UserInterventionQueue interventions,
+      OutputLimitRunBudget.LlmCallReservation reservation) {
     if (timing == null) return executeOwned(context, promptText, interventions, reservation);
     return timing.observeRun(
         context, () -> executeOwned(context, promptText, interventions, reservation));

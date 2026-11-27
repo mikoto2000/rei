@@ -421,9 +421,28 @@ public class ContextHistoryAdvisor implements BaseChatMemoryAdvisor {
       String endpoint = metadata.get(ModelMessagePayloadStore.HISTORY_ENDPOINT);
       if (last < first || count > 256 || endpoint == null || endpoint.isBlank())
         throw protocolRejected();
-      if (!(target instanceof ModelMessagePayloadStore.Origin origin)
-          || !origin.endpoint().equals(endpoint))
-        continue; // The established display rows are the text-only view for another endpoint/API.
+      if (!(target instanceof ModelMessagePayloadStore.Origin origin)) continue;
+      if (!origin.endpoint().equals(endpoint)) {
+        var rows = rowsByRun.getOrDefault(run, List.of());
+        if (last * 3 + 1 > through) {
+          if (!(boundary instanceof ModelMessagePayloadStore.Exchange exchange)
+              || owner == null
+              || !exchange.run().equals(owner.runId())
+              || !origin.owner().equals(exchange.ownerKey())
+              || !exchange.scope().equals(ModelMessagePayloadStore.Scope.forOwner(owner)))
+            throw protocolRejected();
+          if (store == null) store = payloads.get();
+          if (store == null) throw protocolRejected();
+          var operations =
+              commonHistory(
+                  store, exchange.scope(), rows, run, first, last, count, through, projected);
+          if (!operations.isEmpty())
+            projected.put(last * 3 + 1, historical(new AssistantMessage(operations), last * 3 + 1));
+        }
+        // The existing completed display rows retain the common conversation. Native payloads
+        // and their history leases stay with the source connection.
+        continue;
+      }
       if (!(boundary instanceof ModelMessagePayloadStore.Exchange exchange)
           || owner == null
           || !exchange.run().equals(owner.runId())
@@ -492,6 +511,108 @@ public class ContextHistoryAdvisor implements BaseChatMemoryAdvisor {
         java.util.Set.copyOf(replaced),
         java.util.Collections.unmodifiableMap(projected),
         grant);
+  }
+
+  private static String commonHistory(
+      ModelMessagePayloadStore store,
+      ModelMessagePayloadStore.Scope scope,
+      List<ConversationLogEntry> rows,
+      String run,
+      long first,
+      long last,
+      long count,
+      long through,
+      Map<Long, Message> projected) {
+    if (rows.size() != count
+        || rows.isEmpty()
+        || rows.getFirst().sequence() != first
+        || rows.getLast().sequence() != last) throw incompatibleToolHistory();
+    var pending = new java.util.LinkedHashMap<String, AssistantMessage.ToolCall>();
+    var seen = new java.util.HashSet<String>();
+    var references = new java.util.HashSet<String>();
+    var json = new com.fasterxml.jackson.databind.ObjectMapper();
+    var operations = json.createArrayNode();
+    long previous = 0;
+    long characters = 0;
+    for (var row : rows) {
+      var metadata = row.metadata();
+      String role = metadata.get(ModelMessagePayloadStore.HISTORY_ROLE);
+      if (!run.equals(metadata.get(ModelMessagePayloadStore.HISTORY_RUN))
+          || !("turn:" + run).equals(metadata.get(ModelMessagePayloadStore.HISTORY_OWNER))
+          || !references.add(metadata.get(ModelMessagePayloadStore.HISTORY_ID))
+          || row.sequence() <= previous) throw incompatibleToolHistory();
+      previous = row.sequence();
+      var message = store.restoreHistory(scope, metadata).orElseThrow();
+      if (!message.getMessageType().name().equalsIgnoreCase(role)) throw incompatibleToolHistory();
+      if (message instanceof org.springframework.ai.chat.messages.ToolResponseMessage results) {
+        if (results.getResponses().isEmpty()) throw incompatibleToolHistory();
+        for (var result : results.getResponses()) {
+          var call = pending.remove(result.id());
+          if (call == null || !call.name().equals(result.name()) || result.responseData() == null)
+            throw incompatibleToolHistory();
+          characters +=
+              (long) call.name().length()
+                  + call.arguments().length()
+                  + result.responseData().length();
+          if (characters > 131_072) throw incompatibleToolHistory();
+          operations
+              .addObject()
+              .put("operation", call.name())
+              .put("arguments", call.arguments())
+              .put("result", result.responseData());
+        }
+      } else {
+        if (!pending.isEmpty()) throw incompatibleToolHistory();
+        if (message instanceof AssistantMessage assistant) {
+          for (var call : assistant.getToolCalls()) {
+            if (call.id() == null
+                || call.id().isBlank()
+                || !seen.add(call.id())
+                || !"function".equals(call.type())
+                || call.name() == null
+                || call.name().isBlank()
+                || call.arguments() == null) throw incompatibleToolHistory();
+            pending.put(call.id(), call);
+          }
+        } else if (message instanceof UserMessage user) {
+          long sequence = row.sequence() * 3 + 1;
+          if (sequence > through && !user.getMedia().isEmpty())
+            projected.put(
+                sequence,
+                historical(
+                    UserMessage.builder()
+                        .text("Attachments from a completed turn (historical data):")
+                        .media(
+                            user.getMedia().stream()
+                                .map(ContextHistoryAdvisor::commonMedia)
+                                .toList())
+                        .build(),
+                    sequence));
+        } else throw incompatibleToolHistory();
+      }
+    }
+    if (!pending.isEmpty()) throw incompatibleToolHistory();
+    if (operations.isEmpty()) return "";
+    return "Completed tool operations from a previous connection (historical data; already executed):\n"
+        + operations;
+  }
+
+  private static org.springframework.ai.content.Media commonMedia(
+      org.springframework.ai.content.Media source) {
+    // Provider file IDs are not portable authority. Keep only explicit data; the destination's
+    // input policy and content-bound export approval still admit the projected request.
+    var builder = org.springframework.ai.content.Media.builder().mimeType(source.getMimeType());
+    if (source.getName() != null) builder.name(source.getName());
+    var data = source.getData();
+    if (data instanceof byte[] bytes) builder.data(bytes.clone());
+    else if (data instanceof String text) builder.data(text);
+    else throw incompatibleToolHistory();
+    return builder.build();
+  }
+
+  private static IllegalStateException incompatibleToolHistory() {
+    return new IllegalStateException(
+        "Completed history is incomplete or incompatible; start a new session");
   }
 
   private static void retireCoveredHistory(

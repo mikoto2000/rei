@@ -129,6 +129,19 @@ class InferenceDynamicApprovalLoopTest {
 
   private void executeApprovedWorkflow(AgentRunContext.Mode mode, boolean plan, String ending)
       throws Exception {
+    executeApprovedWorkflow(mode, plan, ending, null);
+  }
+
+  @ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(booleans = {false, true})
+  void completedLocalOperationsContinueThroughPlanAndBackToLocalChatOnlyWithFreshConsent(
+      boolean denied) throws Exception {
+    executeApprovedWorkflow(AgentRunContext.Mode.EXCLUSIVE, false, null, denied ? "deny" : "allow");
+  }
+
+  private void executeApprovedWorkflow(
+      AgentRunContext.Mode mode, boolean plan, String ending, String historySwitch)
+      throws Exception {
     try (var fixture = new ResponsesLoopFixture(plan)) {
       var clock = Clock.systemUTC();
       var owner =
@@ -274,7 +287,8 @@ class InferenceDynamicApprovalLoopTest {
         assertThat(execution.budgetSnapshot().totalTokens()).isEqualTo(requests * 5L);
         assertThat(execution.budgetSnapshot().usageUnknown()).isFalse();
       }
-      execution.completeRun();
+      if (historySwitch == null) execution.completeRun();
+      else assertCrossRouteHistory(data, execution, executions, historySwitch.equals("deny"));
     }
   }
 
@@ -282,6 +296,27 @@ class InferenceDynamicApprovalLoopTest {
       org.sqlite.SQLiteDataSource data,
       AgentRunContext owner,
       ResponsesLoopFixture fixture,
+      Consent consent,
+      List<ToolCallback> callbacks,
+      AgentEventFactory events,
+      boolean resumed) {
+    return context(
+        data,
+        owner,
+        new Route(fixture.pin, fixture.options()),
+        consent,
+        callbacks,
+        events,
+        resumed);
+  }
+
+  private record Route(
+      RunLlmConnection pin, org.springframework.ai.model.tool.ToolCallingChatOptions options) {}
+
+  private RunExecutionContext context(
+      org.sqlite.SQLiteDataSource data,
+      AgentRunContext owner,
+      Route route,
       Consent consent,
       List<ToolCallback> callbacks,
       AgentEventFactory events,
@@ -311,17 +346,17 @@ class InferenceDynamicApprovalLoopTest {
       context.beginContextRestoration();
     } else context.consumeNextLlmCall();
     var exchange = new ModelMessagePayloadStore(data).newExchange(owner);
-    var values = new java.util.HashMap<>(fixture.options().getToolContext());
+    var values = new java.util.HashMap<>(route.options().getToolContext());
     values.put(RunExecutionContext.KEY, context);
     values.put(
-        dev.mikoto2000.rei.modeloptions.ModelOptions.RUN_CONNECTION_CONTEXT_KEY, fixture.pin);
+        dev.mikoto2000.rei.modeloptions.ModelOptions.RUN_CONNECTION_CONTEXT_KEY, route.pin());
     values.put(ModelMessagePayloadStore.EXCHANGE_CONTEXT_KEY, exchange);
     values.put(
         ModelMessagePayloadStore.ORIGIN_CONTEXT_KEY,
-        new ModelMessagePayloadStore.Origin(exchange.ownerKey(), fixture.pin.fingerprint()));
+        new ModelMessagePayloadStore.Origin(exchange.ownerKey(), route.pin().fingerprint()));
     values.put(ResponsesReasoningReplay.OWNER_CONTEXT_KEY, exchange.ownerKey());
     context.setModelOptions(
-        fixture
+        route
             .options()
             .mutate()
             .toolContext(null)
@@ -329,6 +364,278 @@ class InferenceDynamicApprovalLoopTest {
             .toolCallbacks(callbacks)
             .build());
     return context;
+  }
+
+  private record HistoryFixture(
+      org.sqlite.SQLiteDataSource data,
+      dev.mikoto2000.rei.conversation.ConversationTurnStore turns,
+      dev.mikoto2000.rei.conversation.ConversationLogStore logs,
+      dev.mikoto2000.rei.core.contextbudget.ContextHistoryAdvisor advisor,
+      ModelMessagePayloadStore payloads) {}
+
+  private record HistoryHop(
+      AgentRunContext owner,
+      Route route,
+      java.util.function.Function<
+              org.springframework.ai.model.tool.ToolCallingChatOptions,
+              org.springframework.ai.chat.model.ChatModel>
+          model,
+      java.util.function.IntSupplier requests,
+      boolean streaming) {}
+
+  private void assertCrossRouteHistory(
+      org.sqlite.SQLiteDataSource data,
+      RunExecutionContext source,
+      AtomicInteger operations,
+      boolean denied)
+      throws Exception {
+    var turns = dev.mikoto2000.rei.conversation.ConversationTurnStore.inMemory();
+    var logs =
+        new dev.mikoto2000.rei.conversation.ConversationLogStore(
+            directory.resolve("cross-history"),
+            Clock.systemUTC(),
+            new com.fasterxml.jackson.databind.ObjectMapper()
+                .registerModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule()));
+    var payloads = new ModelMessagePayloadStore(data);
+    var history =
+        new HistoryFixture(
+            data,
+            turns,
+            logs,
+            new dev.mikoto2000.rei.core.contextbudget.ContextHistoryAdvisor(
+                turns,
+                dev.mikoto2000.rei.chatmemory.WindowedConversationMemory.builder().build(),
+                new dev.mikoto2000.rei.core.contextbudget.ConversationSummaryRepository(directory),
+                logs,
+                () -> payloads),
+            payloads);
+    var sourcePointers = publishCompletedHistory(history, source);
+    var scope = ModelMessagePayloadStore.Scope.forOwner(source.runContext());
+    var codec = new dev.mikoto2000.rei.modelmessage.ModelMessageCodec();
+    var sourceBytes =
+        sourcePointers.stream()
+            .map(pointer -> codec.encode(payloads.restoreHistory(scope, pointer).orElseThrow()))
+            .toList();
+    source.completeRun();
+    try (var plan = new ResponsesLoopFixture(true);
+        var local = new PinnedChatModelsTest.Fixture();
+        var models =
+            new PinnedChatModels(
+                pin -> {
+                  throw new AssertionError("No-auth history read credentials");
+                },
+                pin -> {},
+                null,
+                2)) {
+      plan.replies =
+          turn ->
+              plan.reply.replace(
+                  "\"output\":[",
+                  "\"output\":[{\"type\":\"reasoning\",\"id\":\"rs_plan_private\",\"summary\":[],\"encrypted_content\":\"OPAQUE_PLAN_PRIVATE\"},");
+      var original = source.runContext();
+      var planOwner =
+          new AgentRunContext(
+              "cross-plan",
+              original.conversationId(),
+              directory,
+              original.projectId(),
+              AgentRunContext.RequestSource.SHELL,
+              AgentRunContext.Mode.EXCLUSIVE);
+      var planExecution =
+          historyHop(
+              history,
+              new HistoryHop(
+                  planOwner,
+                  new Route(plan.pin, plan.options()),
+                  options ->
+                      ResponsesAdapter.createForRun(
+                          plan.pin,
+                          (org.springframework.ai.openai.responses.OpenAiResponsesChatOptions)
+                              options,
+                          plan.client),
+                  () -> plan.requests.size(),
+                  true),
+              denied);
+      assertThat(operations).hasValue(1);
+      if (denied) {
+        assertThat(plan.requests).isEmpty();
+        assertThat(local.bodies).isEmpty();
+      } else {
+        assertThat(plan.requests).hasSize(1);
+        assertThat(plan.requests.getFirst().path("input").toString())
+            .contains("SYNTHETIC_CALENDAR_RESULT")
+            .doesNotContain("\"type\":\"function_call\"");
+        var planPointers = publishCompletedHistory(history, planExecution);
+        var planScope = ModelMessagePayloadStore.Scope.forOwner(planOwner);
+        var planBytes =
+            planPointers.stream()
+                .map(pointer ->
+                    codec.encode(payloads.restoreHistory(planScope, pointer).orElseThrow()))
+                .toList();
+        assertThat(
+                planBytes.stream()
+                    .map(bytes -> new String(bytes, java.nio.charset.StandardCharsets.UTF_8)))
+            .anyMatch(text -> text.contains("OPAQUE_PLAN_PRIVATE"));
+        planExecution.completeRun();
+        var base = local.pin("back-local", "fixture-model", LlmAuthentication.NONE);
+        var pin =
+            new RunLlmConnection(
+                base.profileId(),
+                true,
+                base.provider(),
+                base.authentication(),
+                null,
+                null,
+                base.endpoint(),
+                java.util.Map.of(
+                    LlmEndpointCapabilities.Capability.CHAT_COMPLETIONS,
+                    LlmEndpointCapabilities.Support.SUPPORTED,
+                    LlmEndpointCapabilities.Capability.STREAMING,
+                    LlmEndpointCapabilities.Support.SUPPORTED,
+                    LlmEndpointCapabilities.Capability.MAX_OUTPUT_TOKENS,
+                    LlmEndpointCapabilities.Support.SUPPORTED),
+                base.generation());
+        var localOwner =
+            new AgentRunContext(
+                "cross-local-chat",
+                original.conversationId(),
+                directory,
+                original.projectId(),
+                AgentRunContext.RequestSource.SHELL,
+                AgentRunContext.Mode.EXCLUSIVE);
+        var localExecution =
+            historyHop(
+                history,
+                new HistoryHop(
+                    localOwner,
+                    new Route(pin, RunNativeOptions.options(pin)),
+                    options -> models.model(pin),
+                    () -> local.bodies.size(),
+                    false),
+                false);
+        assertThat(local.bodies).hasSize(1);
+        assertThat(local.headers).containsExactly("<none>");
+        assertThat(local.bodies.getFirst().path("messages").toString())
+            .contains("SYNTHETIC_CALENDAR_RESULT", "done")
+            .doesNotContain(
+                "OPAQUE_PLAN_PRIVATE", "encrypted_content", "tool_calls", "reasoning_content");
+        assertThat(operations).hasValue(1);
+        for (int i = 0; i < planPointers.size(); i++)
+          assertThat(
+                  codec.encode(
+                      payloads.restoreHistory(planScope, planPointers.get(i)).orElseThrow()))
+              .isEqualTo(planBytes.get(i));
+        localExecution.completeRun();
+      }
+      for (int i = 0; i < sourcePointers.size(); i++)
+        assertThat(
+                codec.encode(payloads.restoreHistory(scope, sourcePointers.get(i)).orElseThrow()))
+            .isEqualTo(sourceBytes.get(i));
+    }
+  }
+
+  private java.util.List<java.util.Map<String, String>> publishCompletedHistory(
+      HistoryFixture history, RunExecutionContext execution) {
+    var owner = execution.runContext();
+    var pointers = execution.protocolHistoryReferences();
+    assertThat(pointers).isNotEmpty();
+    history.turns().start(owner, "synthetic calendar request", java.time.Instant.now());
+    history
+        .logs()
+        .append(
+            owner.conversationId(),
+            "user",
+            "synthetic calendar request",
+            java.util.Map.of(ModelMessagePayloadStore.HISTORY_RUN, owner.runId()));
+    var metadata =
+        new java.util.HashMap<>(
+            history.logs().appendProtocolHistory(owner.conversationId(), owner.runId(), pointers));
+    metadata.put(ModelMessagePayloadStore.HISTORY_ENDPOINT, execution.protocolHistoryEndpoint());
+    history.turns().recordMetadata(owner, metadata);
+    history
+        .turns()
+        .finish(
+            owner, dev.mikoto2000.rei.conversation.ConversationTurnStore.Status.COMPLETED, "done");
+    history
+        .logs()
+        .append(
+            owner.conversationId(),
+            "assistant",
+            "done",
+            java.util.Map.of(ModelMessagePayloadStore.HISTORY_RUN, owner.runId()));
+    return pointers;
+  }
+
+  private RunExecutionContext historyHop(
+      HistoryFixture history, HistoryHop destination, boolean denied) {
+    var owner = destination.owner();
+    var clock = Clock.systemUTC();
+    var consent = consent(history.data(), owner, clock);
+    var events = new AgentEventFactory(clock);
+    var execution =
+        context(history.data(), owner, destination.route(), consent, List.of(), events, false);
+    var initial =
+        history
+            .advisor()
+            .before(
+                org.springframework.ai.chat.client.ChatClientRequest.builder()
+                    .prompt(new Prompt("synthetic calendar request", execution.modelOptions()))
+                    .context(
+                        java.util.Map.of(
+                            org.springframework.ai.chat.client.advisor.api.MemoryAdvisor
+                                .CONVERSATION_ID,
+                            owner.conversationId(),
+                            AgentRunContext.class.getName(),
+                            owner))
+                    .build(),
+                null)
+            .prompt();
+    var loop = new StagnationChatModel(destination.model().apply(execution.modelOptions()));
+    int before = destination.requests().getAsInt();
+    assertThatThrownBy(() -> invokeHistoryHop(loop, initial, destination.streaming()))
+        .isInstanceOf(RunWaitingException.class);
+    assertThat(destination.requests().getAsInt()).isEqualTo(before);
+    var pending = consent.requests.list(owner.projectId());
+    assertThat(pending).hasSize(1);
+    var approval = pending.getFirst();
+    var entry = consent.store.find(approval.id()).orElseThrow();
+    assertThat(consent.store.document(entry).connection()).isEqualTo(destination.route().pin());
+    var reviewed =
+        consent.store.saved(entry).messages().stream()
+            .map(message ->
+                new String(
+                    new dev.mikoto2000.rei.modelmessage.ModelMessageCodec().encode(message),
+                    java.nio.charset.StandardCharsets.UTF_8))
+            .collect(java.util.stream.Collectors.joining("\n"));
+    assertThat(reviewed)
+        .contains("SYNTHETIC_CALENDAR_RESULT")
+        .doesNotContain("OPAQUE_PLAN_PRIVATE");
+    consent.continuations.decide(owner.projectId(), approval.id(), !denied, !denied);
+    if (denied) {
+      assertThat(consent.requests.get(owner.projectId(), approval.id()).status())
+          .isEqualTo("DENIED");
+      assertThat(destination.requests().getAsInt()).isEqualTo(before);
+      execution.completeRun();
+      return null;
+    }
+    assertThat(consent.store.claim(approval.id())).isTrue();
+    assertThat(consent.registry.transition(owner.runId(), RunStatus.RUNNING, null)).isTrue();
+    execution =
+        context(history.data(), owner, destination.route(), consent, List.of(), events, true);
+    invokeHistoryHop(
+        loop,
+        new Prompt("synthetic calendar request", execution.modelOptions()),
+        destination.streaming());
+    assertThat(destination.requests().getAsInt()).isEqualTo(before + 1);
+    assertThat(consent.requests.get(owner.projectId(), approval.id()).status())
+        .isEqualTo("CONSUMED");
+    return execution;
+  }
+
+  private static void invokeHistoryHop(
+      StagnationChatModel model, Prompt prompt, boolean streaming) {
+    if (streaming) model.stream(prompt).blockLast(Duration.ofSeconds(10));
+    else model.call(prompt);
   }
 
   private Consent consent(org.sqlite.SQLiteDataSource data, AgentRunContext owner, Clock clock) {

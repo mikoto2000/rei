@@ -204,7 +204,8 @@ public class AgentScheduleDispatcher {
                         throw new IllegalStateException("Scheduled session ownership changed");
                       if (continuations != null) continuations.attachParent(owner, null, completed);
                       result =
-                          chat.execute(owner, entry.task().action(), new UserInterventionQueue());
+                          chat.executeIndependent(
+                              owner, entry.task().action(), new UserInterventionQueue());
                     }
                   } catch (RuntimeException error) {
                     result = ChatExecutionResult.failed(error.getClass().getSimpleName());

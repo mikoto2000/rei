@@ -411,9 +411,12 @@ final class ResponsesAdapter implements LlmProtocolAdapter, ChatModel {
         "parallelToolCalls");
     requireCapability(
         options.getResponseFormat(), LlmCapabilities.Setting.STRUCTURED_OUTPUT, "structuredOutput");
-    for (var message : prompt.getInstructions())
-      if (message instanceof UserMessage user && !user.getMedia().isEmpty())
-        requireCapability(Boolean.TRUE, LlmCapabilities.Setting.IMAGE_INPUT, "imageInput");
+    if (acceptedConnection != null && acceptedConnection.named())
+      LlmInputPolicy.requireMedia(prompt, acceptedConnection);
+    else
+      for (var message : prompt.getInstructions())
+        if (message instanceof UserMessage user && !user.getMedia().isEmpty())
+          requireCapability(Boolean.TRUE, LlmCapabilities.Setting.IMAGE_INPUT, "imageInput");
     var hostedTools = options.getHostedTools();
     if (hostedTools != null && !hostedTools.isEmpty())
       throw new IllegalArgumentException("Responses hostedTools are not supported");
