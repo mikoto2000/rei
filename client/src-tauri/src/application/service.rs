@@ -54,6 +54,9 @@ pub struct Application {
     pending_chats: Mutex<HashMap<String, PendingChat>>,
 }
 impl Application {
+    pub async fn llm_endpoints(&self, _server: &str) -> Result<Vec<LlmEndpoint>> {
+        Err(AppError::EndpointNotFound)
+    }
     pub async fn tasks_list(
         &self,
         server: &str,
