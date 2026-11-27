@@ -40,6 +40,10 @@ final class ChatRunConnections {
       throw new IllegalStateException("Chat selection changed while choosing a model");
   }
 
+  void selectModel(String expectedEndpoint, String model) {
+    selectModel(model);
+  }
+
   Selection selection() {
     return selection.get();
   }

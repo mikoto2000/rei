@@ -12,6 +12,23 @@ import org.springframework.boot.context.properties.bind.Binder;
 import org.springframework.boot.context.properties.source.MapConfigurationPropertySource;
 
 class ChatRunConnectionsTest {
+  @Test
+  void delayedModelChoiceCannotMutateADifferentEndpoint() {
+    var connections = connections();
+    var original = connections.accept(owner("first-pin", "session"));
+    connections.select("second");
+    assertThatThrownBy(() -> connections.selectModel("first", "stale-model"))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("selection changed");
+    assertThat(connections.accept(owner("second-pin", "session")).endpoint().model())
+        .isEqualTo("second-model");
+    connections.select("first");
+    connections.selectModel("first", "new-model");
+    assertThat(connections.accept(owner("new-pin", "session")).endpoint().model())
+        .isEqualTo("new-model");
+    assertThat(original.endpoint().model()).isEqualTo("first-model");
+  }
+
   @org.junit.jupiter.params.ParameterizedTest
   @org.junit.jupiter.params.provider.CsvSource({
     "chat-completions,UNKNOWN,false", "chat-completions,UNSUPPORTED,false",
