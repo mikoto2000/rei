@@ -180,10 +180,7 @@ public final class ChatConnectionService
           var model = selected.models().getOrDefault(configured.id(), configured.model());
           if ((model == null || model.isBlank()) && !catalog.hasNamedProfiles())
             model = legacyModel.get();
-          var capabilities =
-              java.util.Objects.equals(model, configured.model())
-                  ? configured.capabilities()
-                  : configured.capabilities().forUnconfirmedModel();
+          var capabilities = catalog.capabilities(configured, model);
           var profile =
               new ChatEndpointCatalog.Profile(
                   configured.id(),
@@ -203,7 +200,11 @@ public final class ChatConnectionService
           var reasons = new java.util.ArrayList<String>();
           var diagnostics = new java.util.ArrayList<>(catalog.diagnostics());
           var outputKey =
-              profile.api() == LlmApiType.RESPONSES ? "max_output_tokens" : "max_tokens";
+              profile.api() == LlmApiType.RESPONSES
+                  ? "max_output_tokens"
+                  : profile.provider() == LlmProvider.OPENAI_API
+                      ? "max_completion_tokens"
+                      : "max_tokens";
           if (capabilities.effective().get(LlmEndpointCapabilities.Capability.MAX_OUTPUT_TOKENS)
               == LlmEndpointCapabilities.Support.SUPPORTED) {
             applied.put(
@@ -225,6 +226,25 @@ public final class ChatConnectionService
               unapplied.put("temperature", "unsupported or unconfirmed");
               reasons.add("temperature is unsupported or unconfirmed");
             }
+          }
+          try {
+            var generation = factory.configuredGeneration(profile.id(), model);
+            applied.clear();
+            applied.putAll(generation);
+          } catch (IllegalArgumentException | IllegalStateException unavailable) {
+            for (var setting : source.getGeneration().keySet()) {
+              unapplied.put(setting, "unsupported, unconfirmed or invalid for this API");
+              reasons.add(setting + " is unsupported, unconfirmed or invalid for this API");
+            }
+          }
+          if (profile.api() == LlmApiType.CHAT_COMPLETIONS) {
+            for (var capability :
+                java.util.List.of(
+                    LlmEndpointCapabilities.Capability.CHAT_COMPLETIONS,
+                    LlmEndpointCapabilities.Capability.STREAMING))
+              if (capabilities.effective().get(capability)
+                  != LlmEndpointCapabilities.Support.SUPPORTED)
+                reasons.add(capability + " is unsupported or unconfirmed");
           }
           var replay =
               profile.api() == LlmApiType.CHAT_COMPLETIONS
@@ -381,6 +401,11 @@ public final class ChatConnectionService
 
   public void selectModel(String model) {
     connections.selectModel(model);
+  }
+
+  @Override
+  public void selectModel(String expectedEndpoint, String model) {
+    connections.selectModel(expectedEndpoint, model);
   }
 
   public ChatModel model() {

@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import type { LlmEndpoint, LlmModels } from "../entities/llm";
 import type {
   ArtifactPage,
   ArtifactPreview,
@@ -25,6 +26,13 @@ import type {
   WorkspaceResult,
 } from "../entities/workspace";
 interface Commands {
+  llm_endpoints: [{ serverId: string }, LlmEndpoint[]];
+  llm_select: [{ serverId: string; endpoint: string }, LlmEndpoint];
+  llm_models: [{ serverId: string }, LlmModels];
+  llm_select_model: [
+    { serverId: string; endpoint: string; model: string },
+    LlmModels,
+  ];
   artifacts_list: [
     {
       serverId: string;

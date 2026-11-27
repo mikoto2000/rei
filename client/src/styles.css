@@ -452,6 +452,22 @@ main {
 .chat-page .eyebrow {
   margin-bottom: 8px;
 }
+.llm-controls {
+  padding: 16px 20px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  border-bottom: 1px solid var(--line);
+}
+.llm-controls fieldset {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+.llm-controls pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 12px;
+}
 .transcript {
   padding: 24px 38px;
   flex: 1;

@@ -33,11 +33,22 @@ final class ChatRunConnections {
 
   void selectModel(String model) {
     var before = selection.get();
+    selectModel(before, model);
+  }
+
+  private void selectModel(Selection before, String model) {
     factory.capture(before.endpoint(), model);
     var models = new java.util.HashMap<>(before.models());
     models.put(before.endpoint(), model);
     if (!selection.compareAndSet(before, new Selection(before.endpoint(), models)))
       throw new IllegalStateException("Chat selection changed while choosing a model");
+  }
+
+  void selectModel(String expectedEndpoint, String model) {
+    var before = selection.get();
+    if (!java.util.Objects.equals(expectedEndpoint, before.endpoint()))
+      throw new IllegalStateException("Chat selection changed while choosing a model");
+    selectModel(before, model);
   }
 
   Selection selection() {

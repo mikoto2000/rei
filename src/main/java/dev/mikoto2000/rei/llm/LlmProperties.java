@@ -164,6 +164,7 @@ public class LlmProperties {
       copy.accountRef = accountRef;
       copy.usagePath = usagePath;
       copy.modelCapabilities = modelCapabilities;
+      copy.modelCapabilitiesByName = modelCapabilitiesByName;
       copy.serverCapabilities = serverCapabilities;
       copy.generation = RunGenerationSettings.copy(generation);
       return copy;
@@ -225,6 +226,7 @@ public class LlmProperties {
     private String accountRef;
     private String usagePath;
     private Map<String, String> modelCapabilities = Map.of();
+    private Map<String, Map<String, String>> modelCapabilitiesByName = Map.of();
     private Map<String, String> serverCapabilities = Map.of();
     private Map<String, Object> generation = Map.of();
 
@@ -255,6 +257,30 @@ public class LlmProperties {
 
     public Map<String, String> getModelCapabilities() {
       return Map.copyOf(modelCapabilities);
+    }
+
+    public Map<String, Map<String, String>> getModelCapabilitiesByName() {
+      return modelCapabilitiesByName;
+    }
+
+    public void setModelCapabilitiesByName(Map<String, Map<String, String>> declarations) {
+      if (declarations == null) {
+        modelCapabilitiesByName = Map.of();
+        return;
+      }
+      if (declarations.size() > 256)
+        throw new IllegalArgumentException("Too many model capability declarations");
+      var copy = new java.util.LinkedHashMap<String, Map<String, String>>();
+      declarations.forEach((name, capabilities) -> {
+        if (name == null
+            || name.isBlank()
+            || name.length() > 1024
+            || name.codePoints().anyMatch(Character::isISOControl)
+            || capabilities == null)
+          throw new IllegalArgumentException("Invalid model capability declaration");
+        copy.put(name, Map.copyOf(capabilities));
+      });
+      modelCapabilitiesByName = java.util.Collections.unmodifiableMap(copy);
     }
 
     public void setModelCapabilities(Map<String, String> modelCapabilities) {

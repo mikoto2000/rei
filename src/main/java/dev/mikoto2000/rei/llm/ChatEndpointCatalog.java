@@ -23,6 +23,9 @@ public final class ChatEndpointCatalog {
         var field = PREFIX + feature;
         if (!server.getGeneration().isEmpty())
           throw invalid(field + ".generation", "is only supported on named chat endpoints");
+        if (!server.getModelCapabilitiesByName().isEmpty())
+          throw invalid(
+              field + ".model-capabilities-by-name", "is only supported on named chat endpoints");
         requireNamedTransportControls(server, field);
         if (server.getAuthentication() != null)
           throw invalid(field + ".authentication", "is only supported for named chat profiles");
@@ -69,6 +72,13 @@ public final class ChatEndpointCatalog {
       if (chat.getActive() == null || !endpoints.containsKey(chat.getActive()))
         throw invalid(CHAT + ".active", "must name a registered chat endpoint");
       endpoints.forEach((name, server) -> validate(CHAT + ".endpoints." + name, server));
+      endpoints.forEach((name, server) ->
+          server
+              .getModelCapabilitiesByName()
+              .values()
+              .forEach(declarations ->
+                  LlmEndpointCapabilities.validateModelDeclarations(
+                      declarations, CHAT + ".endpoints." + name + ".model-capabilities-by-name")));
       initial = chat.getActive();
       profiles =
           endpoints.entrySet().stream()
@@ -270,6 +280,19 @@ public final class ChatEndpointCatalog {
 
   public List<Profile> profiles() {
     return List.copyOf(profiles);
+  }
+
+  LlmEndpointCapabilities capabilities(Profile profile, String model) {
+    var capabilities =
+        java.util.Objects.equals(profile.model(), model)
+            ? profile.capabilities()
+            : profile.capabilities().forUnconfirmedModel();
+    var declarations =
+        model == null ? null : connection(profile.id()).getModelCapabilitiesByName().get(model);
+    return declarations == null
+        ? capabilities
+        : capabilities.withModelDeclarations(
+            declarations, CHAT + ".endpoints." + profile.id() + ".model-capabilities-by-name");
   }
 
   LlmProperties.Server connection(String name) {

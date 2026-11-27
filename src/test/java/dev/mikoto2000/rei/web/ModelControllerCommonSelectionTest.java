@@ -11,6 +11,21 @@ import org.junit.jupiter.api.Test;
 
 class ModelControllerCommonSelectionTest {
   @Test
+  void publicResponsesCarryTheEndpointIdentityFromTheSameSnapshot() {
+    var selection = mock(ChatModelSelection.class);
+    when(selection.selection()).thenReturn(new ChatModelSelection.Selection("second", "chosen"));
+    when(selection.models())
+        .thenReturn(
+            new ChatModelSelection.Models(
+                new ChatModelSelection.Selection("first", "first-model"), List.of("first-model")));
+    var controller = new ModelController(selection);
+    var mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+    assertThat(mapper.valueToTree(controller.current()).path("endpoint").asText())
+        .isEqualTo("second");
+    assertThat(mapper.valueToTree(controller.list()).path("endpoint").asText()).isEqualTo("first");
+  }
+
+  @Test
   void modelListAndCurrentModelUseTheSharedConnectionSelection() {
     var selection = mock(ChatModelSelection.class);
     when(selection.selection())

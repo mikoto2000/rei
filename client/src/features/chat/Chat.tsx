@@ -2,7 +2,8 @@ import { runStatusLabel, modeLabel, streamLabel } from "../../shared/labels";
 import { Answer, CopyText } from "../../shared/Answer";
 import { RunActivity, RunTimeline } from "./RunActivity";
 import { timeline } from "../history/timeline";
-import { useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
+import { LlmControls } from "./LlmControls";
 import { Avatar } from "../../shared/Avatar";
 import {
   activeRuns,
@@ -16,7 +17,9 @@ import {
 import type { HistoryState } from "../history/pagination";
 import type { ArtifactSelection } from "../../entities/artifacts";
 import { emptyDraft, type Draft } from "./drafts";
+import type { Command } from "../../tauri/commands";
 interface Props {
+  llmCall?: Command;
   draft?: Draft;
   onDraft?: (draft: Draft) => void;
   onArtifacts?: (selection: ArtifactSelection) => void;
@@ -39,6 +42,7 @@ interface Props {
   onRefreshHistory?: () => void;
 }
 export function Chat({
+  llmCall,
   draft,
   onDraft,
   userAvatar,
@@ -60,6 +64,12 @@ export function Chat({
   onRefreshHistory,
   onArtifacts,
 }: Props) {
+  const [llmBusy, setLlmBusy] = useState(false);
+  const llmBusyRef = useRef(false);
+  const selectionBusy = useCallback((busy: boolean) => {
+    llmBusyRef.current = busy;
+    setLlmBusy(busy);
+  }, []);
   const messageRef = useRef<HTMLTextAreaElement>(null);
   const [advanced, setAdvanced] = useState(draft?.mode === "INTERVENTION");
   const [showEvents, setShowEvents] = useState(true);
@@ -79,6 +89,7 @@ export function Chat({
   );
   const inputTarget = inputTargets.find((r) => r.runId === targetRun);
   const submitDisabled =
+    (mode !== "INTERVENTION" && llmBusy) ||
     !canSubmit(conversation.localId, message, runs, pending) ||
     error === "SessionNotFound" ||
     history?.error === "SessionNotFound" ||
@@ -107,6 +118,12 @@ export function Chat({
           {conversation.sessionId ? " 🔒" : ""}
         </span>
       </header>
+      <LlmControls
+        serverId={conversation.serverProfileId}
+        call={llmCall}
+        disabled={pending}
+        onBusy={selectionBusy}
+      />
       <div className="transcript">
         {conversation.sessionId && onRefreshHistory && (
           <button
@@ -352,7 +369,11 @@ export function Chat({
           className="composer"
           onSubmit={async (e) => {
             e.preventDefault();
-            if (submitDisabled) return;
+            if (
+              submitDisabled ||
+              (mode !== "INTERVENTION" && llmBusyRef.current)
+            )
+              return;
             if (
               await (mode === "INTERVENTION"
                 ? onInput!(inputTarget!, message)

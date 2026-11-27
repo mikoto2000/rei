@@ -370,6 +370,28 @@ async fn tasks_list(
     )
     .await
 }
+
+#[tauri::command]
+async fn llm_endpoints(app: App<'_>, server_id: String) -> Result<Vec<LlmEndpoint>> {
+    app.llm_endpoints(&server_id).await
+}
+#[tauri::command]
+async fn llm_select(app: App<'_>, server_id: String, endpoint: String) -> Result<LlmEndpoint> {
+    app.llm_select(&server_id, &endpoint).await
+}
+#[tauri::command]
+async fn llm_models(app: App<'_>, server_id: String) -> Result<LlmModels> {
+    app.llm_models(&server_id).await
+}
+#[tauri::command]
+async fn llm_select_model(
+    app: App<'_>,
+    server_id: String,
+    endpoint: String,
+    model: String,
+) -> Result<LlmModels> {
+    app.llm_select_model(&server_id, &endpoint, &model).await
+}
 #[tauri::command]
 async fn task_get(
     app: App<'_>,
@@ -517,6 +539,10 @@ pub fn run() {
             artifact_get,
             artifact_save,
             tasks_list,
+            llm_endpoints,
+            llm_select,
+            llm_models,
+            llm_select_model,
             task_get,
             task_submit,
             task_control,

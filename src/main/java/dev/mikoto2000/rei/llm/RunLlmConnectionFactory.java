@@ -82,10 +82,7 @@ final class RunLlmConnectionFactory {
     if (metadata.provider() == LlmProvider.CHATGPT_PLAN)
       throw new IllegalStateException("ChatGPT model discovery requires verified account support");
     var model = modelOverride == null ? metadata.model() : modelOverride;
-    var capabilities =
-        java.util.Objects.equals(model, metadata.model())
-            ? metadata.capabilities()
-            : metadata.capabilities().forUnconfirmedModel();
+    var capabilities = catalog.capabilities(metadata, model);
     var endpoint =
         new ResolvedLlmEndpoint(
             profile,
@@ -178,14 +175,68 @@ final class RunLlmConnectionFactory {
           settings.generation(),
           RunTransportSettings.defaults(settings.transport()));
     }
+    var configured = namedConfiguration(profile, modelOverride, metadata, connection);
+    var resolved = configured.endpoint();
+    var capabilities = configured.capabilities();
+    var accountRegistration =
+        metadata.accountRef() == null ? null : registration.apply(metadata.accountRef());
+    if (metadata.provider() == LlmProvider.CHATGPT_PLAN && accountRegistration == null)
+      throw new IllegalStateException("ChatGPT account registration is unavailable");
+    var snapshot =
+        new RunLlmConnection(
+            profile,
+            true,
+            metadata.provider(),
+            metadata.authentication(),
+            metadata.accountRef(),
+            accountRegistration,
+            resolved,
+            capabilities,
+            configured.generation(),
+            transport(connection));
+    RunNativeOptions.options(snapshot);
+    return snapshot;
+  }
+
+  private record NamedConfiguration(
+      ResolvedLlmEndpoint endpoint,
+      java.util.Map<LlmEndpointCapabilities.Capability, LlmEndpointCapabilities.Support>
+          capabilities,
+      java.util.Map<String, Object> generation) {}
+
+  /** Same pure generation resolution as admission, without account or credential access. */
+  java.util.Map<String, Object> configuredGeneration(String profile, String model) {
+    var metadata =
+        catalog.profiles().stream()
+            .filter(value -> value.id().equals(profile))
+            .findFirst()
+            .orElseThrow();
+    var configured = namedConfiguration(profile, model, metadata, catalog.connection(profile));
+    var preview =
+        new RunLlmConnection(
+            profile,
+            true,
+            metadata.provider(),
+            metadata.authentication(),
+            metadata.accountRef(),
+            null,
+            configured.endpoint(),
+            configured.capabilities(),
+            configured.generation());
+    RunNativeOptions.options(preview);
+    return configured.generation();
+  }
+
+  private NamedConfiguration namedConfiguration(
+      String profile,
+      String modelOverride,
+      ChatEndpointCatalog.Profile metadata,
+      LlmProperties.Server connection) {
     var model = modelOverride == null ? metadata.model() : modelOverride;
     if (model == null || model.isBlank() || model.codePoints().anyMatch(Character::isISOControl))
       throw new IllegalArgumentException(
           "chat model must be explicit and contain no control characters");
-    var capabilities =
-        model.equals(metadata.model())
-            ? metadata.capabilities().effective()
-            : metadata.capabilities().forUnconfirmedModel().effective();
+    var capabilities = catalog.capabilities(metadata, model).effective();
     var replay =
         connection.getApi() == LlmApiType.CHAT_COMPLETIONS
             ? ReasoningReplayMode.NONE
@@ -224,28 +275,14 @@ final class RunLlmConnectionFactory {
             output,
             connection.getTemperature(),
             connection.getReadTimeout() == null ? readTimeout : connection.getReadTimeout());
-    var accountRegistration =
-        metadata.accountRef() == null ? null : registration.apply(metadata.accountRef());
-    if (metadata.provider() == LlmProvider.CHATGPT_PLAN && accountRegistration == null)
-      throw new IllegalStateException("ChatGPT account registration is unavailable");
-    var snapshot =
-        new RunLlmConnection(
-            profile,
-            true,
-            metadata.provider(),
-            metadata.authentication(),
-            metadata.accountRef(),
-            accountRegistration,
+    return new NamedConfiguration(
+        resolved,
+        capabilities,
+        RunGenerationSettings.named(
+            generation(resolved, metadata.provider()),
+            connection.getGeneration(),
             resolved,
-            capabilities,
-            RunGenerationSettings.named(
-                generation(resolved, metadata.provider()),
-                connection.getGeneration(),
-                resolved,
-                capabilities),
-            transport(connection));
-    RunNativeOptions.options(snapshot);
-    return snapshot;
+            capabilities));
   }
 
   /**

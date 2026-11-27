@@ -2,6 +2,8 @@ use serde::{Deserialize, Serialize};
 use zeroize::Zeroizing;
 mod history;
 pub use history::*;
+mod llm;
+pub use llm::*;
 mod workspace;
 pub use workspace::*;
 mod tasks;

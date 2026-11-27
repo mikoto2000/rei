@@ -29,15 +29,20 @@ public final class ModelController {
   private final Supplier<Models> modelCatalog;
 
   /** 保持先。 */
-  private final Supplier<String> selectedModel;
+  private final Supplier<Selection> selectedModel;
 
-  private final Consumer<String> selectModel;
+  private final Consumer<Selection> selectModel;
 
   /** 指定された値や利用先を使って、ModelControllerを初期化する。 */
   public ModelController(OpenAiCompatibleModelsService models, ModelHolderService holder) {
     this.modelCatalog = () -> new Models(models.listModels(), holder.get());
-    this.selectedModel = () -> holder.get();
-    this.selectModel = model -> holder.set(model);
+    this.selectedModel = () -> new Selection(holder.get());
+    this.selectModel =
+        request -> {
+          if (request.endpoint() != null)
+            throw new IllegalStateException("Endpoint-bound model selection is unavailable");
+          holder.set(request.model());
+        };
   }
 
   @org.springframework.beans.factory.annotation.Autowired
@@ -46,10 +51,19 @@ public final class ModelController {
     this.modelCatalog =
         () -> {
           var snapshot = selection.models();
-          return new Models(snapshot.models(), snapshot.selection().model());
+          return new Models(
+              snapshot.models(), snapshot.selection().model(), snapshot.selection().endpoint());
         };
-    this.selectedModel = () -> selection.selection().model();
-    this.selectModel = selection::selectModel;
+    this.selectedModel =
+        () -> {
+          var current = selection.selection();
+          return new Selection(current.model(), current.endpoint());
+        };
+    this.selectModel =
+        request -> {
+          if (request.endpoint() == null) selection.selectModel(request.model());
+          else selection.selectModel(request.endpoint(), request.model());
+        };
   }
 
   /**
@@ -57,8 +71,13 @@ public final class ModelController {
    *
    * @param models モデル一覧
    * @param currentModel 現在モデル
+   * @param endpoint 一覧を取得した接続先
    */
-  public record Models(List<String> models, String currentModel) {
+  public record Models(List<String> models, String currentModel, String endpoint) {
+    public Models(List<String> models, String currentModel) {
+      this(models, currentModel, null);
+    }
+
     public Models {
       models = models == null ? null : Collections.unmodifiableList(new ArrayList<>(models));
     }
@@ -68,8 +87,13 @@ public final class ModelController {
    * Web APIによる操作で受け渡す選択内容を表す。
    *
    * @param model モデル
+   * @param endpoint 変更対象の接続先。省略時は既存の選択方式を使う
    */
-  public record Selection(String model) implements StrictApiRequest {
+  public record Selection(String model, String endpoint) implements StrictApiRequest {
+    public Selection(String model) {
+      this(model, null);
+    }
+
     /** 受け取った情報からSelectionを作成する。 */
     public Selection {
       if (model == null
@@ -77,6 +101,8 @@ public final class ModelController {
           || model.length() > 1024
           || model.codePoints().anyMatch(Character::isISOControl))
         throw new IllegalArgumentException("Valid model name required");
+      if (endpoint != null && !endpoint.matches("[A-Za-z0-9][A-Za-z0-9_.-]{0,63}"))
+        throw new IllegalArgumentException("Valid registered endpoint name required");
     }
   }
 
@@ -89,14 +115,19 @@ public final class ModelController {
   /** Web APIによる操作で用いる現在を返す。 */
   @GetMapping("/current")
   public Selection current() {
-    return new Selection(selectedModel.get());
+    return selectedModel.get();
   }
 
   /** 指定された条件に応じて、利用する対象を選ぶ。 */
   @PutMapping("/current")
   public synchronized Selection select(@RequestBody Selection request) {
     if (request == null) throw new IllegalArgumentException("Model required");
-    selectModel.accept(request.model());
+    try {
+      selectModel.accept(request);
+    } catch (IllegalStateException changed) {
+      throw new org.springframework.web.server.ResponseStatusException(
+          org.springframework.http.HttpStatus.CONFLICT, "Chat selection changed or unavailable");
+    }
     return current();
   }
 }
