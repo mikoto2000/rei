@@ -224,12 +224,20 @@ class PinnedChatModelsTest {
             headers.add(
                 java.util.Objects.toString(
                     exchange.getRequestHeaders().getFirst("Authorization"), "<none>"));
-            bodies.add(new ObjectMapper().readTree(exchange.getRequestBody().readAllBytes()));
+            var request = new ObjectMapper().readTree(exchange.getRequestBody().readAllBytes());
+            bodies.add(request);
+            boolean streaming = request.path("stream").asBoolean();
             var body =
-                ("{\"id\":\"fixture\",\"object\":\"chat.completion\",\"created\":0,\"model\":\"fixture\","
-                        + "\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"fixture-answer\"},\"finish_reason\":\"stop\"}]}")
+                (streaming
+                        ? "data: {\"id\":\"fixture\",\"object\":\"chat.completion.chunk\",\"created\":0,\"model\":\"fixture\","
+                            + "\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\"fixture-answer\"},\"finish_reason\":\"stop\"}],"
+                            + "\"usage\":{\"prompt_tokens\":3,\"completion_tokens\":2,\"total_tokens\":5}}\n\ndata: [DONE]\n\n"
+                        : "{\"id\":\"fixture\",\"object\":\"chat.completion\",\"created\":0,\"model\":\"fixture\","
+                            + "\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"fixture-answer\"},\"finish_reason\":\"stop\"}]}")
                     .getBytes(StandardCharsets.UTF_8);
-            exchange.getResponseHeaders().set("Content-Type", "application/json");
+            exchange
+                .getResponseHeaders()
+                .set("Content-Type", streaming ? "text/event-stream" : "application/json");
             exchange.sendResponseHeaders(200, body.length);
             try (var output = exchange.getResponseBody()) {
               output.write(body);

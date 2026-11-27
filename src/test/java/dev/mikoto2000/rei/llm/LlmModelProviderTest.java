@@ -8,6 +8,76 @@ import org.springframework.ai.chat.model.ChatModel;
 
 /** 言語モデルモデル提供元の結果と状態の契約を検証するテスト。 */
 class LlmModelProviderTest {
+  static java.util.stream.Stream<org.junit.jupiter.params.provider.Arguments>
+      independentFeatures() {
+    return java.util.stream.Stream.of(
+            "voice-correction",
+            "memory",
+            "agent-skills",
+            "activity",
+            "activity-behavior",
+            "web-page-summary",
+            "image-prompt",
+            "briefing",
+            "context-summary",
+            "work-context",
+            "output-limit-planner",
+            "feed-summary",
+            "interest-discovery",
+            "search",
+            "computer-use",
+            "computer-use-planner")
+        .flatMap(feature ->
+            java.util.stream.Stream.of(false, true)
+                .map(configured ->
+                    org.junit.jupiter.params.provider.Arguments.of(feature, configured)));
+  }
+
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.MethodSource("independentFeatures")
+  void helperInferenceKeepsStaticSettingsWhenNormalChatSelectsSubscription(
+      String feature, boolean configured) {
+    var properties = new LlmProperties();
+    var plan = new LlmProperties.Server();
+    plan.setProvider("chatgpt-plan");
+    plan.setApi(LlmApiType.RESPONSES);
+    plan.setAccountRef("personal");
+    plan.setModel("normal-plan-model");
+    var chat = new LlmProperties.Server();
+    chat.setActive("subscription");
+    chat.setEndpoints(java.util.Map.of("subscription", plan));
+    properties.setFeature(LlmFeature.CHAT, chat);
+    if (configured) {
+      var settings = new LlmProperties.Server();
+      settings.setBaseUrl("http://dedicated-helper.invalid/v1");
+      settings.setModel("dedicated-helper-model");
+      properties.setFeature(feature, settings);
+    }
+    var defaults = Mockito.mock(ChatModel.class);
+    Mockito.when(defaults.getOptions())
+        .thenReturn(
+            org.springframework.ai.openai.OpenAiChatOptions.builder()
+                .model("static-root-model")
+                .baseUrl("http://static-root.invalid/v1")
+                .build());
+    var provider = new LlmModelProvider(defaults, properties);
+    var options = provider.requestOptions(feature, null, false);
+    assertThat(options).isInstanceOf(org.springframework.ai.openai.OpenAiChatOptions.class);
+    assertThat(options.getModel())
+        .isEqualTo(configured ? "dedicated-helper-model" : "static-root-model");
+    assertThat(provider.resolvedEndpoint(feature).baseUrl())
+        .isEqualTo(
+            configured ? "http://dedicated-helper.invalid/v1" : "http://static-root.invalid/v1");
+    if (options.getToolContext() != null)
+      assertThat(options.getToolContext())
+          .doesNotContainKey(
+              dev.mikoto2000.rei.modeloptions.ModelOptions.RUN_CONNECTION_CONTEXT_KEY);
+    Mockito.verify(defaults, Mockito.never())
+        .call(Mockito.any(org.springframework.ai.chat.prompt.Prompt.class));
+    Mockito.verify(defaults, Mockito.never()).stream(
+        Mockito.any(org.springframework.ai.chat.prompt.Prompt.class));
+  }
+
   @Test
   void applicationRetryBoundariesOwnAllTextRequestRetries() {
     var defaults = Mockito.mock(ChatModel.class);

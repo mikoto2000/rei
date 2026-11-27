@@ -105,6 +105,10 @@ class ContextHistoryAdvisorTest {
     "COMPLETED,true,checkpointGrant",
     "COMPLETED,false,ok",
     "COMPLETED,false,mediaPng",
+    "COMPLETED,false,mediaProviderId",
+    "COMPLETED,false,mediaMissingReference",
+    "COMPLETED,false,mediaCount",
+    "COMPLETED,false,mediaScope",
     "COMPLETED,false,mediaPdf",
     "FAILED,false,mediaPng",
     "COMPLETED,false,completedTool",
@@ -135,7 +139,12 @@ class ContextHistoryAdvisorTest {
     var old = new AgentRunContext("old", "chat", dir, "project");
     var current =
         new AgentRunContext(
-            "current", "chat", dir, scenario.equals("scope") ? "other-project" : "project");
+            "current",
+            "chat",
+            dir,
+            (scenario.equals("scope") || scenario.equals("mediaScope"))
+                ? "other-project"
+                : "project");
     var source = new org.sqlite.SQLiteDataSource();
     source.setUrl("jdbc:sqlite:" + dir.resolve("protocol.db"));
     var payloads = new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore(source);
@@ -211,7 +220,19 @@ class ContextHistoryAdvisorTest {
               .resolve("old actual input `@file:" + attachment + "`");
       assertThat(resolved.warnings()).isEmpty();
       assertThat(resolved.media()).hasSize(1);
-      originalInput = UserMessage.builder().text(resolved.prompt()).media(resolved.media()).build();
+      var attachments = resolved.media();
+      if (scenario.equals("mediaProviderId")) {
+        var attachmentData = attachments.getFirst();
+        attachments =
+            java.util.List.of(
+                org.springframework.ai.content.Media.builder()
+                    .id("PRIVATE_SOURCE_FILE_ID")
+                    .mimeType(attachmentData.getMimeType())
+                    .name(attachmentData.getName())
+                    .data(attachmentData.getDataAsByteArray())
+                    .build());
+      }
+      originalInput = UserMessage.builder().text(resolved.prompt()).media(attachments).build();
     }
     var inputBytes = new dev.mikoto2000.rei.modelmessage.ModelMessageCodec().encode(originalInput);
     var userRef = previousExchange.withKey("input").reference(originalInput);
@@ -266,6 +287,19 @@ class ContextHistoryAdvisorTest {
         new java.util.HashMap<>(logs.appendProtocolHistory("chat", old.runId(), pointers));
     manifest.put("rei.modelMessage.endpoint", "endpoint-a");
     turns.recordMetadata(old, manifest);
+    if (scenario.equals("mediaCount"))
+      turns.recordMetadata(
+          old, Map.of(dev.mikoto2000.rei.conversation.ConversationLogStore.PROTOCOL_COUNT, "3"));
+    if (scenario.equals("mediaMissingReference")) {
+      var pointer = pointers.getFirst();
+      payloads.release(
+          previousExchange.scope(),
+          new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Ref(
+              pointer.get(dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.HISTORY_ID),
+              pointer.get(dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.HISTORY_HASH)),
+          dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ReferenceKind.HISTORY,
+          "turn:old");
+    }
     if (scenario.equals("completedToolCount"))
       turns.recordMetadata(
           old, Map.of(dev.mikoto2000.rei.conversation.ConversationLogStore.PROTOCOL_COUNT, "4"));
@@ -405,6 +439,14 @@ class ContextHistoryAdvisorTest {
                     AgentRunContext.class.getName(),
                     current))
             .build();
+    if (java.util.Set.of("mediaMissingReference", "mediaCount", "mediaScope").contains(scenario)) {
+      org.assertj.core.api.Assertions.assertThatThrownBy(() -> advisor.before(request, null))
+          .isInstanceOf(IllegalStateException.class)
+          .hasMessageNotContaining("PRIVATE_SOURCE_FILE_ID");
+      assertThat(payloads.restoreHistory(previousExchange.scope(), pointers.get(1)).orElseThrow())
+          .isEqualTo(original);
+      return;
+    }
     if (java.util.Set.of("missing", "count", "range", "version", "scope", "missingLog")
         .contains(scenario)) {
       org.assertj.core.api.Assertions.assertThatThrownBy(() -> advisor.before(request, null))
@@ -488,6 +530,9 @@ class ContextHistoryAdvisorTest {
           .isEqualTo(originalInput.getMedia().getFirst().getMimeType());
       assertThat(media.getFirst().getName())
           .isEqualTo(originalInput.getMedia().getFirst().getName());
+      assertThat(media.getFirst().getId()).isNull();
+      ((byte[]) media.getFirst().getData())[0] ^= 1;
+
       assertThat(
               new dev.mikoto2000.rei.modelmessage.ModelMessageCodec()
                   .encode(
