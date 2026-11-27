@@ -25,18 +25,33 @@ class ChatRunConnectionsTest {
       values.put(prefix + "server-capabilities." + capability, "supported");
     values.put(prefix + "model-capabilities.reasoning-replay", "supported");
     values.put(prefix + "model-capabilities-by-name.[second-model].reasoning-replay", "supported");
-    var properties = new Binder(new MapConfigurationPropertySource(values)).bind("rei.llm", LlmProperties.class).get();
+    var properties =
+        new Binder(new MapConfigurationPropertySource(values))
+            .bind("rei.llm", LlmProperties.class)
+            .get();
     var catalog = new ChatEndpointCatalog(properties);
-    var connections = new ChatRunConnections(catalog, new RunLlmConnectionFactory(catalog, properties,
-        ignored -> { throw new AssertionError("No fallback"); }, ignored -> "fixture-registration"));
+    var connections =
+        new ChatRunConnections(
+            catalog,
+            new RunLlmConnectionFactory(
+                catalog,
+                properties,
+                ignored -> {
+                  throw new AssertionError("No fallback");
+                },
+                ignored -> "fixture-registration"));
     var original = connections.accept(owner("first", "session"));
     connections.selectModel("plan", "second-model");
     var second = connections.accept(owner("second", "session"));
     assertThat(second.endpoint().model()).isEqualTo("second-model");
-    assertThat(second.capabilities()).containsEntry(LlmEndpointCapabilities.Capability.REASONING_REPLAY, LlmEndpointCapabilities.Support.SUPPORTED);
+    assertThat(second.capabilities())
+        .containsEntry(
+            LlmEndpointCapabilities.Capability.REASONING_REPLAY,
+            LlmEndpointCapabilities.Support.SUPPORTED);
     assertThat(original.endpoint().model()).isEqualTo("first-model");
     connections.selectModel("plan", "unknown-third");
-    assertThatThrownBy(() -> connections.accept(owner("third", "session"))).isInstanceOf(IllegalStateException.class);
+    assertThatThrownBy(() -> connections.accept(owner("third", "session")))
+        .isInstanceOf(IllegalStateException.class);
     assertThat(connections.require(owner("second", "session"))).isSameAs(second);
   }
 

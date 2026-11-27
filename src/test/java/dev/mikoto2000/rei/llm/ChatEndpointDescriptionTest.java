@@ -68,13 +68,20 @@ class ChatEndpointDescriptionTest {
     values.put(prefix("first") + "server-capabilities.streaming", "supported");
     try (var service = service(values)) {
       var controller = new dev.mikoto2000.rei.web.ModelController(service);
-      var request = new ObjectMapper().readValue(
-          "{\"model\":\"stale-model\",\"endpoint\":\"first\"}",
-          dev.mikoto2000.rei.web.ModelController.Selection.class);
+      var request =
+          new ObjectMapper()
+              .readValue(
+                  "{\"model\":\"stale-model\",\"endpoint\":\"first\"}",
+                  dev.mikoto2000.rei.web.ModelController.Selection.class);
       service.select("second");
       assertThatThrownBy(() -> controller.select(request))
           .isInstanceOf(org.springframework.web.server.ResponseStatusException.class)
-          .satisfies(error -> assertThat(((org.springframework.web.server.ResponseStatusException) error).getStatusCode().value()).isEqualTo(409));
+          .satisfies(error ->
+              assertThat(
+                      ((org.springframework.web.server.ResponseStatusException) error)
+                          .getStatusCode()
+                          .value())
+                  .isEqualTo(409));
       assertThat(service.selection().model()).isEqualTo("second-model");
     }
   }
@@ -84,18 +91,27 @@ class ChatEndpointDescriptionTest {
     var values = settings();
     values.remove(prefix("first") + "temperature");
     values.remove(prefix("first") + "max-output-tokens");
-    values.put(prefix("first") + "model-capabilities-by-name.[confirmed-second].max-output-tokens", "supported");
-    values.put(prefix("first") + "model-capabilities-by-name.[confirmed-second].vision", "unsupported");
+    values.put(
+        prefix("first") + "model-capabilities-by-name.[confirmed-second].max-output-tokens",
+        "supported");
+    values.put(
+        prefix("first") + "model-capabilities-by-name.[confirmed-second].vision", "unsupported");
     try (var service = service(values)) {
       service.selectModel("confirmed-second");
       var selected = service.currentEndpoint();
       assertThat(selected.profile().capabilities().effective())
-          .containsEntry(LlmEndpointCapabilities.Capability.MAX_OUTPUT_TOKENS, LlmEndpointCapabilities.Support.SUPPORTED)
-          .containsEntry(LlmEndpointCapabilities.Capability.VISION, LlmEndpointCapabilities.Support.UNSUPPORTED);
+          .containsEntry(
+              LlmEndpointCapabilities.Capability.MAX_OUTPUT_TOKENS,
+              LlmEndpointCapabilities.Support.SUPPORTED)
+          .containsEntry(
+              LlmEndpointCapabilities.Capability.VISION,
+              LlmEndpointCapabilities.Support.UNSUPPORTED);
       assertThat(selected.generationSettings()).containsEntry("max_tokens", 4096);
       service.selectModel("unknown-third");
       assertThat(service.currentEndpoint().profile().capabilities().effective())
-          .containsEntry(LlmEndpointCapabilities.Capability.MAX_OUTPUT_TOKENS, LlmEndpointCapabilities.Support.UNKNOWN);
+          .containsEntry(
+              LlmEndpointCapabilities.Capability.MAX_OUTPUT_TOKENS,
+              LlmEndpointCapabilities.Support.UNKNOWN);
     }
   }
 

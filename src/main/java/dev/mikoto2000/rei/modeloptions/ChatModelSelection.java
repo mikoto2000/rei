@@ -16,4 +16,9 @@ public interface ChatModelSelection {
   Selection selection();
 
   void selectModel(String model);
+
+  /** Atomically reject a choice made for a different endpoint. */
+  default void selectModel(String expectedEndpoint, String model) {
+    throw new IllegalStateException("Endpoint-bound model selection is unavailable");
+  }
 }
