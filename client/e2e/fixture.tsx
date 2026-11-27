@@ -171,10 +171,65 @@ if (imageArtifact) {
   artifact.mediaType = "image/png";
   artifact.filename = "生成画像.png";
 }
+const llmFixture = new URLSearchParams(location.search).has("llm");
+let llmEndpoint = "local";
+const llmModels: Record<string, string> = {
+  local: "local-model",
+  plan: "plan-model",
+};
+const llmRow = (id: string) => ({
+  profile: {
+    id,
+    model: llmModels[id],
+    provider: id === "plan" ? "chatgpt-plan" : "openai-compatible",
+    api: id === "plan" ? "responses" : "chat-completions",
+    authentication: id === "plan" ? "chatgpt-oauth" : "none",
+    accountRef: id === "plan" ? "personal" : null,
+    usagePath: id === "plan" ? "chatgpt-plan" : "local-llm",
+    capabilities: {
+      route: { VISION: "SUPPORTED" },
+      server: { VISION: "UNKNOWN" },
+      model: { VISION: "UNKNOWN" },
+      effective: { VISION: "UNKNOWN" },
+    },
+  },
+  active: llmEndpoint === id,
+  reasoningReplay: id === "plan" ? "ENCRYPTED" : "NONE",
+  authenticationState: id === "plan" ? "authorized" : "not-required",
+  unavailableReason: null,
+  generationSettings: {},
+  unappliedSettings: {},
+  diagnostics: [],
+  selectionScope:
+    "process-wide; next Run only; resets on restart; fixture only",
+});
 const call = (async (
   name: string,
   args: Record<string, unknown> | undefined,
 ) => {
+  if (name.startsWith("llm_")) {
+    if (!llmFixture) throw "EndpointNotFound";
+    if (args?.serverId !== "s") throw "InvalidInput";
+    if (name === "llm_endpoints") return [llmRow("local"), llmRow("plan")];
+    if (name === "llm_select") {
+      if (args.endpoint !== "local" && args.endpoint !== "plan")
+        throw "InvalidInput";
+      llmEndpoint = args.endpoint;
+      return llmRow(llmEndpoint);
+    }
+    if (name === "llm_models")
+      return {
+        endpoint: llmEndpoint,
+        currentModel: llmModels[llmEndpoint],
+        models: [`${llmEndpoint}-model`, `${llmEndpoint}-second`],
+      };
+    if (name === "llm_select_model") {
+      if (args.endpoint !== llmEndpoint || typeof args.model !== "string")
+        throw "Conflict";
+      llmModels[llmEndpoint] = args.model;
+      return { endpoint: llmEndpoint, currentModel: args.model, models: [] };
+    }
+  }
   if (name === "app_snapshot") return structuredClone(data);
   if (name === "artifacts_list") return { items: [artifact], nextCursor: null };
   if (name === "artifact_get") return artifact;
