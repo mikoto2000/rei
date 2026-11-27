@@ -198,7 +198,10 @@ final class RunLlmConnectionFactory {
             resolved,
             capabilities,
             RunGenerationSettings.named(
-                generation(resolved), connection.getGeneration(), resolved, capabilities),
+                generation(resolved, metadata.provider()),
+                connection.getGeneration(),
+                resolved,
+                capabilities),
             transport(connection));
     RunNativeOptions.options(snapshot);
     return snapshot;
@@ -258,6 +261,16 @@ final class RunLlmConnectionFactory {
     if (source.getRequestTimeout() != null)
       values.put("request_timeout", source.getRequestTimeout().toString());
     return RunTransportSettings.defaults(values);
+  }
+
+  private static java.util.Map<String, Object> generation(
+      ResolvedLlmEndpoint endpoint, LlmProvider provider) {
+    var values = new java.util.LinkedHashMap<>(generation(endpoint));
+    if (provider == LlmProvider.OPENAI_API
+        && endpoint.apiType() == LlmApiType.CHAT_COMPLETIONS
+        && values.containsKey("max_tokens"))
+      values.put("max_completion_tokens", values.remove("max_tokens"));
+    return values;
   }
 
   private static java.util.Map<String, Object> generation(ResolvedLlmEndpoint endpoint) {
