@@ -39,6 +39,15 @@ final class ResponsesLoopFixture implements AutoCloseable {
   ResponsesLoopFixture(
       boolean plan,
       Map<LlmEndpointCapabilities.Capability, LlmEndpointCapabilities.Support> inputCapabilities) {
+    this(plan, inputCapabilities, Map.of());
+  }
+
+  ResponsesLoopFixture(
+      boolean plan,
+      Map<LlmEndpointCapabilities.Capability, LlmEndpointCapabilities.Support> inputCapabilities,
+      Map<String, Object> generation) {
+    assertThat(generation.keySet())
+        .allMatch(key -> Set.of("reasoning_effort", "response_format").contains(key));
     String base = plan ? "https://api.openai.com/v1" : "http://127.0.0.1:1/v1";
     var support = LlmEndpointCapabilities.Support.SUPPORTED;
     var unsupported = LlmEndpointCapabilities.Support.UNSUPPORTED;
@@ -60,9 +69,7 @@ final class ResponsesLoopFixture implements AutoCloseable {
                 new LlmCapabilities(
                     plan ? ReasoningReplayMode.ENCRYPTED : ReasoningReplayMode.NONE,
                     36,
-                    inputCapabilities.get(LlmEndpointCapabilities.Capability.VISION) == support
-                        ? Set.of(LlmCapabilities.Setting.IMAGE_INPUT)
-                        : Set.of()),
+                    settings(inputCapabilities, generation)),
                 plan ? null : 64,
                 null,
                 Duration.ofSeconds(5)),
@@ -80,8 +87,8 @@ final class ResponsesLoopFixture implements AutoCloseable {
                     plan ? support : unsupported,
                     LlmEndpointCapabilities.Capability.MAX_OUTPUT_TOKENS,
                     plan ? unsupported : support),
-                inputCapabilities),
-            plan ? Map.of() : Map.of("max_output_tokens", 64));
+                generationCapabilities(inputCapabilities, generation)),
+            generationValues(plan, generation));
     client =
         PinnedOpenAiClients.open(
             pin,
@@ -119,6 +126,46 @@ final class ResponsesLoopFixture implements AutoCloseable {
             () -> {});
   }
 
+  private static Map<String, Object> generationValues(
+      boolean plan, Map<String, Object> generation) {
+    var result = new java.util.HashMap<String, Object>(generation);
+    if (!plan) result.put("max_output_tokens", 64);
+    return Map.copyOf(result);
+  }
+
+  private static Set<LlmCapabilities.Setting> settings(
+      Map<LlmEndpointCapabilities.Capability, LlmEndpointCapabilities.Support> capabilities,
+      Map<String, Object> generation) {
+    var settings = java.util.EnumSet.noneOf(LlmCapabilities.Setting.class);
+    if (capabilities.get(LlmEndpointCapabilities.Capability.VISION)
+        == LlmEndpointCapabilities.Support.SUPPORTED)
+      settings.add(LlmCapabilities.Setting.IMAGE_INPUT);
+    if (generation.containsKey("reasoning_effort"))
+      settings.add(LlmCapabilities.Setting.REASONING_EFFORT);
+    if (generation.containsKey("response_format"))
+      settings.add(LlmCapabilities.Setting.STRUCTURED_OUTPUT);
+    return Set.copyOf(settings);
+  }
+
+  private static Map<LlmEndpointCapabilities.Capability, LlmEndpointCapabilities.Support>
+      generationCapabilities(
+          Map<LlmEndpointCapabilities.Capability, LlmEndpointCapabilities.Support> inputs,
+          Map<String, Object> generation) {
+    var values =
+        new java.util.EnumMap<LlmEndpointCapabilities.Capability, LlmEndpointCapabilities.Support>(
+            LlmEndpointCapabilities.Capability.class);
+    values.putAll(inputs);
+    if (generation.containsKey("reasoning_effort"))
+      values.put(
+          LlmEndpointCapabilities.Capability.REASONING_EFFORT,
+          LlmEndpointCapabilities.Support.SUPPORTED);
+    if (generation.containsKey("response_format"))
+      values.put(
+          LlmEndpointCapabilities.Capability.STRUCTURED_OUTPUT,
+          LlmEndpointCapabilities.Support.SUPPORTED);
+    return Map.copyOf(values);
+  }
+
   OpenAiResponsesChatOptions options() {
     return ((OpenAiResponsesChatOptions) RunNativeOptions.options(pin))
         .mutate()
@@ -133,7 +180,9 @@ final class ResponsesLoopFixture implements AutoCloseable {
     assertThat(inputs.keySet())
         .allMatch(capability ->
             capability == LlmEndpointCapabilities.Capability.VISION
-                || capability == LlmEndpointCapabilities.Capability.FILE_INPUT);
+                || capability == LlmEndpointCapabilities.Capability.FILE_INPUT
+                || capability == LlmEndpointCapabilities.Capability.REASONING_EFFORT
+                || capability == LlmEndpointCapabilities.Capability.STRUCTURED_OUTPUT);
     var values =
         new java.util.EnumMap<LlmEndpointCapabilities.Capability, LlmEndpointCapabilities.Support>(
             LlmEndpointCapabilities.Capability.class);

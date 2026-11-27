@@ -21,7 +21,9 @@ class ChatEndpointCapabilitiesTest {
         "tool-namespace",
         "reasoning-replay",
         "vision",
-        "file-input"
+        "file-input",
+        "reasoning-effort",
+        "structured-output"
       })
   void verifiedPlanAdapterCapabilitiesStillRequireServerAndModelConfirmation(String capability) {
     var settings = plan();
