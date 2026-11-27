@@ -2,6 +2,8 @@ package dev.mikoto2000.rei.autonomous;
 
 import dev.mikoto2000.rei.application.state.OperationConflictException;
 import dev.mikoto2000.rei.storage.StorageDatabase;
+import dev.mikoto2000.rei.storage.StorageObjectRegistry;
+import jakarta.annotation.PreDestroy;
 import java.io.IOException;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
@@ -17,8 +19,13 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.DependsOn;
+import org.springframework.stereotype.Component;
 
 /** Durable reservations and immutable review revisions. No model, tool, or external transport. */
+@Component
+@DependsOn("storageMigrationLease")
 public final class AutonomousDraftStore {
   public record Claim(String opportunityId, String token) {}
 
@@ -29,6 +36,13 @@ public final class AutonomousDraftStore {
   private final AutonomousActionProperties settings;
   private final AutonomousActionPolicy policy;
   private final AtomicBoolean stopping = new AtomicBoolean();
+
+  @Autowired
+  public AutonomousDraftStore(
+      StorageObjectRegistry registry, Clock clock, AutonomousActionProperties settings) {
+    this(new StorageDatabase(registry.root()), clock, settings);
+    recoverInterruptedConsiderations();
+  }
 
   public AutonomousDraftStore(
       StorageDatabase database, Clock clock, AutonomousActionProperties settings) {
@@ -45,6 +59,7 @@ public final class AutonomousDraftStore {
             limits.cooldown());
   }
 
+  @PreDestroy
   public void stop() {
     stopping.set(true);
   }
@@ -53,7 +68,7 @@ public final class AutonomousDraftStore {
     return stopping.get() || Thread.currentThread().isInterrupted();
   }
 
-  /** Called once at application startup, never by another request or repository constructor. */
+  /** Startup recovery; standalone test repositories do not automatically abandon live claims. */
   public void recoverInterruptedConsiderations() {
     database.transaction(db -> {
       var interrupted = new ArrayList<String>();

@@ -2,8 +2,11 @@ package dev.mikoto2000.rei.autonomous;
 
 import dev.mikoto2000.rei.event.AgentEventBus;
 import dev.mikoto2000.rei.event.AgentEventType;
+import jakarta.annotation.PreDestroy;
+import org.springframework.stereotype.Component;
 
 /** Connects application shutdown to opportunity admission, without connecting a publisher. */
+@Component
 final class AutonomousDraftLifecycle implements AutoCloseable {
   private final AutonomousDraftStore store;
   private final AgentEventBus.Subscription subscription;
@@ -17,6 +20,7 @@ final class AutonomousDraftLifecycle implements AutoCloseable {
   }
 
   @Override
+  @PreDestroy
   public void close() {
     store.stop();
     subscription.unsubscribe();
