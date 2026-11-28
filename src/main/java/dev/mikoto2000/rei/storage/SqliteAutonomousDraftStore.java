@@ -6,6 +6,9 @@ import dev.mikoto2000.rei.autonomous.AutonomousActionProperties;
 import dev.mikoto2000.rei.autonomous.AutonomousConflictException;
 import dev.mikoto2000.rei.autonomous.AutonomousDraft;
 import dev.mikoto2000.rei.autonomous.AutonomousDraftStore;
+import dev.mikoto2000.rei.autonomous.AutonomousPostRecord;
+import dev.mikoto2000.rei.autonomous.AutonomousPublicationStore;
+import dev.mikoto2000.rei.autonomous.AutonomousTidGenerator;
 import dev.mikoto2000.rei.autonomous.DefaultAutonomousActionPolicy;
 import jakarta.annotation.PreDestroy;
 import java.io.IOException;
@@ -30,11 +33,13 @@ import org.springframework.stereotype.Component;
 /** Durable reservations and immutable review revisions. No model, tool, or external transport. */
 @Component
 @DependsOn("storageMigrationLease")
-public final class SqliteAutonomousDraftStore implements AutonomousDraftStore {
+public final class SqliteAutonomousDraftStore
+    implements AutonomousDraftStore, AutonomousPublicationStore {
   private final StorageDatabase database;
   private final Clock clock;
   private final AutonomousActionProperties settings;
   private final AutonomousActionPolicy policy;
+  private final AutonomousTidGenerator recordKeys;
   private final AtomicBoolean stopping = new AtomicBoolean();
 
   @Autowired
@@ -42,12 +47,14 @@ public final class SqliteAutonomousDraftStore implements AutonomousDraftStore {
       StorageObjectRegistry registry, Clock clock, AutonomousActionProperties settings) {
     this(new StorageDatabase(registry.root()), clock, settings);
     recoverInterruptedConsiderations();
+    recoverInterruptedPublications();
   }
 
   public SqliteAutonomousDraftStore(
       StorageDatabase database, Clock clock, AutonomousActionProperties settings) {
     this.database = Objects.requireNonNull(database);
     this.clock = Objects.requireNonNull(clock);
+    this.recordKeys = new AutonomousTidGenerator(clock);
     this.settings = Objects.requireNonNull(settings);
     var limits = settings.bluesky();
     this.policy =
@@ -68,6 +75,255 @@ public final class SqliteAutonomousDraftStore implements AutonomousDraftStore {
 
   public boolean isStopping() {
     return stopping.get() || Thread.currentThread().isInterrupted();
+  }
+
+  public PublishClaim beginPublication(String id, int expectedRevision, String actor) {
+    if (id == null
+        || id.isBlank()
+        || id.length() > 256
+        || expectedRevision < 1
+        || actor == null
+        || actor.isBlank()
+        || actor.length() > 256
+        || actor.chars().anyMatch(Character::isISOControl))
+      throw new IllegalArgumentException("Invalid publication review");
+    publicationAdmission();
+    get(id);
+    return database.transaction(db -> {
+      publicationAdmission();
+      var current = find(db, id);
+      if ((current.state() != AutonomousDraft.State.PENDING_REVIEW
+              && current.state() != AutonomousDraft.State.FAILED)
+          || current.content().revision() != expectedRevision
+          || !clock.instant().isBefore(current.expiresAt()))
+        throw new AutonomousConflictException();
+      var prior = publicationJournal(db, current);
+      boolean retry = current.state() == AutonomousDraft.State.FAILED;
+      if (retry && prior == null) throw new AutonomousConflictException();
+      if (!retry && prior != null) throw new IllegalStateException("Unexpected publication record");
+      var now = clock.instant();
+      var record =
+          retry ? prior.record() : AutonomousPostRecord.fromDraft(current, recordKeys.next(), now);
+      var token = UUID.randomUUID().toString();
+      if (retry) {
+        try (var sql =
+            prepared(
+                db,
+                "UPDATE autonomous_publications SET token=?,updated=? WHERE draft_id=? AND token IS NULL",
+                token,
+                now.toEpochMilli(),
+                id)) {
+          if (sql.executeUpdate() != 1) throw new AutonomousConflictException();
+        }
+      } else {
+        try (var sql =
+            prepared(
+                db,
+                "INSERT INTO autonomous_publications VALUES(?,?,?,?,?,?,?,?,?,?)",
+                id,
+                record.did(),
+                record.recordKey(),
+                expectedRevision,
+                current.content().bodyHash(),
+                record.recordJson(),
+                record.recordHash(),
+                token,
+                now.toEpochMilli(),
+                now.toEpochMilli())) {
+          sql.executeUpdate();
+        }
+      }
+      var changed =
+          publicationState(
+              current,
+              AutonomousDraft.State.PUBLISHING,
+              new AutonomousDraft.Approval(now, actor),
+              new AutonomousDraft.Publication(
+                  now, record.recordKey(), record.recordJson(), null, null, "PUBLISHING", ""),
+              now);
+      update(db, changed, expectedRevision, current.state());
+      audit(
+          db, id, "PUBLICATION_STARTED", retry ? "explicit_retry" : "selected_review", actor, now);
+      return new PublishClaim(id, token, record);
+    });
+  }
+
+  public AutonomousDraft finishPublication(
+      PublishClaim claim, Outcome outcome, String uri, String cid, String failureCode) {
+    if (claim == null
+        || claim.draftId() == null
+        || claim.token() == null
+        || claim.record() == null
+        || outcome == null
+        || failureCode == null
+        || !failureCode.matches("[a-z0-9_]{0,128}"))
+      throw new IllegalArgumentException("Invalid publication result");
+    return database.transaction(db -> {
+      var current = find(db, claim.draftId());
+      if (current.state() != AutonomousDraft.State.PUBLISHING)
+        throw new AutonomousConflictException();
+      var journal = publicationJournal(db, current);
+      if (journal == null
+          || !claim.token().equals(journal.token())
+          || !claim.record().equals(journal.record())) throw new AutonomousConflictException();
+      var finalOutcome = outcome;
+      var code = failureCode;
+      if (outcome == Outcome.PUBLISHED
+          && (!journal.record().uri().equals(uri) || !AutonomousPostRecord.validRecordCid(cid))) {
+        finalOutcome = Outcome.UNKNOWN;
+        code = "invalid_record_receipt";
+      }
+      var now = clock.instant();
+      boolean published = finalOutcome == Outcome.PUBLISHED;
+      var previous = current.publication();
+      var publication =
+          new AutonomousDraft.Publication(
+              previous.startedAt(),
+              previous.recordKey(),
+              previous.recordJson(),
+              published ? uri : null,
+              published ? cid : null,
+              finalOutcome.name(),
+              published ? "" : code);
+      var changed =
+          publicationState(
+              current,
+              AutonomousDraft.State.valueOf(finalOutcome.name()),
+              current.approval(),
+              publication,
+              now);
+      update(db, changed, current.content().revision(), AutonomousDraft.State.PUBLISHING);
+      try (var sql =
+          prepared(
+              db,
+              "UPDATE autonomous_publications SET token=NULL,updated=? WHERE draft_id=? AND token=?",
+              now.toEpochMilli(),
+              current.id(),
+              claim.token())) {
+        if (sql.executeUpdate() != 1) throw new AutonomousConflictException();
+      }
+      audit(
+          db,
+          current.id(),
+          "PUBLICATION_FINISHED",
+          finalOutcome.name(),
+          current.approval().approvedBy(),
+          now);
+      return changed;
+    });
+  }
+
+  public Optional<AutonomousPostRecord> publicationRecord(String id) {
+    return database.read(db -> {
+      var journal = publicationJournal(db, find(db, id));
+      return journal == null ? Optional.empty() : Optional.of(journal.record());
+    });
+  }
+
+  public void recoverInterruptedPublications() {
+    int recovered;
+    do {
+      recovered =
+          database.transaction(db -> {
+            var interrupted = new ArrayList<AutonomousDraft>();
+            try (var query = db.createStatement();
+                var rows =
+                    query.executeQuery(
+                        "SELECT * FROM autonomous_drafts WHERE state='PUBLISHING' LIMIT 256")) {
+              while (rows.next()) interrupted.add(row(rows));
+            }
+            for (var current : interrupted) {
+              var now = clock.instant();
+              var old = current.publication();
+              var publication =
+                  old == null
+                      ? null
+                      : new AutonomousDraft.Publication(
+                          old.startedAt(),
+                          old.recordKey(),
+                          old.recordJson(),
+                          null,
+                          null,
+                          "UNKNOWN",
+                          "restart_during_publication");
+              var changed =
+                  publicationState(
+                      current, AutonomousDraft.State.UNKNOWN, current.approval(), publication, now);
+              update(db, changed, current.content().revision(), AutonomousDraft.State.PUBLISHING);
+              try (var sql =
+                  prepared(
+                      db,
+                      "UPDATE autonomous_publications SET token=NULL,updated=? WHERE draft_id=?",
+                      now.toEpochMilli(),
+                      current.id())) {
+                sql.executeUpdate();
+              }
+              audit(db, current.id(), "PUBLICATION_RECOVERED", "restart_unknown", "system", now);
+            }
+            return interrupted.size();
+          });
+    } while (recovered == 256);
+  }
+
+  private void publicationAdmission() {
+    if (!settings.enabled() || !settings.bluesky().enabled())
+      throw new SecurityException("Autonomous publication is disabled");
+    if (isStopping()) throw new AutonomousConflictException();
+  }
+
+  private record PublicationJournal(AutonomousPostRecord record, String token) {}
+
+  private PublicationJournal publicationJournal(Connection db, AutonomousDraft draft)
+      throws SQLException {
+    try (var query =
+            prepared(db, "SELECT * FROM autonomous_publications WHERE draft_id=?", draft.id());
+        var rows = query.executeQuery()) {
+      if (!rows.next()) return null;
+      var record =
+          new AutonomousPostRecord(
+              rows.getString("target_did"),
+              rows.getString("record_key"),
+              rows.getString("record_json"),
+              rows.getString("record_hash"));
+      var token = rows.getString("token");
+      var publication = draft.publication();
+      if (!record.did().equals(draft.target().did())
+          || rows.getInt("revision") != draft.content().revision()
+          || !rows.getString("body_hash").equals(draft.content().bodyHash())
+          || !record.text().equals(draft.content().text())
+          || publication == null
+          || !record.recordKey().equals(publication.recordKey())
+          || !record.recordJson().equals(publication.recordJson())
+          || (draft.state() == AutonomousDraft.State.PUBLISHING) != (token != null)
+          || rows.getLong("updated") != draft.updatedAt().toEpochMilli())
+        throw new IllegalStateException("Inconsistent publication journal");
+      return new PublicationJournal(record, token);
+    }
+  }
+
+  private static AutonomousDraft publicationState(
+      AutonomousDraft current,
+      AutonomousDraft.State state,
+      AutonomousDraft.Approval approval,
+      AutonomousDraft.Publication publication,
+      Instant now) {
+    return new AutonomousDraft(
+        current.id(),
+        current.actionType(),
+        current.opportunityId(),
+        current.trigger(),
+        current.createdAt(),
+        now,
+        current.target(),
+        current.content(),
+        state,
+        current.expiresAt(),
+        current.rejectionReason(),
+        current.rejectionReasonPublic(),
+        current.regenerationAttempts(),
+        current.lastRegenerationAttemptAt(),
+        approval,
+        publication);
   }
 
   /** Startup recovery; standalone test repositories do not automatically abandon live claims. */
@@ -568,17 +824,24 @@ public final class SqliteAutonomousDraftStore implements AutonomousDraftStore {
 
   private void update(Connection db, AutonomousDraft draft, int expected)
       throws SQLException, IOException {
+    update(db, draft, expected, AutonomousDraft.State.PENDING_REVIEW);
+  }
+
+  private void update(
+      Connection db, AutonomousDraft draft, int expected, AutonomousDraft.State prior)
+      throws SQLException, IOException {
     try (var sql =
         prepared(
             db,
-            "UPDATE autonomous_drafts SET state=?,revision=?,updated=?,body_hash=?,snapshot=? WHERE id=? AND revision=? AND state='PENDING_REVIEW'",
+            "UPDATE autonomous_drafts SET state=?,revision=?,updated=?,body_hash=?,snapshot=? WHERE id=? AND revision=? AND state=?",
             draft.state().name(),
             draft.content().revision(),
             draft.updatedAt().toEpochMilli(),
             draft.content().bodyHash(),
             StorageDatabase.JSON.writeValueAsString(draft),
             draft.id(),
-            expected)) {
+            expected,
+            prior.name())) {
       if (sql.executeUpdate() != 1) throw new AutonomousConflictException();
     }
   }
@@ -621,14 +884,21 @@ public final class SqliteAutonomousDraftStore implements AutonomousDraftStore {
 
   private void audit(Connection db, String subject, String operation, String reason, Instant now)
       throws SQLException {
+    audit(db, subject, operation, reason, null, now);
+  }
+
+  private void audit(
+      Connection db, String subject, String operation, String reason, String actor, Instant now)
+      throws SQLException {
     try (var sql =
         prepared(
             db,
-            "INSERT INTO autonomous_audit(id,subject,operation,reason_code,created) VALUES(?,?,?,?,?)",
+            "INSERT INTO autonomous_audit(id,subject,operation,reason_code,actor,created) VALUES(?,?,?,?,?,?)",
             UUID.randomUUID().toString(),
             subject,
             operation,
             reason,
+            actor,
             now.toEpochMilli())) {
       sql.executeUpdate();
     }
