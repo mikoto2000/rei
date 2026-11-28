@@ -1,8 +1,8 @@
 package dev.mikoto2000.rei.autonomous;
 
-import java.security.SecureRandom;
 import java.time.Clock;
 import java.util.Objects;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.regex.Pattern;
 
 /** Timestamp record keys for the fixed Bluesky post collection. */
@@ -16,7 +16,7 @@ public final class AutonomousTidGenerator {
   private long latestMicros = -1;
 
   public AutonomousTidGenerator(Clock clock) {
-    this(clock, new SecureRandom().nextInt(1024));
+    this(clock, ThreadLocalRandom.current().nextInt(1024));
   }
 
   public AutonomousTidGenerator(Clock clock, int clockId) {

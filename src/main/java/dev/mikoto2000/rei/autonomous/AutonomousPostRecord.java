@@ -75,7 +75,7 @@ public record AutonomousPostRecord(
 
   public static boolean validRecordCid(String cid) {
     if (cid == null || cid.length() != 59 || cid.charAt(0) != 'b') return false;
-    var decoded = new byte[36];
+    var decoded = new int[36];
     int buffer = 0, bits = 0, count = 0;
     for (int i = 1; i < cid.length(); i++) {
       int digit = CID_BASE32.indexOf(cid.charAt(i));
@@ -85,7 +85,7 @@ public record AutonomousPostRecord(
       if (bits >= 8) {
         bits -= 8;
         if (count >= decoded.length) return false;
-        decoded[count++] = (byte) (buffer >>> bits);
+        decoded[count++] = buffer >>> bits;
         buffer &= (1 << bits) - 1;
       }
     }
