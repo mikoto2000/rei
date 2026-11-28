@@ -199,8 +199,11 @@ class IsolatedAutonomousPostGeneratorTest {
         });
   }
 
-  @Test
-  void fallbackKeepsSamePublicMessagesAndCorrectConnectionWithoutLoggingProviderBodies() {
+  @ParameterizedTest
+  @ValueSource(ints = {0, 4000, 512})
+  void fallbackKeepsSamePublicMessagesAndCorrectConnectionWithoutLoggingProviderBodies(
+      int configuredCompletionTokens) {
+    boolean completionTokens = configuredCompletionTokens > 0;
     failPrimary = true;
     var logger =
         (ch.qos.logback.classic.Logger)
@@ -210,7 +213,9 @@ class IsolatedAutonomousPostGeneratorTest {
     logs.start();
     logger.addAppender(logs);
     try {
-      context(OpenAiChatOptions.builder(), custom(true))
+      var defaults = OpenAiChatOptions.builder();
+      if (completionTokens) defaults.maxCompletionTokens(configuredCompletionTokens);
+      context(defaults, custom(true))
           .run(context -> {
             assertThat(
                     context
@@ -227,7 +232,11 @@ class IsolatedAutonomousPostGeneratorTest {
             var second = StorageDatabase.JSON.readTree(requests.get(1));
             assertThat(second.path("messages")).isEqualTo(first.path("messages"));
             assertThat(second.path("model").asText()).isEqualTo("fixture-model");
-            assertThat(second.path("max_tokens").asInt()).isEqualTo(1024);
+            assertThat(
+                    second.path(completionTokens ? "max_completion_tokens" : "max_tokens").asInt())
+                .isEqualTo(completionTokens ? Math.min(1024, configuredCompletionTokens) : 1024);
+            assertThat(second.has(completionTokens ? "max_tokens" : "max_completion_tokens"))
+                .isFalse();
             verifyNoInteractions(events, publisher);
           });
       assertThat(logs.list).hasSize(1);
