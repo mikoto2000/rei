@@ -1,5 +1,6 @@
 package dev.mikoto2000.rei.bluesky;
 
+import java.io.IOException;
 import java.time.OffsetDateTime;
 import java.util.List;
 
@@ -11,6 +12,23 @@ public interface BlueskyApiClient {
 
   /** 新たな対象を利用できるよう、投稿を作成する。 */
   PostResult createPost(String accessJwt, String did, String text);
+
+  /** Existing account authentication with the bounded fixed-record transport contract. */
+  default AuthResult authenticateForRecord(String handle, String appPassword)
+      throws IOException, InterruptedException {
+    return authenticate(handle, appPassword);
+  }
+
+  /**
+   * Creates exactly the supplied record/key; implementations must not rewrite it or use putRecord.
+   */
+  default RecordResult createRecord(
+      String accessJwt, String did, String recordKey, String recordJson)
+      throws IOException, InterruptedException {
+    throw new UnsupportedOperationException("Fixed record creation is not implemented");
+  }
+
+  record RecordResult(String uri, String cid) {}
 
   /** 指定や設定に応じた対象を利用するため、操作対象を確定する。 */
   default String resolveHandle(String handle) {
