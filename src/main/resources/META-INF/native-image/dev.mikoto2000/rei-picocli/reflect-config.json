@@ -282,6 +282,7 @@
       { "name" : "id" },
       { "name" : "limit" },
       { "name" : "publicUse" },
+      { "name" : "reason" },
       { "name" : "revision" },
       { "name" : "spec" },
       { "name" : "text" }

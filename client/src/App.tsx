@@ -27,6 +27,7 @@ import { Tasks } from "./features/tasks/Tasks";
 import { Artifacts } from "./features/artifacts/Artifacts";
 import type { ArtifactSelection } from "./entities/artifacts";
 import { Attention } from "./features/attention/Attention";
+import { AutonomousDrafts } from "./features/autonomous/AutonomousDrafts";
 import { ActivityAnalysis } from "./features/activity/ActivityAnalysis";
 import { Workspace } from "./features/workspace/Workspace";
 import { WorkContextNotice } from "./features/workspace/WorkContextNotice";
@@ -52,6 +53,7 @@ type Page =
   | "settings"
   | "workspace"
   | "attention"
+  | "autonomous"
   | "activity"
   | "recovery"
   | "tasks"
@@ -381,6 +383,12 @@ export function App({
             Inbox・承認
           </button>
           <button
+            className={page === "autonomous" ? "selected" : ""}
+            onClick={() => navigate("autonomous")}
+          >
+            投稿案
+          </button>
+          <button
             className={page === "workspace" ? "selected" : ""}
             onClick={() => navigate("workspace")}
           >
@@ -500,6 +508,7 @@ export function App({
                   settings: "設定",
                   workspace: "ツール",
                   attention: "通知・承認",
+                  autonomous: "投稿案",
                   activity: "活動の分析",
                   recovery: "復旧・再開",
                   tasks: "作業一覧",
@@ -566,6 +575,12 @@ export function App({
                 call={call}
                 serverId={data.unlocked ? data.selectedServer : null}
                 projects={projects[data.selectedServer ?? ""] ?? noProjects}
+              />
+            )}
+            {page === "autonomous" && (
+              <AutonomousDrafts
+                call={call}
+                serverId={data.unlocked ? data.selectedServer : null}
               />
             )}
             {page === "activity" && (

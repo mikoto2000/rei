@@ -56,7 +56,9 @@ public final class SqliteAutonomousDraftStore implements AutonomousDraftStore {
             limits.enabled(),
             limits.maxPendingDrafts(),
             limits.maxDraftsPerDay(),
-            limits.cooldown());
+            limits.cooldown(),
+            limits.maxRegenerations(),
+            limits.regenerationCooldown());
   }
 
   @PreDestroy
@@ -99,8 +101,7 @@ public final class SqliteAutonomousDraftStore implements AutonomousDraftStore {
       AutonomousDraft.Trigger trigger,
       String targetDid,
       String targetHandle) {
-    if (opportunityId == null || !opportunityId.matches("[A-Za-z0-9][A-Za-z0-9:_./-]{0,127}"))
-      throw new IllegalArgumentException("Invalid opportunity identifier");
+    validateOpportunityId(opportunityId);
     Objects.requireNonNull(trigger);
     return database.transaction(db -> {
       var now = clock.instant();
@@ -147,6 +148,8 @@ public final class SqliteAutonomousDraftStore implements AutonomousDraftStore {
     var content = AutonomousDraft.Content.create(1, text, reason, sourceIds);
     return database.transaction(db -> {
       var held = held(db, claim);
+      if (!"NEW".equals(held.kind()) || held.draftId() != null || held.expectedRevision() != null)
+        throw new AutonomousConflictException();
       var now = clock.instant();
       expire(db, now);
       var decision =
@@ -179,6 +182,112 @@ public final class SqliteAutonomousDraftStore implements AutonomousDraftStore {
       finish(db, claim, "GENERATED", "propose_post", draft.id(), now);
       audit(db, draft.id(), "DRAFT_CREATED", "pending_review", now);
       return Optional.of(draft);
+    });
+  }
+
+  public Consideration reserveRegeneration(
+      String opportunityId,
+      String draftId,
+      int expectedRevision,
+      String targetDid,
+      String targetHandle) {
+    validateOpportunityId(opportunityId);
+    get(draftId);
+    return database.transaction(db -> {
+      if (scalar(db, "SELECT COUNT(*) FROM autonomous_opportunities WHERE id=?", opportunityId) > 0)
+        return new Consideration(
+            new AutonomousActionPolicy.ActionDecision(false, "duplicate_opportunity"), null);
+      var now = clock.instant();
+      expire(db, now);
+      var current = pending(db, draftId, expectedRevision);
+      boolean targetMatches =
+          current.target().did().equals(targetDid)
+              && current.target().handle().equals(targetHandle);
+      var decision =
+          policy.evaluate(
+              facts(
+                  db,
+                  now,
+                  targetDid,
+                  targetHandle,
+                  null,
+                  regenerationFacts(db, draftId, null, targetMatches)));
+      var token = decision.shouldConsider() ? UUID.randomUUID().toString() : null;
+      try (var insert =
+          prepared(
+              db,
+              """
+              INSERT INTO autonomous_opportunities
+              (id,trigger,kind,status,token,created,updated,considered,zone,target_did,target_handle,
+               reason,draft_id,expected_revision)
+              VALUES(?, 'MANUAL', 'REGENERATE', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+              """,
+              opportunityId,
+              decision.shouldConsider() ? "RUNNING" : "POLICY_SKIPPED",
+              token,
+              now.toEpochMilli(),
+              now.toEpochMilli(),
+              decision.shouldConsider() ? 1 : 0,
+              zone().getId(),
+              targetDid == null ? "" : targetDid,
+              targetHandle == null ? "" : targetHandle,
+              decision.reason(),
+              draftId,
+              expectedRevision)) {
+        insert.executeUpdate();
+      }
+      if (decision.shouldConsider()) {
+        update(db, current.regenerationAttempted(now), expectedRevision);
+        audit(db, draftId, "REGENERATION_STARTED", "attempt_reserved", now);
+      }
+      audit(db, opportunityId, "OPPORTUNITY", decision.reason(), now);
+      return new Consideration(
+          decision, decision.shouldConsider() ? new Claim(opportunityId, token) : null);
+    });
+  }
+
+  public Optional<AutonomousDraft> completeRegeneration(
+      Claim claim, String text, String reason, List<String> sourceIds) {
+    return database.transaction(db -> {
+      var held = held(db, claim);
+      if (!"REGENERATE".equals(held.kind())
+          || held.draftId() == null
+          || held.expectedRevision() == null) throw new AutonomousConflictException();
+      var now = clock.instant();
+      expire(db, now);
+      var current = find(db, held.draftId());
+      if (current.state() != AutonomousDraft.State.PENDING_REVIEW
+          || current.content().revision() != held.expectedRevision()
+          || !now.isBefore(current.expiresAt())) {
+        finish(db, claim, "ABORTED", "draft_changed", null, now);
+        return Optional.empty();
+      }
+      var decision =
+          policy.evaluate(
+              facts(
+                  db,
+                  now,
+                  held.target().did(),
+                  held.target().handle(),
+                  claim.opportunityId(),
+                  regenerationFacts(
+                      db,
+                      held.draftId(),
+                      claim.opportunityId(),
+                      current.target().equals(held.target()))));
+      if (!decision.shouldConsider()) {
+        finish(db, claim, "ABORTED", decision.reason(), null, now);
+        return Optional.empty();
+      }
+      var content =
+          AutonomousDraft.Content.create(
+              Math.incrementExact(held.expectedRevision()), text, reason, sourceIds);
+      var changed = current.edited(content, now);
+      update(db, changed, held.expectedRevision());
+      revision(db, changed);
+      finish(db, claim, "GENERATED", "regenerate_post", changed.id(), now);
+      audit(db, changed.id(), "REGENERATED", "new_revision", now);
+      return Optional.of(changed);
     });
   }
 
@@ -278,6 +387,17 @@ public final class SqliteAutonomousDraftStore implements AutonomousDraftStore {
 
   private AutonomousActionContext facts(
       Connection db, Instant now, String did, String handle, String excluding) throws SQLException {
+    return facts(db, now, did, handle, excluding, null);
+  }
+
+  private AutonomousActionContext facts(
+      Connection db,
+      Instant now,
+      String did,
+      String handle,
+      String excluding,
+      AutonomousActionContext.Regeneration regeneration)
+      throws SQLException {
     var day = now.atZone(zone()).toLocalDate();
     long begin = day.atStartOfDay(zone()).toInstant().toEpochMilli();
     long end = day.plusDays(1).atStartOfDay(zone()).toInstant().toEpochMilli();
@@ -315,24 +435,65 @@ public final class SqliteAutonomousDraftStore implements AutonomousDraftStore {
         active,
         pending,
         generated,
-        attempted < 0 ? null : Instant.ofEpochMilli(attempted));
+        attempted < 0 ? null : Instant.ofEpochMilli(attempted),
+        regeneration);
   }
 
-  private record Held(AutonomousDraft.Trigger trigger, AutonomousDraft.Target target) {}
+  private AutonomousActionContext.Regeneration regenerationFacts(
+      Connection db, String draftId, String excluding, boolean targetMatches) throws SQLException {
+    int attempts =
+        Math.toIntExact(
+            scalar(
+                db,
+                """
+                SELECT COUNT(*) FROM autonomous_opportunities
+                WHERE kind='REGENERATE' AND considered=1 AND draft_id=? AND (? IS NULL OR id<>?)
+                """,
+                draftId,
+                excluding,
+                excluding));
+    long attempted =
+        scalar(
+            db,
+            """
+            SELECT COALESCE(MAX(created),-1) FROM autonomous_opportunities
+            WHERE kind='REGENERATE' AND considered=1 AND draft_id=? AND (? IS NULL OR id<>?)
+            """,
+            draftId,
+            excluding,
+            excluding);
+    return new AutonomousActionContext.Regeneration(
+        attempts, attempted < 0 ? null : Instant.ofEpochMilli(attempted), targetMatches);
+  }
+
+  private static void validateOpportunityId(String opportunityId) {
+    if (opportunityId == null || !opportunityId.matches("[A-Za-z0-9][A-Za-z0-9:_./-]{0,127}"))
+      throw new IllegalArgumentException("Invalid opportunity identifier");
+  }
+
+  private record Held(
+      AutonomousDraft.Trigger trigger,
+      AutonomousDraft.Target target,
+      String kind,
+      String draftId,
+      Integer expectedRevision) {}
 
   private Held held(Connection db, Claim claim) throws SQLException {
     if (claim == null || claim.token() == null) throw new AutonomousConflictException();
     try (var query =
             prepared(
                 db,
-                "SELECT trigger,target_did,target_handle FROM autonomous_opportunities WHERE id=? AND token=? AND status='RUNNING'",
+                "SELECT trigger,target_did,target_handle,kind,draft_id,expected_revision FROM autonomous_opportunities WHERE id=? AND token=? AND status='RUNNING'",
                 claim.opportunityId(),
                 claim.token());
         var rows = query.executeQuery()) {
       if (!rows.next()) throw new AutonomousConflictException();
       return new Held(
           AutonomousDraft.Trigger.valueOf(rows.getString(1)),
-          new AutonomousDraft.Target(rows.getString(2), rows.getString(3)));
+          new AutonomousDraft.Target(rows.getString(2), rows.getString(3)),
+          rows.getString(4),
+          rows.getString(5),
+          rows.getObject(6) == null ? null : rows.getInt(6));
     }
   }
 
@@ -342,7 +503,7 @@ public final class SqliteAutonomousDraftStore implements AutonomousDraftStore {
     try (var sql =
         prepared(
             db,
-            "UPDATE autonomous_opportunities SET status=?,token=NULL,reason=?,draft_id=?,updated=? WHERE id=? AND token=? AND status='RUNNING'",
+            "UPDATE autonomous_opportunities SET status=?,token=NULL,reason=?,draft_id=COALESCE(?,draft_id),updated=? WHERE id=? AND token=? AND status='RUNNING'",
             state,
             reason,
             draft,

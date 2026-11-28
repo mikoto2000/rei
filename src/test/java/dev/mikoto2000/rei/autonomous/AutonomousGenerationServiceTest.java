@@ -81,6 +81,7 @@ class AutonomousGenerationServiceTest {
     var result = service.consider("manual-one", AutonomousDraft.Trigger.MANUAL);
     assertThat(result.status()).isEqualTo(AutonomousGenerationService.Status.DRAFT_CREATED);
     var saved = drafts.get(result.draftId());
+    assertThat(result.draft()).isEqualTo(saved);
     assertThat(saved.state()).isEqualTo(AutonomousDraft.State.PENDING_REVIEW);
     assertThat(saved.approval()).isNull();
     assertThat(saved.publication()).isNull();

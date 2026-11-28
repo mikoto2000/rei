@@ -223,11 +223,22 @@ public final class BackendClient implements AutoCloseable {
   /** 軽量CLIでの対話で用いるmutationを返す。 */
   public JsonNode mutation(String method, String path, Object body)
       throws IOException, InterruptedException {
+    return mutation(method, path, body, Duration.ofSeconds(30));
+  }
+
+  /** 変更操作の応答本文を、指定した待機上限までに受け取る。 */
+  public JsonNode mutation(String method, String path, Object body, Duration timeout)
+      throws IOException, InterruptedException {
+    if (timeout == null
+        || timeout.isZero()
+        || timeout.isNegative()
+        || timeout.compareTo(Duration.ofSeconds(180)) > 0)
+      throw new IllegalArgumentException("Invalid mutation timeout");
     if (!Set.of("POST", "PUT", "PATCH", "DELETE").contains(method))
       throw new IllegalArgumentException("Invalid API mutation");
     return response(
         request(path)
-            .timeout(Duration.ofSeconds(30))
+            .timeout(timeout)
             .header("Content-Type", "application/json")
             .method(
                 method,

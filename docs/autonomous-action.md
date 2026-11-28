@@ -1,8 +1,9 @@
 # 自発的行動の実装状況
 
-Phase 2 では、公開利用を明示的に許可した話題を使い、Shell から投稿案を手動生成できます。
+Phase 3 では、公開利用を明示的に許可した話題を使い、GUI・従来 Shell・軽量 CLI から
+投稿案を手動生成し、一覧・全文確認・編集・再生成・見送り・保留ができます。
 生成は未承認の `PENDING_REVIEW` ドラフトの保存で終了します。
-GUI・Shell の確認・編集画面、通知、定期実行、承認付き公開は後続 Phase です。
+通知、定期実行、承認付き公開は後続 Phase です。投稿承認・公開の操作経路はまだありません。
 既定では無効です。有効化しても定期実行や外部公開は開始しません。
 
 ## 設定
@@ -36,7 +37,7 @@ rei:
 既存の `rei.bluesky.handle` を投稿案の宛先として使います。公開 handle から DID を解決し、
 アプリパスワードの読み取りや Bluesky の認証・投稿は行いません。
 `rei.autonomous-action.enabled` と `rei.autonomous-action.bluesky.enabled` を両方有効にしたうえで、
-既存の対話 Shell で操作します。軽量 CLI・GUI への操作追加は後続 Phase です。
+従来 Shell または接続済みの軽量 CLI で操作します。
 
 ```text
 /autonomous add-source --text "公開用の話題"
@@ -59,6 +60,69 @@ rei:
 通常の会話、Memory、Activity、ローカルファイル、非公開の見送り理由は生成コンテキストに入りません。
 公開可能な話題がない場合やモデルの `SKIP` は正常終了です。失敗時に再生成ループは行いません。
 機会 ID、保存済みの上限・クールダウン・排他は手動実行でも適用されます。
+
+## 投稿案の確認と編集
+
+GUI の「投稿案」を開くと、接続中のサーバー全体の投稿案を確認できます。
+Project や Session の選択は不要です。「全文を確認」から本文、投稿先 handle/DID、
+理由、参照資料 ID、改訂番号、作成日時、有効期限、試行回数、結果を確認します。
+本文と理由は文字列として表示し、モデルが HTML や操作指示を書いても実行しません。
+
+「本文を編集」→「編集を保存」、または「再生成」の応答には、保存した最新の改訂番号と
+全文を表示します。新しい本文を確認するまで前の版の確認を引き継いだとは扱いません。
+「見送る」の理由は任意・非公開で、再生成用の入力に渡しません。
+「保留して閉じる」は画面を閉じるだけで、`PENDING_REVIEW` や期限を変更しません。
+期限切れ・見送り済みの投稿案は編集・再生成できません。
+
+```text
+/autonomous drafts --limit 20
+/autonomous draft <draftId>
+/autonomous edit <draftId> --revision 1 --text "編集した本文"
+/autonomous regenerate <draftId> --revision 2
+/autonomous hold <draftId>
+/autonomous reject <draftId> --revision 3 --reason "今回は見送る"
+```
+
+Shell と軽量 CLI はサーバーの結果を JSON で表示し、編集・再生成後も全文を出力します。
+`hold` は読み取りだけです。更新操作には確認した `--revision` が必須で、
+他の画面で編集・見送りされた場合は conflict として拒否します。
+GUI でも競合・通信切断時は更新して現在の状態を確認し、自動で変更操作を再送しません。
+生成・再生成のクライアント通信期限は本文の受信完了まで 180 秒、その他は 30 秒です。
+時間切れはサーバー側の取り消しを保証しないため、再操作の前に一覧・詳細を確認してください。
+
+再生成は、既定で投稿案一件につき最大 3 回・試行間隔 1 時間です。
+新規生成の一日上限や保留件数上限とは別に判定します。モデル呼び出し前に試行を永続化し、
+`SKIP`・失敗・再起動でも消費した回数と時刻を戻しません。
+`SKIP` と失敗では元の本文を保持します。生成中に編集・見送り・期限切れとなった場合も
+その操作を上書きせず、再起動後に生成を自動再開しません。
+再生成には利用許可済みの現行話題だけを使い、編集した投稿本文や非公開の見送り理由を送りません。
+
+GUI の「公開用の話題を管理」から、話題の登録・本文編集・利用許可・取消を操作できます。
+新規登録の利用許可は既定でオフです。編集中は保存済みの話題への許可変更を無効にし、
+保存後の新しい改訂番号に対して明示的に許可します。本文編集では必ず許可が外れます。
+サーバー切り替え時は前のサーバーの本文・入力を消し、遅れて届いた応答も表示しません。
+
+## HTTP API
+
+GUI・軽量 CLI は既存の API キー認証と固定ルートを使います。
+従来 Shell と同じ保存・生成サービスを呼び、HTTP を経由しただけで承認済みにはしません。
+
+| 操作 | ルート |
+| --- | --- |
+| 一覧・詳細 | `GET /api/v1/autonomous/drafts[?limit=20]`、`GET /api/v1/autonomous/drafts/{id}` |
+| 手動生成 | `POST /api/v1/autonomous/drafts/generate`（空の JSON） |
+| 編集 | `POST /api/v1/autonomous/drafts/{id}/edit`（`expectedRevision`、`text`） |
+| 再生成 | `POST /api/v1/autonomous/drafts/{id}/regenerate`（`expectedRevision`） |
+| 見送り | `POST /api/v1/autonomous/drafts/{id}/reject`（`expectedRevision`、任意の `reason`） |
+| 話題一覧・詳細 | `GET /api/v1/autonomous/sources[?limit=20]`、`GET /api/v1/autonomous/sources/{id}` |
+| 話題登録 | `POST /api/v1/autonomous/sources`（`text`、任意の `publicUseAllowed`、既定 false） |
+| 話題編集 | `POST /api/v1/autonomous/sources/{id}/edit`（`expectedRevision`、`text`） |
+| 話題の許可・取消 | `POST /api/v1/autonomous/sources/{id}/permit`、`/revoke`（`expectedRevision`） |
+
+一覧は 1～200 件、不正入力は 400、存在しない ID は 404、古い改訂番号などの競合は 409 です。
+更新リクエストの未知の項目を拒否し、承認フラグや任意の生成コンテキストを受け付けません。
+生成結果の `SKIPPED` は正常な見送り、`FAILED` は失敗です。再生成では現在の本文も返します。
+生成の有効フラグがオフでも、保存済み投稿案の確認・編集と話題の管理は利用できます。
 
 ## LLM 接続と応答の検証
 
@@ -114,6 +178,8 @@ storage.db の schema 23 で、`autonomous_opportunities`、`autonomous_drafts`�
 制約を持ちます。移行だけでは機能を有効化しません。
 schema 24 は `autonomous_public_sources` に本文・公開利用許可・操作元のリビジョンを追加します。
 現行版は ID ごとに一件だけとし、旧リビジョンを上書きしません。
+schema 25 は検討機会に `expected_revision` を追加し、再生成対象の ID と確認した版を
+永続 claim に結び付けます。完了時もその版・状態・期限を検証し、競合した結果は保存しません。
 
 本文と revision は短い同一 transaction に保存します。Project/Run 所有の ArtifactStore に
 仮の Run を作成せず、今回の本文保存には使用していません。
@@ -142,3 +208,7 @@ schema 24 は `autonomous_public_sources` に本文・公開利用許可・操�
 自発生成の時間制限は、ローカル HTTP サーバーが有効な応答を少しずつ返すテストで、
 既定接続・専用接続・フォールバックを検証します。時間切れ後の通常呼び出しでも
 従来の読み取りタイムアウト動作と接続設定が維持されることを確認します。
+Phase 3 では、実際の認証付き HTTP、全クライアントの固定ルートと改訂番号、再生成中の
+競合・再起動・上限、GUI の二重送信・全文表示・サーバー切り替え、デスクトップ/モバイルの
+確認操作も模擬サーバーと fixture で検証します。ローカルで既定のテスト用ポート 1420 が
+使われている場合は、`REI_CLIENT_E2E_PORT` に別のポート番号を指定して E2E を実行できます。

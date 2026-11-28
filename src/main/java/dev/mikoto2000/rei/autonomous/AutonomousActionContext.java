@@ -11,4 +11,28 @@ public record AutonomousActionContext(
     boolean activeOpportunity,
     int pendingDrafts,
     int generatedToday,
-    Instant lastAttemptAt) {}
+    Instant lastAttemptAt,
+    Regeneration regeneration) {
+  public record Regeneration(int attempts, Instant lastAttemptAt, boolean targetMatches) {}
+
+  public AutonomousActionContext(
+      Instant now,
+      String targetDid,
+      String targetHandle,
+      boolean stopping,
+      boolean activeOpportunity,
+      int pendingDrafts,
+      int generatedToday,
+      Instant lastAttemptAt) {
+    this(
+        now,
+        targetDid,
+        targetHandle,
+        stopping,
+        activeOpportunity,
+        pendingDrafts,
+        generatedToday,
+        lastAttemptAt,
+        null);
+  }
+}

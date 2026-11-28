@@ -21,6 +21,16 @@ public interface AutonomousDraftStore {
   Optional<AutonomousDraft> complete(
       Claim claim, String text, String reason, List<String> sourceIds);
 
+  Consideration reserveRegeneration(
+      String opportunityId,
+      String draftId,
+      int expectedRevision,
+      String targetDid,
+      String targetHandle);
+
+  Optional<AutonomousDraft> completeRegeneration(
+      Claim claim, String text, String reason, List<String> sourceIds);
+
   void skip(Claim claim, String reason);
 
   void fail(Claim claim);

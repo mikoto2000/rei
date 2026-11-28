@@ -3,6 +3,8 @@ import { App } from "../src/App";
 import type { Command } from "../src/tauri/commands";
 import type { Snapshot, Run } from "../src/entities/models";
 import "../src/styles.css";
+import { autonomousFixture } from "./autonomous-fixture";
+import type { WorkspaceOperation } from "../src/entities/workspace";
 const server = {
   id: "s",
   name: "Home Rei",
@@ -384,6 +386,11 @@ const call = (async (
     return accepted;
   }
   if (name === "workspace_execute") {
+    if (
+      (args?.operation as WorkspaceOperation).operation.startsWith("autonomous")
+    ) {
+      return autonomousFixture(args?.operation as WorkspaceOperation);
+    }
     const op = args?.operation as {
       operation: string;
       url?: string;

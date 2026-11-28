@@ -6,6 +6,7 @@ use serde::de::DeserializeOwned;
 use std::time::Duration;
 mod artifacts;
 mod attention;
+mod autonomous;
 mod background;
 mod checkpoints;
 mod dependencies;
@@ -92,7 +93,17 @@ impl HttpReiClient {
         request: reqwest::RequestBuilder,
         op: Operation,
     ) -> Result<T> {
-        let response = Self::checked(request.timeout(Duration::from_secs(30)), op).await?;
+        Self::json_with_timeout(request, op, Duration::from_secs(30)).await
+    }
+    async fn json_with_timeout<T: DeserializeOwned>(
+        request: reqwest::RequestBuilder,
+        op: Operation,
+        timeout: Duration,
+    ) -> Result<T> {
+        if timeout.is_zero() || timeout > Duration::from_secs(180) {
+            return Err(AppError::InvalidInput);
+        }
+        let response = Self::checked(request.timeout(timeout), op).await?;
         if matches!(op, Operation::Resource)
             && (response.status() != reqwest::StatusCode::OK
                 || !response
