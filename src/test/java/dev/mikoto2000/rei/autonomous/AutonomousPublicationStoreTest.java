@@ -72,6 +72,55 @@ class AutonomousPublicationStoreTest {
   }
 
   @Test
+  void reconciliationOnlyConfirmsTheFrozenUnknownRecordAndPreservesApproval() {
+    var claim = begin();
+    var unknown =
+        store.finishPublication(
+            claim, AutonomousPublicationStore.Outcome.UNKNOWN, null, null, "response_lost");
+    var confirmed =
+        store.confirmPublication(
+            initial.id(), 1, claim.record(), claim.record().uri(), CID, "operator-two");
+    assertThat(confirmed.state()).isEqualTo(AutonomousDraft.State.PUBLISHED);
+    assertThat(confirmed.approval()).isEqualTo(unknown.approval());
+    assertThat(confirmed.publication().recordJson()).isEqualTo(claim.record().recordJson());
+    assertThat(confirmed.publication().uri()).isEqualTo(claim.record().uri());
+    assertThat(confirmed.publication().cid()).isEqualTo(CID);
+    assertThatThrownBy(() ->
+            store.confirmPublication(
+                initial.id(), 1, claim.record(), claim.record().uri(), CID, "operator-two"))
+        .isInstanceOf(AutonomousConflictException.class);
+  }
+
+  @Test
+  void reconciliationRejectsStaleWrongOrStillRunningPublications() {
+    var claim = begin();
+    assertThatThrownBy(() ->
+            store.confirmPublication(
+                initial.id(), 1, claim.record(), claim.record().uri(), CID, "operator-two"))
+        .isInstanceOf(AutonomousConflictException.class);
+    store.finishPublication(
+        claim, AutonomousPublicationStore.Outcome.UNKNOWN, null, null, "response_lost");
+    assertThatThrownBy(() ->
+            store.confirmPublication(
+                initial.id(), 2, claim.record(), claim.record().uri(), CID, "operator-two"))
+        .isInstanceOf(AutonomousConflictException.class);
+    assertThatThrownBy(() ->
+            store.confirmPublication(
+                initial.id(),
+                1,
+                claim.record(),
+                "at://did:plc:other/app.bsky.feed.post/" + claim.record().recordKey(),
+                CID,
+                "operator-two"))
+        .isInstanceOf(AutonomousConflictException.class);
+    assertThatThrownBy(() ->
+            store.confirmPublication(
+                initial.id(), 1, claim.record(), claim.record().uri(), "invalid", "operator-two"))
+        .isInstanceOf(AutonomousConflictException.class);
+    assertThat(store.get(initial.id()).state()).isEqualTo(AutonomousDraft.State.UNKNOWN);
+  }
+
+  @Test
   void beginningPersistsTheSelectedRecordAndApprovalBeforeAnyExternalExecution() {
     assertThat(store.publicationRecord(initial.id())).isEmpty();
     var claim = begin();

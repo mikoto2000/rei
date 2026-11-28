@@ -23,5 +23,13 @@ public interface AutonomousPublicationStore {
 
   Optional<AutonomousPostRecord> publicationRecord(String id);
 
+  AutonomousDraft confirmPublication(
+      String id,
+      int expectedRevision,
+      AutonomousPostRecord expectedRecord,
+      String uri,
+      String cid,
+      String actor);
+
   void recoverInterruptedPublications();
 }

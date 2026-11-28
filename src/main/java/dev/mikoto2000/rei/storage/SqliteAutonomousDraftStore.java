@@ -220,6 +220,55 @@ public final class SqliteAutonomousDraftStore
     });
   }
 
+  public AutonomousDraft confirmPublication(
+      String id,
+      int expectedRevision,
+      AutonomousPostRecord expectedRecord,
+      String uri,
+      String cid,
+      String actor) {
+    if (expectedRevision < 1
+        || expectedRecord == null
+        || actor == null
+        || actor.isBlank()
+        || actor.length() > 256
+        || actor.chars().anyMatch(Character::isISOControl))
+      throw new IllegalArgumentException("Invalid publication reconciliation");
+    if (isStopping()) throw new AutonomousConflictException();
+    return database.transaction(db -> {
+      if (isStopping()) throw new AutonomousConflictException();
+      var current = find(db, id);
+      if (current.state() != AutonomousDraft.State.UNKNOWN
+          || current.content().revision() != expectedRevision)
+        throw new AutonomousConflictException();
+      var journal = publicationJournal(db, current);
+      if (journal == null
+          || journal.token() != null
+          || !expectedRecord.equals(journal.record())
+          || !journal.record().uri().equals(uri)
+          || !AutonomousPostRecord.validRecordCid(cid)) throw new AutonomousConflictException();
+      var now = clock.instant();
+      var old = current.publication();
+      var publication =
+          new AutonomousDraft.Publication(
+              old.startedAt(), old.recordKey(), old.recordJson(), uri, cid, "PUBLISHED", "");
+      var changed =
+          publicationState(
+              current, AutonomousDraft.State.PUBLISHED, current.approval(), publication, now);
+      update(db, changed, expectedRevision, AutonomousDraft.State.UNKNOWN);
+      try (var sql =
+          prepared(
+              db,
+              "UPDATE autonomous_publications SET updated=? WHERE draft_id=? AND token IS NULL",
+              now.toEpochMilli(),
+              id)) {
+        if (sql.executeUpdate() != 1) throw new AutonomousConflictException();
+      }
+      audit(db, id, "PUBLICATION_RECONCILED", "matching_record", actor, now);
+      return changed;
+    });
+  }
+
   public void recoverInterruptedPublications() {
     int recovered;
     do {
