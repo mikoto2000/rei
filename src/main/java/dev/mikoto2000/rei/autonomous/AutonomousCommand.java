@@ -1,6 +1,7 @@
 package dev.mikoto2000.rei.autonomous;
 
 import java.util.function.Supplier;
+import org.springframework.aot.hint.annotation.RegisterReflectionForBinding;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
@@ -11,7 +12,15 @@ import picocli.CommandLine.Spec;
 
 /** Manual draft consideration and explicit topic consent. No publication operations. */
 @Component
-@Command(name = "autonomous", description = "自発投稿案の手動生成と公開用話題の管理", mixinStandardHelpOptions = true)
+@RegisterReflectionForBinding({
+  AutonomousDraft.class,
+  AutonomousPublicSources.Source.class,
+  AutonomousGenerationService.Result.class
+})
+@Command(
+    name = "autonomous",
+    description = "自発投稿案の確認・編集・手動生成と公開用話題の管理",
+    mixinStandardHelpOptions = true)
 public final class AutonomousCommand implements java.util.concurrent.Callable<Integer> {
   private static final com.fasterxml.jackson.databind.ObjectMapper JSON =
       new com.fasterxml.jackson.databind.ObjectMapper()
@@ -19,6 +28,7 @@ public final class AutonomousCommand implements java.util.concurrent.Callable<In
           .disable(com.fasterxml.jackson.databind.SerializationFeature.WRITE_DATES_AS_TIMESTAMPS)
           .enable(com.fasterxml.jackson.databind.SerializationFeature.ORDER_MAP_ENTRIES_BY_KEYS);
   private final AutonomousPublicSources sources;
+  private final AutonomousDraftStore drafts;
   private final Supplier<AutonomousGenerationService> generation;
 
   @Spec picocli.CommandLine.Model.CommandSpec spec;
@@ -27,17 +37,21 @@ public final class AutonomousCommand implements java.util.concurrent.Callable<In
       index = "0",
       arity = "0..1",
       defaultValue = "sources",
-      paramLabel = "generate|sources|source|add-source|edit-source|permit-source|revoke-source")
+      paramLabel =
+          "generate|drafts|draft|edit|regenerate|reject|hold|sources|source|add-source|edit-source|permit-source|revoke-source")
   String action;
 
-  @Parameters(index = "1", arity = "0..1", paramLabel = "sourceId")
+  @Parameters(index = "1", arity = "0..1", paramLabel = "id")
   String id;
 
-  @Option(names = "--text", description = "話題の本文（引用符で囲んで指定）")
+  @Option(names = "--text", description = "投稿案または話題の本文（引用符で囲んで指定）")
   String text;
 
-  @Option(names = "--revision", description = "確認した話題のリビジョン（編集・許可・取消で必須）")
+  @Option(names = "--revision", description = "確認したリビジョン（編集・再生成・見送り・許可・取消で必須）")
   Integer revision;
+
+  @Option(names = "--reason", description = "任意の見送り理由（非公開）")
+  String reason;
 
   @Option(names = "--public-use", description = "新規登録する本文を投稿案生成に利用してよいと明示する")
   boolean publicUse;
@@ -46,18 +60,33 @@ public final class AutonomousCommand implements java.util.concurrent.Callable<In
   int limit;
 
   public AutonomousCommand() {
-    this(null, (Supplier<AutonomousGenerationService>) () -> null);
+    this(null, null, (Supplier<AutonomousGenerationService>) () -> null);
+  }
+
+  public AutonomousCommand(
+      AutonomousPublicSources sources, ObjectProvider<AutonomousGenerationService> generation) {
+    this(sources, null, generation::getIfAvailable);
   }
 
   @Autowired
   public AutonomousCommand(
-      AutonomousPublicSources sources, ObjectProvider<AutonomousGenerationService> generation) {
-    this(sources, generation::getIfAvailable);
+      AutonomousPublicSources sources,
+      AutonomousDraftStore drafts,
+      ObjectProvider<AutonomousGenerationService> generation) {
+    this(sources, drafts, generation::getIfAvailable);
   }
 
   AutonomousCommand(
       AutonomousPublicSources sources, Supplier<AutonomousGenerationService> generation) {
+    this(sources, null, generation);
+  }
+
+  AutonomousCommand(
+      AutonomousPublicSources sources,
+      AutonomousDraftStore drafts,
+      Supplier<AutonomousGenerationService> generation) {
     this.sources = sources;
+    this.drafts = drafts;
     this.generation = generation;
   }
 
@@ -67,6 +96,8 @@ public final class AutonomousCommand implements java.util.concurrent.Callable<In
     try {
       if (publicUse && !"add-source".equals(action))
         throw new IllegalArgumentException("--public-use is only valid for add-source");
+      if (reason != null && !"reject".equals(action))
+        throw new IllegalArgumentException("--reason is only valid for reject");
       Object result =
           switch (action) {
             case "generate" -> {
@@ -77,6 +108,23 @@ public final class AutonomousCommand implements java.util.concurrent.Callable<In
                   : service.manual();
             }
             case "sources" -> sources.list(limit);
+            case "drafts" -> drafts.list(limit);
+            case "draft", "hold" -> drafts.get(requiredId());
+            case "edit" -> drafts.edit(requiredId(), requiredRevision(), requiredText());
+            case "reject" ->
+                drafts.reject(requiredId(), requiredRevision(), reason == null ? "" : reason);
+            case "regenerate" -> {
+              var draftId = requiredId();
+              var expected = requiredRevision();
+              var service = generation.get();
+              yield service == null
+                  ? new AutonomousGenerationService.Result(
+                      AutonomousGenerationService.Status.SKIPPED,
+                      "disabled",
+                      draftId,
+                      drafts.get(draftId))
+                  : service.regenerate(draftId, expected);
+            }
             case "source" -> sources.get(requiredId());
             case "add-source" -> sources.register(requiredText(), publicUse, "shell");
             case "edit-source" ->
