@@ -8,6 +8,40 @@ export interface CoachingSettings {
   cooldownDays: number;
 }
 export type WorkspaceOperation =
+  | { operation: "autonomousDrafts"; limit: number }
+  | { operation: "autonomousDraft"; id: string }
+  | { operation: "autonomousGenerate" }
+  | {
+      operation: "autonomousEdit";
+      id: string;
+      expectedRevision: number;
+      text: string;
+    }
+  | { operation: "autonomousRegenerate"; id: string; expectedRevision: number }
+  | {
+      operation: "autonomousReject";
+      id: string;
+      expectedRevision: number;
+      reason: string;
+    }
+  | { operation: "autonomousSources"; limit: number }
+  | { operation: "autonomousSource"; id: string }
+  | {
+      operation: "autonomousAddSource";
+      text: string;
+      publicUseAllowed: boolean;
+    }
+  | {
+      operation: "autonomousEditSource";
+      id: string;
+      expectedRevision: number;
+      text: string;
+    }
+  | {
+      operation: "autonomousPermitSource" | "autonomousRevokeSource";
+      id: string;
+      expectedRevision: number;
+    }
   | {
       operation: "activityObservationContext";
       projectId: string;

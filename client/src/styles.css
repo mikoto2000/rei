@@ -298,6 +298,45 @@ main {
 .narrow {
   max-width: 760px;
 }
+.autonomous-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+.autonomous-body,
+.autonomous-preview,
+.autonomous-pane dd {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+.autonomous-body {
+  font: inherit;
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--bg);
+}
+.autonomous-pane dl > div {
+  display: grid;
+  grid-template-columns: minmax(95px, 1fr) minmax(0, 3fr);
+  gap: 12px;
+  margin: 8px 0;
+  font-size: 13px;
+}
+.autonomous-pane dd {
+  margin: 0;
+}
+.autonomous-pane dt {
+  color: var(--muted);
+}
+.autonomous-pane textarea {
+  min-height: 110px;
+}
+.autonomous-pane button {
+  margin: 4px;
+}
 .card {
   background: #192330;
   border: 1px solid var(--line);
