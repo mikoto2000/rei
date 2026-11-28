@@ -30,6 +30,14 @@ public interface BlueskyApiClient {
 
   record RecordResult(String uri, String cid) {}
 
+  /** Public fixed-key lookup. Must never authenticate or submit a write. */
+  default RecordSnapshot getFixedRecord(String did, String recordKey)
+      throws IOException, InterruptedException {
+    throw new UnsupportedOperationException("Fixed record lookup is not implemented");
+  }
+
+  record RecordSnapshot(String uri, String cid, String recordJson) {}
+
   /** 指定や設定に応じた対象を利用するため、操作対象を確定する。 */
   default String resolveHandle(String handle) {
     throw new UnsupportedOperationException("resolveHandle is not implemented");

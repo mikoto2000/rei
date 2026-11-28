@@ -57,6 +57,41 @@ class BlueskyAutonomousPublicationTransportTest {
   }
 
   @Test
+  void lookupOnlyUsesTheFrozenPublicIdentityWithoutAuthenticationOrPosting() {
+    api.snapshot = new BlueskyApiClient.RecordSnapshot(record.uri(), CID, record.recordJson());
+    properties.setAppPassword("");
+    var found = transport.lookup(record);
+    assertThat(found.uri()).isEqualTo(record.uri());
+    assertThat(found.cid()).isEqualTo(CID);
+    assertThat(found.recordJson()).isEqualTo(record.recordJson());
+    assertThat(api.lookups).isEqualTo(1);
+    assertThat(api.did).isEqualTo(record.did());
+    assertThat(api.key).isEqualTo(record.recordKey());
+    assertThat(api.authentications).isZero();
+    assertThat(api.creates).isZero();
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"absent", "failed", "interrupted"})
+  void lookupFailureNeverSubmitsAnythingOrExposesProviderErrors(String defect) throws Exception {
+    if (defect.equals("failed")) api.lookupFailure = new IOException("PRIVATE_PROVIDER");
+    if (defect.equals("interrupted"))
+      api.lookupFailure = new InterruptedException("PRIVATE_PROVIDER");
+    try (var executor = Executors.newSingleThreadExecutor()) {
+      executor
+          .submit(() -> {
+            assertThat(transport.lookup(record)).isNull();
+            assertThat(Thread.currentThread().isInterrupted())
+                .isEqualTo(defect.equals("interrupted"));
+          })
+          .get(5, TimeUnit.SECONDS);
+    }
+    assertThat(api.lookups).isEqualTo(1);
+    assertThat(api.authentications).isZero();
+    assertThat(api.creates).isZero();
+  }
+
+  @Test
   void reusesExistingCredentialsAndSendsTheExactFrozenRecordOnce() {
     transport.validate(record.text());
     assertThat(api.authentications).isZero();
@@ -185,6 +220,9 @@ class BlueskyAutonomousPublicationTransportTest {
   }
 
   private static final class FakeApi implements BlueskyApiClient {
+    private int lookups;
+    private Exception lookupFailure;
+    private RecordSnapshot snapshot;
     private int authentications, creates;
     private boolean success = true;
     private String authDid = DID, authJwt = "fixture-access-jwt", resultDefect = "";
@@ -195,6 +233,17 @@ class BlueskyAutonomousPublicationTransportTest {
     @Override
     public AuthResult authenticate(String handle, String password) {
       throw new AssertionError("The bounded record authentication method is required");
+    }
+
+    @Override
+    public RecordSnapshot getFixedRecord(String did, String key)
+        throws IOException, InterruptedException {
+      lookups++;
+      this.did = did;
+      this.key = key;
+      if (lookupFailure instanceof IOException failed) throw failed;
+      if (lookupFailure instanceof InterruptedException cancelled) throw cancelled;
+      return snapshot;
     }
 
     @Override

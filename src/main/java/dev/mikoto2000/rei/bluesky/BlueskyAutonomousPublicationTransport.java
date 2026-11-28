@@ -84,6 +84,19 @@ public final class BlueskyAutonomousPublicationTransport implements AutonomousPu
     return new Receipt(AutonomousPublicationStore.Outcome.FAILED, null, null, code);
   }
 
+  @Override
+  public FoundRecord lookup(AutonomousPostRecord record) {
+    try {
+      var found = client.getFixedRecord(record.did(), record.recordKey());
+      return found == null ? null : new FoundRecord(found.uri(), found.cid(), found.recordJson());
+    } catch (InterruptedException cancelled) {
+      Thread.currentThread().interrupt();
+      return null;
+    } catch (IOException | RuntimeException unavailable) {
+      return null;
+    }
+  }
+
   private static Receipt unknown(String code) {
     return new Receipt(AutonomousPublicationStore.Outcome.UNKNOWN, null, null, code);
   }

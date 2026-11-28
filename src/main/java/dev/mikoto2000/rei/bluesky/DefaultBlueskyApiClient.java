@@ -167,6 +167,29 @@ public class DefaultBlueskyApiClient implements BlueskyApiClient {
         .POST(HttpRequest.BodyPublishers.ofByteArray(recordMapper.writeValueAsBytes(body)));
   }
 
+  @Override
+  public RecordSnapshot getFixedRecord(String did, String recordKey)
+      throws IOException, InterruptedException {
+    URI endpoint = recordCreateUri.resolve("com.atproto.repo.getRecord");
+    URI uri =
+        URI.create(
+            endpoint
+                + "?repo="
+                + encode(did)
+                + "&collection=app.bsky.feed.post&rkey="
+                + encode(recordKey));
+    JsonNode response =
+        sendRecordRequest(HttpRequest.newBuilder(uri).timeout(recordTimeout()).GET().build());
+    String foundUri = requiredRecordText(response, "uri");
+    var value = response.get("value");
+    if (value == null || !value.isObject())
+      throw new IOException("Invalid Bluesky record response");
+    var cid = response.get("cid");
+    if (cid != null && !cid.isTextual()) throw new IOException("Invalid Bluesky record response");
+    return new RecordSnapshot(
+        foundUri, cid == null ? null : cid.textValue(), recordMapper.writeValueAsString(value));
+  }
+
   private Duration recordTimeout() {
     return Duration.ofSeconds(Math.min(60, Math.max(1, properties.getTimeoutSeconds())));
   }

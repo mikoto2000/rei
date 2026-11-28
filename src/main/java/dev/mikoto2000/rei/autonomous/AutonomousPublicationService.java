@@ -84,4 +84,29 @@ public final class AutonomousPublicationService {
   private boolean canSend() {
     return !store.isStopping() && permissions.allowed();
   }
+
+  public AutonomousDraft reconcile(String id, int expectedRevision, String actor) {
+    if (expectedRevision < 1
+        || actor == null
+        || actor.isBlank()
+        || actor.length() > 256
+        || actor.chars().anyMatch(Character::isISOControl))
+      throw new IllegalArgumentException("Review revision and operation source are required");
+    if (store.isStopping()) throw new AutonomousConflictException();
+    if (!permissions.allowed()) throw new SecurityException("Bluesky publication is not allowed");
+    var current = store.get(id);
+    if (current.content().revision() != expectedRevision
+        || current.state() != AutonomousDraft.State.UNKNOWN)
+      throw new AutonomousConflictException();
+    var record = store.publicationRecord(id).orElseThrow(AutonomousConflictException::new);
+    AutonomousPublicationTransport.FoundRecord found;
+    try {
+      found = transport.lookup(record);
+    } catch (RuntimeException unavailable) {
+      return current;
+    }
+    if (found == null || !record.matches(found.uri(), found.cid(), found.recordJson()))
+      return current;
+    return store.confirmPublication(id, expectedRevision, record, found.uri(), found.cid(), actor);
+  }
 }

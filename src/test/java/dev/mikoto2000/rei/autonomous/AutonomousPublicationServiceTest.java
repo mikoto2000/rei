@@ -76,6 +76,90 @@ class AutonomousPublicationServiceTest {
     return service.publish(initial.id(), 1, "api-client");
   }
 
+  private AutonomousDraft uncertain() {
+    transport.behavior =
+        (record, gate) ->
+            new AutonomousPublicationTransport.Receipt(
+                AutonomousPublicationStore.Outcome.UNKNOWN, null, null, "response_lost");
+    return publish();
+  }
+
+  @Test
+  void readOnlyReconciliationConfirmsAllFrozenValuesWithoutAnotherSend() {
+    var unknown = uncertain();
+    var record = store.publicationRecord(initial.id()).orElseThrow();
+    transport.found =
+        new AutonomousPublicationTransport.FoundRecord(record.uri(), CID, record.recordJson());
+    var result = service.reconcile(initial.id(), 1, "api-client");
+    assertThat(result.state()).isEqualTo(AutonomousDraft.State.PUBLISHED);
+    assertThat(result.approval()).isEqualTo(unknown.approval());
+    assertThat(result.publication().cid()).isEqualTo(CID);
+    assertThat(transport.lookups).isEqualTo(1);
+    assertThat(transport.records).hasSize(1);
+  }
+
+  @ParameterizedTest
+  @ValueSource(
+      strings = {
+        "absent",
+        "missing_cid",
+        "invalid_cid",
+        "wrong_uri",
+        "changed_text",
+        "extra_field",
+        "invalid_json",
+        "lookup_failure"
+      })
+  void missingDifferentOrUnavailableRecordsStayUnknownAndAreNeverResent(String defect) {
+    var unknown = uncertain();
+    var record = store.publicationRecord(initial.id()).orElseThrow();
+    transport.found =
+        switch (defect) {
+          case "absent" -> null;
+          case "missing_cid" ->
+              new AutonomousPublicationTransport.FoundRecord(
+                  record.uri(), null, record.recordJson());
+          case "invalid_cid" ->
+              new AutonomousPublicationTransport.FoundRecord(
+                  record.uri(), "invalid", record.recordJson());
+          case "wrong_uri" ->
+              new AutonomousPublicationTransport.FoundRecord(
+                  record.uri() + "other", CID, record.recordJson());
+          case "changed_text" ->
+              new AutonomousPublicationTransport.FoundRecord(
+                  record.uri(), CID, record.recordJson().replace("確認した全文", "別の本文"));
+          case "extra_field" ->
+              new AutonomousPublicationTransport.FoundRecord(
+                  record.uri(), CID, record.recordJson().replaceFirst("\\{", "{\"facets\":[],"));
+          case "invalid_json" ->
+              new AutonomousPublicationTransport.FoundRecord(record.uri(), CID, "{PRIVATE");
+          default -> null;
+        };
+    if (defect.equals("lookup_failure"))
+      transport.lookupFailure = new IllegalStateException("PRIVATE_PROVIDER_BODY");
+    assertThat(service.reconcile(initial.id(), 1, "api-client")).isEqualTo(unknown);
+    assertThat(store.get(initial.id())).isEqualTo(unknown);
+    assertThat(transport.records).hasSize(1);
+    assertThatThrownBy(this::publish).isInstanceOf(AutonomousConflictException.class);
+  }
+
+  @Test
+  void stalePendingDeniedAndStoppingReconciliationsDoNotPerformNetworkReads() {
+    assertThatThrownBy(() -> service.reconcile(initial.id(), 1, "api-client"))
+        .isInstanceOf(AutonomousConflictException.class);
+    uncertain();
+    assertThatThrownBy(() -> service.reconcile(initial.id(), 2, "api-client"))
+        .isInstanceOf(AutonomousConflictException.class);
+    allowed.set(false);
+    assertThatThrownBy(() -> service.reconcile(initial.id(), 1, "api-client"))
+        .isInstanceOf(SecurityException.class);
+    allowed.set(true);
+    store.stop();
+    assertThatThrownBy(() -> service.reconcile(initial.id(), 1, "api-client"))
+        .isInstanceOf(AutonomousConflictException.class);
+    assertThat(transport.lookups).isZero();
+  }
+
   @Test
   void onlyAnExplicitPublicationSendsThePersistedSelectedRecord() {
     assertThat(transport.records).isEmpty();
@@ -242,6 +326,9 @@ class AutonomousPublicationServiceTest {
   }
 
   private final class FakeTransport implements AutonomousPublicationTransport {
+    private FoundRecord found;
+    private RuntimeException lookupFailure;
+    private int lookups;
     private final List<AutonomousPostRecord> records = new ArrayList<>();
     private Consumer<String> validation = text -> {};
     private BiFunction<AutonomousPostRecord, BooleanSupplier, Receipt> behavior =
@@ -250,6 +337,13 @@ class AutonomousPublicationServiceTest {
     @Override
     public void validate(String text) {
       validation.accept(text);
+    }
+
+    @Override
+    public FoundRecord lookup(AutonomousPostRecord record) {
+      lookups++;
+      if (lookupFailure != null) throw lookupFailure;
+      return found;
     }
 
     @Override
