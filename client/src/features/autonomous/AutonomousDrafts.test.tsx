@@ -17,6 +17,159 @@ import { AutonomousDrafts } from "./AutonomousDrafts";
 
 afterEach(cleanup);
 
+it("opens history explicitly and fetches the current full draft before offering publication", async () => {
+  const f = fixture((_server, op) => {
+    if (op.operation === "autonomousPublished")
+      return result([draft("past-one", 1, "保存された公開本文", "PUBLISHED")]);
+    if (op.operation === "autonomousHistory")
+      return result([
+        {
+          id: "manual:past",
+          title: "生成履歴",
+          fields: [
+            ["Type", "AutonomousHistory"],
+            ["Status", "GENERATED"],
+            ["Trigger", "MANUAL"],
+            ["Kind", "NEW"],
+            ["Reason", "過去の生成"],
+            ["DraftId", "history-draft"],
+            ["CreatedAt", "2026-11-28T03:00:00Z"],
+          ],
+        },
+      ]);
+    if (op.operation === "autonomousDraft" && op.id === "history-draft")
+      return result([draft("history-draft", 7, "履歴から取得した最新本文")]);
+    return undefined;
+  });
+  render(<AutonomousDrafts call={f.call as Command} serverId="s" />);
+  await screen.findByRole("button", { name: "投稿案を確認 draft-one" });
+  expect(
+    f.operations().some((op) => op.operation === "autonomousHistory"),
+  ).toBe(false);
+  await userEvent.click(
+    screen.getByRole("button", { name: "投稿・生成履歴を表示" }),
+  );
+  expect(await screen.findByText("保存された公開本文")).toBeTruthy();
+  await userEvent.click(
+    screen.getByRole("button", { name: "投稿案を開く history-draft" }),
+  );
+  const detail = await screen.findByRole("region", { name: "投稿案の詳細" });
+  expect(within(detail).getByLabelText("投稿本文の全文").textContent).toBe(
+    "履歴から取得した最新本文",
+  );
+  expect(f.operations()).toContainEqual({
+    operation: "autonomousDraft",
+    id: "history-draft",
+  });
+  expect(
+    f.operations().some((op) => op.operation === "autonomousPublish"),
+  ).toBe(false);
+  expect(screen.queryByRole("region", { name: "投稿・生成履歴" })).toBeNull();
+  await userEvent.click(screen.getByRole("button", { name: "公開内容を確認" }));
+  expect(screen.getByRole("dialog").textContent).toContain(
+    "履歴から取得した最新本文",
+  );
+  expect(screen.getByRole("dialog").textContent).not.toContain(
+    "保存された公開本文",
+  );
+});
+
+const rejectedWithReason = (reason: string) => {
+  const item = draft("draft-one", 1, "見送った本文", "REJECTED");
+  item.fields.push(["RejectionReason", reason]);
+  return result([item]);
+};
+
+it("copies a rejection into a private editable form and permits only the redacted registered source", async () => {
+  const privateReason = "PRIVATE_ORIGINAL_REASON / もっと簡潔に";
+  const publicFeedback = "PUBLIC_FEEDBACK もっと簡潔に";
+  const f = fixture((_server, op) =>
+    op.operation === "autonomousDraft"
+      ? rejectedWithReason(privateReason)
+      : undefined,
+  );
+  render(<AutonomousDrafts call={f.call as Command} serverId="s" />);
+  await openDraft();
+  await userEvent.click(
+    screen.getByRole("button", { name: "公開用の話題を管理" }),
+  );
+  await userEvent.click(
+    screen.getByRole("checkbox", { name: "投稿案の生成に利用してよい" }),
+  );
+  const before = f.operations().length;
+  await userEvent.click(
+    screen.getByRole("button", { name: "見送り理由を資料の入力欄へコピー" }),
+  );
+  expect(f.operations()).toHaveLength(before);
+  const input = screen.getByLabelText<HTMLTextAreaElement>("新しい話題の本文");
+  expect(input.value).toBe(privateReason);
+  expect(
+    screen.getByRole<HTMLInputElement>("checkbox", {
+      name: "投稿案の生成に利用してよい",
+    }).checked,
+  ).toBe(false);
+  await userEvent.clear(input);
+  await userEvent.type(input, publicFeedback);
+  await userEvent.click(screen.getByRole("button", { name: "話題を登録" }));
+  await screen.findByRole("region", { name: "話題の詳細" });
+  expect(f.operations()).toContainEqual({
+    operation: "autonomousAddSource",
+    text: publicFeedback,
+    publicUseAllowed: false,
+  });
+  expect(
+    f.operations().some((op) => op.operation === "autonomousPermitSource"),
+  ).toBe(false);
+  await userEvent.click(
+    screen.getByRole("button", { name: "生成への利用を許可" }),
+  );
+  await waitFor(() =>
+    expect(f.operations()).toContainEqual({
+      operation: "autonomousPermitSource",
+      id: "source-one",
+      expectedRevision: 1,
+    }),
+  );
+  expect(
+    within(screen.getByRole("region", { name: "投稿案の詳細" })).getByText(
+      privateReason,
+    ),
+  ).toBeTruthy();
+  expect(
+    f.operations().some((op) => op.operation === "autonomousPublish"),
+  ).toBe(false);
+});
+
+it("clears an unsaved private feedback copy when switching servers", async () => {
+  const f = fixture((server, op) =>
+    server === "old" && op.operation === "autonomousDraft"
+      ? rejectedWithReason("PRIVATE_OLD_FEEDBACK")
+      : undefined,
+  );
+  const view = render(
+    <AutonomousDrafts call={f.call as Command} serverId="old" />,
+  );
+  await openDraft();
+  await userEvent.click(
+    screen.getByRole("button", { name: "見送り理由を資料の入力欄へコピー" }),
+  );
+  expect(
+    screen.getByLabelText<HTMLTextAreaElement>("新しい話題の本文").value,
+  ).toBe("PRIVATE_OLD_FEEDBACK");
+  view.rerender(<AutonomousDrafts call={f.call as Command} serverId="new" />);
+  expect(screen.queryByText("PRIVATE_OLD_FEEDBACK")).toBeNull();
+  await screen.findByRole("button", { name: "投稿案を確認 draft-one" });
+  await userEvent.click(
+    screen.getByRole("button", { name: "公開用の話題を管理" }),
+  );
+  expect(
+    screen.getByLabelText<HTMLTextAreaElement>("新しい話題の本文").value,
+  ).toBe("");
+  expect(
+    f.operations().some((op) => op.operation === "autonomousAddSource"),
+  ).toBe(false);
+});
+
 it("opens a notification reference by fetching the latest full draft before any publication", async () => {
   const f = fixture((_server, op) =>
     op.operation === "autonomousDraft"
