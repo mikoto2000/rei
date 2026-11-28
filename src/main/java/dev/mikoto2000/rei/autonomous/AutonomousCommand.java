@@ -10,7 +10,7 @@ import picocli.CommandLine.Option;
 import picocli.CommandLine.Parameters;
 import picocli.CommandLine.Spec;
 
-/** Manual draft consideration and explicit topic consent. No publication operations. */
+/** Manual review, selected-draft publication, and explicit topic consent. */
 @Component
 @RegisterReflectionForBinding({
   AutonomousDraft.class,
@@ -30,6 +30,7 @@ public final class AutonomousCommand implements java.util.concurrent.Callable<In
   private final AutonomousPublicSources sources;
   private final AutonomousDraftStore drafts;
   private final Supplier<AutonomousGenerationService> generation;
+  private final Supplier<AutonomousPublicationService> publication;
 
   @Spec picocli.CommandLine.Model.CommandSpec spec;
 
@@ -38,7 +39,7 @@ public final class AutonomousCommand implements java.util.concurrent.Callable<In
       arity = "0..1",
       defaultValue = "sources",
       paramLabel =
-          "generate|drafts|draft|edit|regenerate|reject|hold|sources|source|add-source|edit-source|permit-source|revoke-source")
+          "generate|drafts|draft|edit|regenerate|reject|hold|publish|reconcile|sources|source|add-source|edit-source|permit-source|revoke-source")
   String action;
 
   @Parameters(index = "1", arity = "0..1", paramLabel = "id")
@@ -47,7 +48,7 @@ public final class AutonomousCommand implements java.util.concurrent.Callable<In
   @Option(names = "--text", description = "投稿案または話題の本文（引用符で囲んで指定）")
   String text;
 
-  @Option(names = "--revision", description = "確認したリビジョン（編集・再生成・見送り・許可・取消で必須）")
+  @Option(names = "--revision", description = "確認したリビジョン（編集・再生成・見送り・公開・照合・許可・取消で必須）")
   Integer revision;
 
   @Option(names = "--reason", description = "任意の見送り理由（非公開）")
@@ -68,12 +69,20 @@ public final class AutonomousCommand implements java.util.concurrent.Callable<In
     this(sources, null, generation::getIfAvailable);
   }
 
-  @Autowired
   public AutonomousCommand(
       AutonomousPublicSources sources,
       AutonomousDraftStore drafts,
       ObjectProvider<AutonomousGenerationService> generation) {
     this(sources, drafts, generation::getIfAvailable);
+  }
+
+  @Autowired
+  public AutonomousCommand(
+      AutonomousPublicSources sources,
+      AutonomousDraftStore drafts,
+      ObjectProvider<AutonomousGenerationService> generation,
+      ObjectProvider<AutonomousPublicationService> publication) {
+    this(sources, drafts, generation::getIfAvailable, publication::getIfAvailable);
   }
 
   AutonomousCommand(
@@ -85,9 +94,18 @@ public final class AutonomousCommand implements java.util.concurrent.Callable<In
       AutonomousPublicSources sources,
       AutonomousDraftStore drafts,
       Supplier<AutonomousGenerationService> generation) {
+    this(sources, drafts, generation, () -> null);
+  }
+
+  AutonomousCommand(
+      AutonomousPublicSources sources,
+      AutonomousDraftStore drafts,
+      Supplier<AutonomousGenerationService> generation,
+      Supplier<AutonomousPublicationService> publication) {
     this.sources = sources;
     this.drafts = drafts;
     this.generation = generation;
+    this.publication = publication;
   }
 
   @Override
@@ -98,6 +116,8 @@ public final class AutonomousCommand implements java.util.concurrent.Callable<In
         throw new IllegalArgumentException("--public-use is only valid for add-source");
       if (reason != null && !"reject".equals(action))
         throw new IllegalArgumentException("--reason is only valid for reject");
+      if (text != null && ("publish".equals(action) || "reconcile".equals(action)))
+        throw new IllegalArgumentException("Publication uses only the saved draft text");
       Object result =
           switch (action) {
             case "generate" -> {
@@ -110,6 +130,8 @@ public final class AutonomousCommand implements java.util.concurrent.Callable<In
             case "sources" -> sources.list(limit);
             case "drafts" -> drafts.list(limit);
             case "draft", "hold" -> drafts.get(requiredId());
+            case "publish" -> publication().publish(requiredId(), requiredRevision(), "shell");
+            case "reconcile" -> publication().reconcile(requiredId(), requiredRevision(), "shell");
             case "edit" -> drafts.edit(requiredId(), requiredRevision(), requiredText());
             case "reject" ->
                 drafts.reject(requiredId(), requiredRevision(), reason == null ? "" : reason);
@@ -154,6 +176,12 @@ public final class AutonomousCommand implements java.util.concurrent.Callable<In
   private String requiredId() {
     if (id == null || id.isBlank()) throw new IllegalArgumentException("sourceId is required");
     return id;
+  }
+
+  private AutonomousPublicationService publication() {
+    var service = publication.get();
+    if (service == null) throw new SecurityException("Publication is unavailable");
+    return service;
   }
 
   private String requiredText() {

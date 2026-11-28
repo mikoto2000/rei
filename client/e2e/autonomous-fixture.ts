@@ -62,6 +62,20 @@ export function autonomousFixture(op: WorkspaceOperation): WorkspaceResult {
           item(),
         ],
       };
+    case "autonomousPublish":
+      if (op.expectedRevision !== revision || state !== "PENDING_REVIEW")
+        throw "ResourceConflict";
+      state = new URLSearchParams(window.location.search).has(
+        "unknown-publication",
+      )
+        ? "UNKNOWN"
+        : "PUBLISHED";
+      break;
+    case "autonomousReconcile":
+      if (op.expectedRevision !== revision || state !== "UNKNOWN")
+        throw "ResourceConflict";
+      state = "PUBLISHED";
+      break;
     default:
       throw "InvalidInput";
   }

@@ -16,6 +16,178 @@ import type {
 import { AutonomousDrafts } from "./AutonomousDrafts";
 
 afterEach(cleanup);
+
+it("publishes only after reviewing the full selected body and target, and suppresses duplicate clicks", async () => {
+  let finish: ((value: WorkspaceResult) => void) | undefined;
+  const f = fixture((_server, op) =>
+    op.operation === "autonomousPublish"
+      ? new Promise((resolve) => {
+          finish = resolve;
+        })
+      : undefined,
+  );
+  render(<AutonomousDrafts call={f.call as Command} serverId="s" />);
+  await openDraft();
+  expect(
+    f.operations().some((op) => op.operation === "autonomousPublish"),
+  ).toBe(false);
+  await userEvent.click(screen.getByRole("button", { name: "公開内容を確認" }));
+  const confirmation = screen.getByRole("dialog", { name: "投稿の公開確認" });
+  expect(
+    within(confirmation).getByLabelText("公開する本文の全文").textContent,
+  ).toBe("最初の本文");
+  expect(within(confirmation).getByText(/rei.example/)).toBeTruthy();
+  expect(within(confirmation).getByText(/did:plc:example/)).toBeTruthy();
+  await userEvent.dblClick(
+    within(confirmation).getByRole("button", { name: "この内容を公開する" }),
+  );
+  expect(
+    f.operations().filter((op) => op.operation === "autonomousPublish"),
+  ).toEqual([
+    { operation: "autonomousPublish", id: "draft-one", expectedRevision: 1 },
+  ]);
+  await act(async () =>
+    finish?.(result([draft("draft-one", 1, "最初の本文", "PUBLISHED")])),
+  );
+  expect(screen.queryByRole("dialog")).toBeNull();
+  expect(screen.queryByRole("button", { name: "公開内容を確認" })).toBeNull();
+});
+
+it("keeps unknown results read-only and reconciles without another publication", async () => {
+  const f = fixture((_server, op) => {
+    if (op.operation === "autonomousDraft")
+      return result([draft("draft-one", 1, "全文", "UNKNOWN")]);
+    if (op.operation === "autonomousReconcile")
+      return result([draft("draft-one", 1, "全文", "PUBLISHED")]);
+    return undefined;
+  });
+  render(<AutonomousDrafts call={f.call as Command} serverId="s" />);
+  await openDraft();
+  expect(screen.queryByRole("button", { name: "公開内容を確認" })).toBeNull();
+  await userEvent.click(screen.getByRole("button", { name: "公開結果を照合" }));
+  expect(f.operations()).toContainEqual({
+    operation: "autonomousReconcile",
+    id: "draft-one",
+    expectedRevision: 1,
+  });
+  expect(
+    f.operations().some((op) => op.operation === "autonomousPublish"),
+  ).toBe(false);
+});
+
+it("cancels publication confirmation and requires reviewing the saved edited body", async () => {
+  const f = fixture();
+  render(<AutonomousDrafts call={f.call as Command} serverId="s" />);
+  await openDraft();
+  await userEvent.click(screen.getByRole("button", { name: "公開内容を確認" }));
+  await userEvent.click(screen.getByRole("button", { name: "公開を取り消す" }));
+  expect(screen.queryByRole("dialog")).toBeNull();
+  await userEvent.click(screen.getByRole("button", { name: "本文を編集" }));
+  expect(
+    (
+      screen.getByRole("button", {
+        name: "公開内容を確認",
+      }) as HTMLButtonElement
+    ).disabled,
+  ).toBe(true);
+  await userEvent.click(screen.getByRole("button", { name: "編集を保存" }));
+  await userEvent.click(screen.getByRole("button", { name: "公開内容を確認" }));
+  expect(screen.getByLabelText("公開する本文の全文").textContent).toBe(
+    "サーバーから返された全文",
+  );
+  expect(within(screen.getByRole("dialog")).getByText(/改訂: 2/)).toBeTruthy();
+  expect(
+    f.operations().some((op) => op.operation === "autonomousPublish"),
+  ).toBe(false);
+});
+
+it("requires an explicit full-content confirmation before retrying a known unsent failure", async () => {
+  const f = fixture((_server, op) => {
+    if (op.operation === "autonomousDraft")
+      return result([draft("draft-one", 3, "凍結した本文", "FAILED")]);
+    if (op.operation === "autonomousPublish")
+      return result([draft("draft-one", 3, "凍結した本文", "PUBLISHED")]);
+    return undefined;
+  });
+  render(<AutonomousDrafts call={f.call as Command} serverId="s" />);
+  await openDraft();
+  await userEvent.click(
+    screen.getByRole("button", { name: "同じ内容で再試行を確認" }),
+  );
+  expect(screen.getByLabelText("公開する本文の全文").textContent).toBe(
+    "凍結した本文",
+  );
+  expect(
+    f.operations().some((op) => op.operation === "autonomousPublish"),
+  ).toBe(false);
+  await userEvent.click(
+    screen.getByRole("button", { name: "この内容を公開する" }),
+  );
+  expect(f.operations()).toContainEqual({
+    operation: "autonomousPublish",
+    id: "draft-one",
+    expectedRevision: 3,
+  });
+});
+
+it("ignores a late publication result after switching servers", async () => {
+  let finish: ((value: WorkspaceResult) => void) | undefined;
+  const f = fixture((server, op) => {
+    if (server === "a" && op.operation === "autonomousPublish")
+      return new Promise((resolve) => {
+        finish = resolve;
+      });
+    if (server === "b" && op.operation === "autonomousDraft")
+      return result([draft("draft-one", 1, "新しいサーバーの本文")]);
+    return undefined;
+  });
+  const view = render(
+    <AutonomousDrafts call={f.call as Command} serverId="a" />,
+  );
+  await openDraft();
+  await userEvent.click(screen.getByRole("button", { name: "公開内容を確認" }));
+  await userEvent.click(
+    screen.getByRole("button", { name: "この内容を公開する" }),
+  );
+  view.rerender(<AutonomousDrafts call={f.call as Command} serverId="b" />);
+  await openDraft();
+  await act(async () =>
+    finish?.(
+      result([draft("draft-one", 1, "OLD_SERVER_PRIVATE", "PUBLISHED")]),
+    ),
+  );
+  expect(screen.queryByText("OLD_SERVER_PRIVATE")).toBeNull();
+  expect(screen.getByLabelText("投稿本文の全文").textContent).toBe(
+    "新しいサーバーの本文",
+  );
+  expect(screen.queryByRole("dialog")).toBeNull();
+});
+
+it("requires refreshing after a disconnected publication instead of offering an immediate retry", async () => {
+  const f = fixture((_server, op) => {
+    if (op.operation === "autonomousPublish")
+      throw new Error("Request timeout");
+    return undefined;
+  });
+  render(<AutonomousDrafts call={f.call as Command} serverId="s" />);
+  await openDraft();
+  await userEvent.click(screen.getByRole("button", { name: "公開内容を確認" }));
+  await userEvent.click(
+    screen.getByRole("button", { name: "この内容を公開する" }),
+  );
+  await screen.findByText(/公開結果を確認できませんでした/);
+  expect(
+    (
+      screen.getByRole("button", {
+        name: "公開内容を確認",
+      }) as HTMLButtonElement
+    ).disabled,
+  ).toBe(true);
+  expect(screen.queryByRole("dialog")).toBeNull();
+  expect(
+    f.operations().filter((op) => op.operation === "autonomousPublish"),
+  ).toHaveLength(1);
+});
 type Item = WorkspaceResult["items"][number];
 const result = (items: Item[]): WorkspaceResult => ({ title: "結果", items });
 const draft = (

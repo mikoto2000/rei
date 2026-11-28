@@ -1,10 +1,10 @@
 # 自発的行動の実装状況
 
-Phase 3 では、公開利用を明示的に許可した話題を使い、GUI・従来 Shell・軽量 CLI から
-投稿案を手動生成し、一覧・全文確認・編集・再生成・見送り・保留ができます。
+Phase 4 では、公開利用を明示的に許可した話題を使い、GUI・従来 Shell・軽量 CLI から
+投稿案を手動生成し、一覧・全文確認・編集・再生成・見送り・保留・明示公開・結果照合ができます。
 生成は未承認の `PENDING_REVIEW` ドラフトの保存で終了します。
-通知、定期実行、承認付き公開は後続 Phase です。投稿承認・公開の操作経路はまだありません。
-既定では無効です。有効化しても定期実行や外部公開は開始しません。
+通知と定期実行は後続 Phase です。既定では無効です。
+有効化だけでは公開せず、選択した投稿案に対する明示的な公開操作が必要です。
 
 ## 設定
 
@@ -87,7 +87,7 @@ Shell と軽量 CLI はサーバーの結果を JSON で表示し、編集・再
 `hold` は読み取りだけです。更新操作には確認した `--revision` が必須で、
 他の画面で編集・見送りされた場合は conflict として拒否します。
 GUI でも競合・通信切断時は更新して現在の状態を確認し、自動で変更操作を再送しません。
-生成・再生成のクライアント通信期限は本文の受信完了まで 180 秒、その他は 30 秒です。
+生成・再生成・公開のクライアント通信期限は本文の受信完了まで 180 秒、照合は 90 秒、その他は 30 秒です。
 時間切れはサーバー側の取り消しを保証しないため、再操作の前に一覧・詳細を確認してください。
 
 再生成は、既定で投稿案一件につき最大 3 回・試行間隔 1 時間です。
@@ -102,6 +102,49 @@ GUI の「公開用の話題を管理」から、話題の登録・本文編集�
 保存後の新しい改訂番号に対して明示的に許可します。本文編集では必ず許可が外れます。
 サーバー切り替え時は前のサーバーの本文・入力を消し、遅れて届いた応答も表示しません。
 
+## 選択した投稿案の公開と結果照合
+
+一覧から投稿案を選び、全文・投稿先 handle/DID・改訂番号・期限を確認します。
+GUI は「公開内容を確認」で表示する全文と投稿先を確認し、「この内容を公開する」で送信します。
+編集・再生成では公開せず、新しい版を改めて確認します。
+従来 Shell と軽量 CLI は詳細を確認してから、その改訂番号を指定します。
+
+```text
+/autonomous draft <draftId>
+/autonomous publish <draftId> --revision 3
+/autonomous reconcile <draftId> --revision 3
+```
+
+既存の `rei.bluesky.enabled`、handle、アプリパスワード、投稿長の制限と
+`blueskyPost` の送信権限を使います。`DENY` は公開を拒否します。
+`REQUIRE_APPROVAL` は、この選択した版の明示的な公開操作で確認します。
+新しい本人確認器や OS アカウントは不要です。通常の投稿ツールの権限動作は変えません。
+生成処理には公開サービスやツールを渡さず、自動公開へ接続しません。
+
+API が受け取るのは ID と確認済みの `expectedRevision` だけです。
+保存済みの本文・hash・DID・期限・状態を検証し、固定 TID と `$type`・text・createdAt の
+レコードを送信前に永続化します。認証した DID が選択した投稿先と違う場合は送信しません。
+本文・改行・日時を送信時に変更せず、facets・返信・メディアを付加しません。
+古い改訂番号や二重公開は拒否します。
+
+`PUBLISHED` は URI と CID を検証して保存した結果です。
+`FAILED` は createRecord を試みる前の失敗に限定し、設定などを直した後で
+「同じ内容で再試行を確認」または `publish` により、同じキー・同じレコードを明示的に再試行できます。
+本文を差し替える再試行は受け付けません。有効期限は再試行で延長しません。
+
+`UNKNOWN` は送信後の通信切断など、公開の成否が確定できない状態です。
+GUI の「公開結果を照合」または `reconcile` は公開レコードを GET で取得するだけです。
+URI・CID・レコード全体が一致した場合だけ `PUBLISHED` に確定します。
+見つからない、削除された、CID がない、内容が違う、取得できない場合は `UNKNOWN` を維持します。
+自動再送・別キーへの切り替え・上書きは行いません。
+再起動時に残る `PUBLISHING` も `UNKNOWN` にし、投稿を自動再開しません。
+クライアントが時間切れになった場合も、更新して現在の状態を確認してください。
+
+初期版の信頼境界は既存 API キーと OS 権限です。共通 API キーを利用できるプログラムも
+公開 API を操作でき、同じ OS 権限の任意プログラムを物理的な人間と区別する保証はありません。
+監査の `api-client` や `shell` は操作元を表し、個人の真正性を証明しません。
+これは当初設計の強い偽装防止要件から、ユーザーが選択した初期版の範囲への変更です。
+
 ## HTTP API
 
 GUI・軽量 CLI は既存の API キー認証と固定ルートを使います。
@@ -114,12 +157,15 @@ GUI・軽量 CLI は既存の API キー認証と固定ルートを使います�
 | 編集 | `POST /api/v1/autonomous/drafts/{id}/edit`（`expectedRevision`、`text`） |
 | 再生成 | `POST /api/v1/autonomous/drafts/{id}/regenerate`（`expectedRevision`） |
 | 見送り | `POST /api/v1/autonomous/drafts/{id}/reject`（`expectedRevision`、任意の `reason`） |
+| 明示公開・未送信失敗の明示再試行 | `POST /api/v1/autonomous/drafts/{id}/publish`（`expectedRevision`） |
+| 結果不明の読取照合 | `POST /api/v1/autonomous/drafts/{id}/reconcile`（`expectedRevision`） |
 | 話題一覧・詳細 | `GET /api/v1/autonomous/sources[?limit=20]`、`GET /api/v1/autonomous/sources/{id}` |
 | 話題登録 | `POST /api/v1/autonomous/sources`（`text`、任意の `publicUseAllowed`、既定 false） |
 | 話題編集 | `POST /api/v1/autonomous/sources/{id}/edit`（`expectedRevision`、`text`） |
 | 話題の許可・取消 | `POST /api/v1/autonomous/sources/{id}/permit`、`/revoke`（`expectedRevision`） |
 
 一覧は 1～200 件、不正入力は 400、存在しない ID は 404、古い改訂番号などの競合は 409 です。
+既存送信権限による拒否や公開無効は 403、未認証は 401 です。
 更新リクエストの未知の項目を拒否し、承認フラグや任意の生成コンテキストを受け付けません。
 生成結果の `SKIPPED` は正常な見送り、`FAILED` は失敗です。再生成では現在の本文も返します。
 生成の有効フラグがオフでも、保存済み投稿案の確認・編集と話題の管理は利用できます。
@@ -180,6 +226,9 @@ schema 24 は `autonomous_public_sources` に本文・公開利用許可・操�
 現行版は ID ごとに一件だけとし、旧リビジョンを上書きしません。
 schema 25 は検討機会に `expected_revision` を追加し、再生成対象の ID と確認した版を
 永続 claim に結び付けます。完了時もその版・状態・期限を検証し、競合した結果は保存しません。
+schema 26 は固定レコードと実行 token を `autonomous_publications` に保存し、
+draft と不変 revision の外部キー、DID/rkey の一意制約を設けます。
+公開開始・承認の監査・状態の更新は一つの transaction です。
 
 本文と revision は短い同一 transaction に保存します。Project/Run 所有の ArtifactStore に
 仮の Run を作成せず、今回の本文保存には使用していません。

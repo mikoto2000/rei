@@ -177,6 +177,95 @@ class AutonomousDraftCommandTest {
   }
 
   @Test
+  void explicitPublicationRequiresTheReviewedRevisionAndUsesOnlyTheSavedDraft() throws Exception {
+    var writes = new java.util.concurrent.atomic.AtomicInteger();
+    var transport =
+        new AutonomousPublicationTransport() {
+          public void validate(String text) {}
+
+          public Receipt send(
+              AutonomousPostRecord record, java.util.function.BooleanSupplier gate) {
+            writes.incrementAndGet();
+            assertThat(record.text()).isEqualTo(initial.content().text());
+            assertThat(record.did()).isEqualTo(initial.target().did());
+            return new Receipt(
+                AutonomousPublicationStore.Outcome.PUBLISHED,
+                record.uri(),
+                "bafyreidfayvfuwqa7qlnopdjiqrxzs6blmoeu4rujcjtnci5beludirz2a",
+                "");
+          }
+        };
+    var service =
+        new AutonomousPublicationService(
+            (AutonomousPublicationStore) drafts, () -> true, transport);
+    java.util.function.Function<String[], Integer> invoke =
+        args -> {
+          output.getBuffer().setLength(0);
+          return new CommandLine(
+                  new AutonomousCommand(sources, drafts, () -> generation, () -> service))
+              .setOut(new PrintWriter(output, true))
+              .setErr(new PrintWriter(output, true))
+              .execute(args);
+        };
+    assertThat(invoke.apply(new String[] {"publish", initial.id()})).isEqualTo(2);
+    assertThat(invoke.apply(new String[] {"publish", initial.id(), "--revision", "2"}))
+        .isEqualTo(2);
+    assertThat(
+            invoke.apply(
+                new String[] {"publish", initial.id(), "--revision", "1", "--text", "差し替え"}))
+        .isEqualTo(2);
+    assertThat(writes.get()).isZero();
+    assertThat(invoke.apply(new String[] {"publish", initial.id(), "--revision", "1"})).isZero();
+    assertThat(json().path("state").asText()).isEqualTo("PUBLISHED");
+    assertThat(json().path("approval").path("approvedBy").asText()).isEqualTo("shell");
+    assertThat(writes.get()).isEqualTo(1);
+    assertThat(invoke.apply(new String[] {"publish", initial.id(), "--revision", "1"}))
+        .isEqualTo(2);
+    assertThat(writes.get()).isEqualTo(1);
+  }
+
+  @Test
+  void explicitShellReconciliationOnlyReadsAnUnknownPublication() throws Exception {
+    var writes = new java.util.concurrent.atomic.AtomicInteger();
+    var reads = new java.util.concurrent.atomic.AtomicInteger();
+    var transport =
+        new AutonomousPublicationTransport() {
+          public void validate(String text) {}
+
+          public Receipt send(
+              AutonomousPostRecord record, java.util.function.BooleanSupplier gate) {
+            writes.incrementAndGet();
+            return new Receipt(
+                AutonomousPublicationStore.Outcome.UNKNOWN, null, null, "response_lost");
+          }
+
+          public FoundRecord lookup(AutonomousPostRecord record) {
+            reads.incrementAndGet();
+            return new FoundRecord(
+                record.uri(),
+                "bafyreidfayvfuwqa7qlnopdjiqrxzs6blmoeu4rujcjtnci5beludirz2a",
+                record.recordJson());
+          }
+        };
+    var service =
+        new AutonomousPublicationService(
+            (AutonomousPublicationStore) drafts, () -> true, transport);
+    for (var action : List.of("publish", "reconcile")) {
+      output.getBuffer().setLength(0);
+      assertThat(
+              new CommandLine(
+                      new AutonomousCommand(sources, drafts, () -> generation, () -> service))
+                  .setOut(new PrintWriter(output, true))
+                  .execute(action, initial.id(), "--revision", "1"))
+          .isZero();
+      assertThat(json().path("state").asText())
+          .isEqualTo(action.equals("publish") ? "UNKNOWN" : "PUBLISHED");
+    }
+    assertThat(writes.get()).isEqualTo(1);
+    assertThat(reads.get()).isEqualTo(1);
+  }
+
+  @Test
   void publicationAndUnrelatedPermissionOptionsAreRejected() {
     assertThat(execute("publish", initial.id())).isEqualTo(2);
     assertThat(execute("approve", initial.id())).isEqualTo(2);

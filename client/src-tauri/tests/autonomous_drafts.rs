@@ -72,6 +72,74 @@ fn field<'a>(item: &'a WorkspaceItem, name: &str) -> &'a str {
 }
 
 #[tokio::test]
+async fn selected_publication_and_reconciliation_use_only_the_reviewed_revision() {
+    for (action, state) in [
+        ("autonomousPublish", "PUBLISHED"),
+        ("autonomousPublish", "UNKNOWN"),
+        ("autonomousPublish", "FAILED"),
+        ("autonomousReconcile", "PUBLISHED"),
+        ("autonomousReconcile", "UNKNOWN"),
+    ] {
+        let mut response = draft("draft-one", 3, "確認した全文\r\n続き");
+        response["state"] = json!(state);
+        response["publication"] = json!({"uri":null,"cid":null,"result":state,"failureReason":""});
+        if state == "PUBLISHED" {
+            response["publication"]["uri"] =
+                json!("at://did:plc:example/app.bsky.feed.post/3jzfcijpj2z2a");
+            response["publication"]["cid"] =
+                json!("bafyreidfayvfuwqa7qlnopdjiqrxzs6blmoeu4rujcjtnci5beludirz2a");
+        }
+        let (api, task, captured) = server(response).await;
+        let op: WorkspaceOperation = serde_json::from_value(json!({"operation":action,
+            "id":"draft-one","expectedRevision":3}))
+        .unwrap();
+        let result = api.workspace(op).await.unwrap();
+        assert_eq!(field(&result.items[0], "Status"), state);
+        assert_eq!(field(&result.items[0], "Text"), "確認した全文\r\n続き");
+        let requests = captured.lock().unwrap();
+        assert_eq!(requests.len(), 1);
+        assert_eq!(requests[0].0, "POST");
+        assert_eq!(
+            requests[0].1,
+            format!(
+                "/api/v1/autonomous/drafts/draft-one/{}",
+                if action == "autonomousPublish" {
+                    "publish"
+                } else {
+                    "reconcile"
+                }
+            )
+        );
+        assert_eq!(requests[0].2, json!({"expectedRevision":3}));
+        task.abort();
+    }
+}
+
+#[tokio::test]
+async fn publication_responses_must_match_the_selected_revision_and_terminal_state() {
+    for (revision, state) in [
+        (2, "PUBLISHED"),
+        (3, "PENDING_REVIEW"),
+        (3, "PUBLISHING"),
+        (3, "REJECTED"),
+    ] {
+        let mut response = draft("draft-one", revision, "本文");
+        response["state"] = json!(state);
+        let (api, task, captured) = server(response).await;
+        let op: WorkspaceOperation =
+            serde_json::from_value(json!({"operation":"autonomousPublish",
+            "id":"draft-one","expectedRevision":3}))
+            .unwrap();
+        assert!(matches!(
+            api.workspace(op).await,
+            Err(AppError::InvalidResponse)
+        ));
+        assert_eq!(captured.lock().unwrap().len(), 1);
+        task.abort();
+    }
+}
+
+#[tokio::test]
 async fn authenticated_draft_detail_preserves_full_text_revision_target_and_expiry() {
     let body = "全文\r\n次の行";
     let (api, task, captured) = server(draft("draft-one", 2, body)).await;
@@ -250,13 +318,47 @@ async fn wrong_resource_or_action_type_is_not_presented_as_the_reviewed_draft() 
 }
 
 #[test]
-fn publication_operations_and_extra_authority_fields_are_not_ipc_operations() {
+fn missing_revision_and_extra_authority_fields_are_not_ipc_operations() {
     for input in [
         json!({"operation":"autonomousPublish","id":"draft-one"}),
+        json!({"operation":"autonomousPublish","id":"draft-one","expectedRevision":1,"actor":"human"}),
+        json!({"operation":"autonomousPublish","id":"draft-one","expectedRevision":1,"text":"差し替え"}),
+        json!({"operation":"autonomousReconcile","id":"draft-one","expectedRevision":1,"targetDid":"did:plc:other"}),
         json!({"operation":"autonomousRegenerate","id":"draft-one","expectedRevision":1,"approved":true}),
         json!({"operation":"autonomousEdit","id":"draft-one","expectedRevision":1,"text":"本文","targetDid":"did:plc:other"}),
     ] {
         assert!(serde_json::from_value::<WorkspaceOperation>(input).is_err());
+    }
+}
+
+#[tokio::test]
+async fn publication_result_requires_a_consistent_journal_and_success_receipt() {
+    for defect in [
+        "missing_journal",
+        "wrong_result",
+        "missing_uri",
+        "missing_cid",
+    ] {
+        let mut response = draft("draft-one", 1, "全文");
+        response["state"] = json!("PUBLISHED");
+        response["publication"] = json!({"uri":"at://did:plc:example/app.bsky.feed.post/3jzfcijpj2z2a",
+            "cid":"bafyreidfayvfuwqa7qlnopdjiqrxzs6blmoeu4rujcjtnci5beludirz2a","result":"PUBLISHED"});
+        match defect {
+            "missing_journal" => response["publication"] = Value::Null,
+            "wrong_result" => response["publication"]["result"] = json!("UNKNOWN"),
+            "missing_uri" => response["publication"]["uri"] = Value::Null,
+            _ => response["publication"]["cid"] = Value::Null,
+        }
+        let (api, task, _) = server(response).await;
+        let op: WorkspaceOperation =
+            serde_json::from_value(json!({"operation":"autonomousPublish",
+            "id":"draft-one","expectedRevision":1}))
+            .unwrap();
+        assert!(matches!(
+            api.workspace(op).await,
+            Err(AppError::InvalidResponse)
+        ));
+        task.abort();
     }
 }
 

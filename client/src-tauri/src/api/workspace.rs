@@ -321,6 +321,8 @@ impl HttpReiClient {
             | WorkspaceOperation::AutonomousGenerate
             | WorkspaceOperation::AutonomousEdit { .. }
             | WorkspaceOperation::AutonomousRegenerate { .. }
+            | WorkspaceOperation::AutonomousPublish { .. }
+            | WorkspaceOperation::AutonomousReconcile { .. }
             | WorkspaceOperation::AutonomousReject { .. }
             | WorkspaceOperation::AutonomousSources { .. }
             | WorkspaceOperation::AutonomousSource { .. }

@@ -210,6 +210,8 @@ impl HttpReiClient {
             AutonomousSources { .. } | AutonomousSource { .. } | AutonomousEditSource { .. }
         );
         let permit_operation = matches!(&op, AutonomousPermitSource { .. });
+        let publishing = matches!(&op, AutonomousPublish { .. });
+        let reconciling = matches!(&op, AutonomousReconcile { .. });
         let revised = match &op {
             AutonomousEdit {
                 expected_revision, ..
@@ -231,6 +233,12 @@ impl HttpReiClient {
                     .ok_or(AppError::InvalidInput)?,
             ),
             AutonomousReject {
+                expected_revision, ..
+            }
+            | AutonomousPublish {
+                expected_revision, ..
+            }
+            | AutonomousReconcile {
                 expected_revision, ..
             } => Some(*expected_revision),
             _ => None,
@@ -328,6 +336,28 @@ impl HttpReiClient {
                     Some(id),
                     false,
                     true,
+                    None,
+                )
+            }
+            AutonomousPublish {
+                id,
+                expected_revision,
+            }
+            | AutonomousReconcile {
+                id,
+                expected_revision,
+            } => {
+                require_input(expected_revision > 0)?;
+                (
+                    resource_path(
+                        false,
+                        &id,
+                        if publishing { "/publish" } else { "/reconcile" },
+                    )?,
+                    Some(json!({"expectedRevision":expected_revision})),
+                    Some(id),
+                    false,
+                    false,
                     None,
                 )
             }
@@ -445,16 +475,46 @@ impl HttpReiClient {
             }
             dto.item(expected.as_deref())?
         } else {
-            let dto = Self::json::<DraftDto>(request, Operation::Resource).await?;
-            if revised.is_some_and(|revision| {
-                dto.content.revision != revision
-                    || dto.state
-                        != if rejection {
-                            "REJECTED"
+            let dto = if publishing || reconciling {
+                Self::json_with_timeout::<DraftDto>(
+                    request,
+                    Operation::Resource,
+                    Duration::from_secs(if publishing { 180 } else { 90 }),
+                )
+                .await?
+            } else {
+                Self::json::<DraftDto>(request, Operation::Resource).await?
+            };
+            let invalid_receipt = (publishing || reconciling)
+                && dto.publication.as_ref().is_none_or(|publication| {
+                    publication.result.as_deref() != Some(dto.state.as_str())
+                        || (dto.state == "PUBLISHED"
+                            && (publication
+                                .uri
+                                .as_deref()
+                                .is_none_or(|uri| !nonblank(uri, 2048))
+                                || publication
+                                    .cid
+                                    .as_deref()
+                                    .is_none_or(|cid| !nonblank(cid, 256))))
+                });
+            if invalid_receipt
+                || revised.is_some_and(|revision| {
+                    dto.content.revision != revision
+                        || if publishing {
+                            !["PUBLISHED", "FAILED", "UNKNOWN"].contains(&dto.state.as_str())
+                        } else if reconciling {
+                            !["PUBLISHED", "UNKNOWN"].contains(&dto.state.as_str())
                         } else {
-                            "PENDING_REVIEW"
+                            dto.state
+                                != if rejection {
+                                    "REJECTED"
+                                } else {
+                                    "PENDING_REVIEW"
+                                }
                         }
-            }) {
+                })
+            {
                 return Err(AppError::InvalidResponse);
             }
             dto.item(expected.as_deref())?

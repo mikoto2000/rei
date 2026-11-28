@@ -2434,7 +2434,8 @@ public final class RemoteCommands {
         switch (action) {
           case "edit", "edit-source" -> Set.of("--revision", "--text");
           case "reject" -> Set.of("--revision", "--reason");
-          case "regenerate", "permit-source", "revoke-source" -> Set.of("--revision");
+          case "regenerate", "publish", "reconcile", "permit-source", "revoke-source" ->
+              Set.of("--revision");
           default -> throw invalid();
         };
     var parsed = parse(words, 2, options, Set.of());
@@ -2461,9 +2462,11 @@ public final class RemoteCommands {
             + autonomousId(parsed.arguments().getFirst())
             + "/"
             + operation;
-    return action.equals("regenerate")
-        ? new Request("POST", path, body, Duration.ofSeconds(180))
-        : post(path, body);
+    return switch (action) {
+      case "regenerate", "publish" -> new Request("POST", path, body, Duration.ofSeconds(180));
+      case "reconcile" -> new Request("POST", path, body, Duration.ofSeconds(90));
+      default -> post(path, body);
+    };
   }
 
   private static String autonomousId(String value) {
