@@ -35,7 +35,52 @@ import org.springframework.stereotype.Component;
  * <p>Derives attention only from owned execution facts, without interpreting model text.
  */
 @Component
-public class AttentionService implements dev.mikoto2000.rei.secretary.SecretaryNotifications {
+public class AttentionService
+    implements dev.mikoto2000.rei.secretary.SecretaryNotifications,
+        dev.mikoto2000.rei.autonomous.AutonomousDraftNotifications {
+  public void deliver(dev.mikoto2000.rei.autonomous.AutonomousDraftNotice notice) {
+    if (notice == null) throw new IllegalArgumentException("Notice is required");
+    if (notice.reviewRequired()
+        && life != null
+        && !life.notificationAllowed("NORMAL", notice.notificationId()))
+      throw new dev.mikoto2000.rei.life.LifeContext.NotificationDeferred();
+    var saved = inbox.applyAutonomous(notice);
+    if (notice.reviewRequired() && saved.status().equals("OPEN"))
+      publisher.publishBoundary(
+          new AgentEvent(
+              notice.notificationId(),
+              0,
+              notice.createdAt(),
+              AgentEventType.ATTENTION_REQUIRED,
+              1,
+              null,
+              null,
+              null,
+              saved.id(),
+              null,
+              new AttentionRequiredPayload(saved.id(), saved.kind(), saved.message()),
+              null));
+  }
+
+  public java.util.List<dev.mikoto2000.rei.autonomous.AutonomousDraftNotifications.Item>
+      listNotices(int limit) {
+    if (limit < 1 || limit > 200) throw new IllegalArgumentException("Invalid notice page size");
+    return inbox.autonomousNotices(limit).stream().map(AttentionService::autonomousItem).toList();
+  }
+
+  public dev.mikoto2000.rei.autonomous.AutonomousDraftNotifications.Item acknowledgeNotice(
+      String id) {
+    if (id == null || !id.matches("[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"))
+      throw new IllegalArgumentException("Invalid notice ID");
+    return autonomousItem(inbox.acknowledgeAutonomous(id));
+  }
+
+  private static dev.mikoto2000.rei.autonomous.AutonomousDraftNotifications.Item autonomousItem(
+      AttentionRepository.Item item) {
+    return new dev.mikoto2000.rei.autonomous.AutonomousDraftNotifications.Item(
+        item.id(), item.reference(), item.status(), item.createdAt());
+  }
+
   private volatile dev.mikoto2000.rei.life.LifePolicy life;
 
   @Autowired(required = false)
