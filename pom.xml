@@ -119,7 +119,7 @@
 		<dependency>
 			<groupId>com.openai</groupId>
 			<artifactId>openai-java-client-okhttp</artifactId>
-			<version>4.101.0</version>
+			<version>4.113.0</version>
 			<exclusions>
 				<!-- Retain Spring AI's Jackson 3 schema module, rather than SDK's Jackson 2 module. -->
 				<exclusion>
