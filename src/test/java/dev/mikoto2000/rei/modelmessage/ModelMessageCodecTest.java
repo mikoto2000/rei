@@ -15,6 +15,20 @@ import org.springframework.ai.chat.messages.part.ToolCallPart;
 
 class ModelMessageCodecTest {
   @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(strings = {"source", "sourceId"})
+  void historyProvenanceKeepsItsStringType(String key) {
+    var codec = new ModelMessageCodec();
+    var message =
+        AssistantMessage.builder()
+            .content("historical answer")
+            .properties(Map.of(key, "fixture"))
+            .build();
+    assertThat(codec.decode(codec.encode(message)).getMetadata()).containsEntry(key, "fixture");
+    assertThatThrownBy(() -> codec.encode(message.mutate().properties(Map.of(key, true)).build()))
+        .isInstanceOf(IllegalArgumentException.class);
+  }
+
+  @org.junit.jupiter.params.ParameterizedTest
   @org.junit.jupiter.params.provider.ValueSource(
       strings = {
         "rei.reviewGuidance",

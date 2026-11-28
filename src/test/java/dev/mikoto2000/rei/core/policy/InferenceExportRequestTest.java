@@ -16,6 +16,36 @@ import org.springframework.ai.tool.definition.ToolDefinition;
 /** Preparing an approval input performs no model call, credential lookup, or tool execution. */
 class InferenceExportRequestTest {
   @Test
+  void historicalNotificationCanBeFrozenForInference() {
+    var history =
+        dev.mikoto2000.rei.core.contextbudget.ContextHistoryAdvisor.historical(
+            org.springframework.ai.chat.messages.AssistantMessage.builder()
+                .content("historical notification")
+                .properties(java.util.Map.of("source", "BEHAVIOR_NOTIFICATION", "sourceId", "notice"))
+                .build(),
+            1);
+    var prompt =
+        new Prompt(
+            List.of(new SystemMessage("system"), history, new UserMessage("question")),
+            ToolCallingChatOptions.builder().model("fixture-model").build());
+    var prepared = InferenceExportRequest.prepare(prompt);
+    var restored = prepared.prompt().getInstructions().get(1);
+    assertThat(restored.getText()).isEqualTo(history.getText());
+    assertThat(restored.getMetadata()).containsAllEntriesOf(history.getMetadata());
+    assertThat(InferenceExportRequest.prepare(prepared.prompt()).fingerprint())
+        .isEqualTo(prepared.fingerprint());
+    var changed =
+        new Prompt(
+            List.of(
+                new SystemMessage("system"),
+                new org.springframework.ai.chat.messages.AssistantMessage("changed notification"),
+                new UserMessage("question")),
+            prompt.getOptions());
+    assertThat(InferenceExportRequest.prepare(changed).fingerprint())
+        .isNotEqualTo(prepared.fingerprint());
+  }
+
+  @Test
   void ordinaryInputIsFrozenAndItsFingerprintIsStable() {
     var prompt = prompt("fixture question", "fixture system");
     var prepared = new AtomicReference<InferenceExportRequest>();

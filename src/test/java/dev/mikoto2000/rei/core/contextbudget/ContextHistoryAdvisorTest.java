@@ -80,6 +80,9 @@ class ContextHistoryAdvisorTest {
     var scope = dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Scope.forOwner(owner);
     int index = 0;
     for (var message : history) {
+      var codec = new dev.mikoto2000.rei.modelmessage.ModelMessageCodec();
+      assertThat(codec.decode(codec.encode(message)).getMetadata())
+          .containsAllEntriesOf(message.getMetadata());
       var ref = payloads.saveForContinuation(scope, owner.runId(), "input-" + index++, message);
       var restored = payloads.load(scope, ref);
       assertThat(restored.getText()).isEqualTo(message.getText());

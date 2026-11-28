@@ -40,6 +40,8 @@ public final class ModelMessageCodec {
 
   private static final Set<String> METADATA =
       Set.of(
+          "source",
+          "sourceId",
           "rei.llm.chat-native",
           "rei.llm.replay-origin-owner",
           "rei.llm.replay-origin-endpoint",
@@ -323,7 +325,9 @@ public final class ModelMessageCodec {
             number(value, "cached"),
             number(value, "reasoning"));
       }
-      case "rei.llm.replay-origin-owner",
+      case "source",
+          "sourceId",
+          "rei.llm.replay-origin-owner",
           "rei.llm.replay-origin-endpoint",
           "rei.llm.chat-native",
           "rei.resumeRunId",
