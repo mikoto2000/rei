@@ -25,6 +25,12 @@ pub struct BackgroundReceipt {
     deny_unknown_fields
 )]
 pub enum WorkspaceOperation {
+    AutonomousPublished {
+        limit: i32,
+    },
+    AutonomousHistory {
+        limit: i32,
+    },
     AutonomousNotifications {
         limit: i32,
     },
