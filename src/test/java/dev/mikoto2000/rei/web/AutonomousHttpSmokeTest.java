@@ -4,8 +4,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import dev.mikoto2000.rei.autonomous.AutonomousActionProperties;
 import dev.mikoto2000.rei.autonomous.AutonomousDraft;
+import dev.mikoto2000.rei.autonomous.AutonomousDraftNotifications;
 import dev.mikoto2000.rei.autonomous.AutonomousDraftStore;
 import dev.mikoto2000.rei.autonomous.AutonomousGenerationService;
+import dev.mikoto2000.rei.autonomous.AutonomousNotificationDispatcher;
+import dev.mikoto2000.rei.autonomous.AutonomousNotificationStore;
 import dev.mikoto2000.rei.autonomous.AutonomousPostRecord;
 import dev.mikoto2000.rei.autonomous.AutonomousPublicSources;
 import dev.mikoto2000.rei.autonomous.AutonomousPublicationService;
@@ -76,6 +79,26 @@ class AutonomousHttpSmokeTest {
     org.springframework.boot.jackson.autoconfigure.JacksonAutoConfiguration.class
   })
   static class Config {
+    @Bean
+    AutonomousDraftNotifications notifications(@Value("${rei.data-dir}") String directory) {
+      var inbox =
+          new dev.mikoto2000.rei.attention.AttentionRepository(
+              new org.springframework.jdbc.datasource.DriverManagerDataSource(
+                  "jdbc:sqlite:" + Path.of(directory).resolve("attention.db")),
+              clock());
+      var bus = new dev.mikoto2000.rei.event.InMemoryAgentEventBus();
+      return new dev.mikoto2000.rei.attention.AttentionService(inbox, bus, bus, clock(), () -> 0);
+    }
+
+    @Bean
+    AutonomousNotificationDispatcher notificationDispatcher(
+        AutonomousDraftStore drafts,
+        org.springframework.beans.factory.ObjectProvider<AutonomousDraftNotifications>
+            notifications) {
+      return new AutonomousNotificationDispatcher(
+          (AutonomousNotificationStore) drafts, notifications);
+    }
+
     @Bean
     FixturePublisher publisher() {
       return new FixturePublisher();
@@ -204,6 +227,78 @@ class AutonomousHttpSmokeTest {
   private com.fasterxml.jackson.databind.JsonNode json(HttpResponse<String> response)
       throws Exception {
     return StorageDatabase.JSON.readTree(response.body());
+  }
+
+  @Test
+  void notificationsAreAuthenticatedGlobalReferencesAndAcknowledgmentNeverApproves()
+      throws Exception {
+    try (var context = start(true, root);
+        var client = HttpClient.newHttpClient()) {
+      context.getBean(AutonomousNotificationDispatcher.class).flush();
+      assertThat(request(client, context, "GET", "/notifications", null, false).statusCode())
+          .isEqualTo(401);
+      var list = request(client, context, "GET", "/notifications?limit=20", null, true);
+      assertThat(list.statusCode()).isEqualTo(200);
+      assertThat(json(list)).hasSize(1);
+      var notice = json(list).get(0);
+      assertThat(notice.path("draftId").asText()).isEqualTo(initial.id());
+      assertThat(notice.path("status").asText()).isEqualTo("OPEN");
+      assertThat(list.body()).doesNotContain("最初の本文", "投稿理由", "projectId", "sessionId", "runId");
+      var path = "/notifications/" + notice.path("id").asText() + "/ack";
+      assertThat(request(client, context, "POST", path, null, false).statusCode()).isEqualTo(401);
+      assertThat(
+              request(client, context, "POST", path, Map.of("approved", true), true).statusCode())
+          .isEqualTo(400);
+      assertThat(request(client, context, "POST", path, Map.of("text", "差し替え"), true).statusCode())
+          .isEqualTo(400);
+      var acknowledged = request(client, context, "POST", path, Map.of(), true);
+      assertThat(acknowledged.statusCode()).isEqualTo(200);
+      assertThat(json(acknowledged).path("status").asText()).isEqualTo("ACKNOWLEDGED");
+      assertThat(json(request(client, context, "GET", "/notifications", null, true))).isEmpty();
+      assertThat(context.getBean(AutonomousDraftStore.class).get(initial.id())).isEqualTo(initial);
+      assertThat(context.getBean(FixturePublisher.class).writes).isZero();
+      assertThat(request(client, context, "GET", "/notifications?limit=0", null, true).statusCode())
+          .isEqualTo(400);
+      assertThat(
+              request(client, context, "GET", "/notifications?limit=201", null, true).statusCode())
+          .isEqualTo(400);
+      assertThat(
+              request(
+                      client,
+                      context,
+                      "POST",
+                      "/notifications/" + java.util.UUID.randomUUID() + "/ack",
+                      Map.of(),
+                      true)
+                  .statusCode())
+          .isEqualTo(404);
+    }
+  }
+
+  @Test
+  void notificationsRemainReadableWhenGenerationIsDisabledAndResolveWithTheirDraft()
+      throws Exception {
+    try (var context = start(false, root);
+        var client = HttpClient.newHttpClient()) {
+      var worker = context.getBean(AutonomousNotificationDispatcher.class);
+      worker.flush();
+      var list = request(client, context, "GET", "/notifications", null, true);
+      assertThat(list.statusCode()).isEqualTo(200);
+      assertThat(json(list)).hasSize(1);
+      assertThat(
+              request(
+                      client,
+                      context,
+                      "POST",
+                      "/drafts/" + initial.id() + "/reject",
+                      Map.of("expectedRevision", 1, "reason", "PRIVATE_FEEDBACK"),
+                      true)
+                  .statusCode())
+          .isEqualTo(200);
+      worker.flush();
+      assertThat(json(request(client, context, "GET", "/notifications", null, true))).isEmpty();
+      assertThat(context.getBean(FixturePublisher.class).writes).isZero();
+    }
   }
 
   @Test

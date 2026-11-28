@@ -17,6 +17,35 @@ import { AutonomousDrafts } from "./AutonomousDrafts";
 
 afterEach(cleanup);
 
+it("opens a notification reference by fetching the latest full draft before any publication", async () => {
+  const f = fixture((_server, op) =>
+    op.operation === "autonomousDraft"
+      ? result([
+          draft("draft-one", 4, "通知後に更新された本文", "PENDING_REVIEW"),
+        ])
+      : undefined,
+  );
+  render(
+    <AutonomousDrafts
+      call={f.call as Command}
+      serverId="s"
+      initialDraftId="draft-one"
+    />,
+  );
+  expect(await screen.findByText("通知後に更新された本文")).toBeTruthy();
+  expect(f.operations()).toContainEqual({
+    operation: "autonomousDraft",
+    id: "draft-one",
+  });
+  expect(
+    f.operations().some((op) => op.operation === "autonomousPublish"),
+  ).toBe(false);
+  await userEvent.click(screen.getByRole("button", { name: "公開内容を確認" }));
+  expect(screen.getByRole("dialog").textContent).toContain(
+    "通知後に更新された本文",
+  );
+});
+
 it("publishes only after reviewing the full selected body and target, and suppresses duplicate clicks", async () => {
   let finish: ((value: WorkspaceResult) => void) | undefined;
   const f = fixture((_server, op) =>

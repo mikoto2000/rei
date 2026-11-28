@@ -60,6 +60,48 @@ struct GenerationDto {
     draft: Option<DraftDto>,
 }
 
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct NoticeDto {
+    id: String,
+    draft_id: String,
+    status: String,
+    created_at: String,
+}
+
+impl NoticeDto {
+    fn item(self, expected: Option<&str>) -> Result<WorkspaceItem> {
+        let valid_draft =
+            !self.draft_id.is_empty()
+                && self.draft_id.len() <= 256
+                && self.draft_id.bytes().enumerate().all(|(i, b)| {
+                    b.is_ascii_alphanumeric() || (i > 0 && [b'-', b'_'].contains(&b))
+                });
+        if uuid::Uuid::parse_str(&self.id).is_err()
+            || !valid_draft
+            || !valid_time(&self.created_at)
+            || expected.is_some_and(|id| id != self.id)
+            || if expected.is_some() {
+                !["ACKNOWLEDGED", "RESOLVED"].contains(&self.status.as_str())
+            } else {
+                !["OPEN", "HELD"].contains(&self.status.as_str())
+            }
+        {
+            return Err(AppError::InvalidResponse);
+        }
+        Ok(WorkspaceItem {
+            id: Some(self.id),
+            title: "投稿案の確認待ち".into(),
+            fields: vec![
+                ("Type".into(), "AutonomousNotice".into()),
+                ("DraftId".into(), self.draft_id),
+                ("Status".into(), self.status),
+                ("CreatedAt".into(), self.created_at),
+            ],
+        })
+    }
+}
+
 fn valid_time(value: &str) -> bool {
     chrono::DateTime::parse_from_rfc3339(value).is_ok()
 }
@@ -200,6 +242,35 @@ fn page(items: Vec<WorkspaceItem>, limit: i32) -> Result<WorkspaceResult> {
 }
 
 impl HttpReiClient {
+    pub(super) async fn autonomous_notifications(
+        &self,
+        op: WorkspaceOperation,
+    ) -> Result<WorkspaceResult> {
+        match op {
+            WorkspaceOperation::AutonomousNotifications { limit } => {
+                require_input((1..=200).contains(&limit))?;
+                let path = format!("/api/v1/autonomous/notifications?limit={limit}");
+                let request = self.request(Method::GET, &path, true)?;
+                let items = Self::json::<Vec<NoticeDto>>(request, Operation::Resource)
+                    .await?
+                    .into_iter()
+                    .map(|dto| dto.item(None))
+                    .collect::<Result<Vec<_>>>()?;
+                page(items, limit)
+            }
+            WorkspaceOperation::AutonomousNoticeAck { id } => {
+                require_input(id.len() == 36 && uuid::Uuid::parse_str(&id).is_ok())?;
+                let path = format!("/api/v1/autonomous/notifications/{}/ack", checked_id(&id)?);
+                let request = self.request(Method::POST, &path, true)?.json(&json!({}));
+                let item = Self::json::<NoticeDto>(request, Operation::Resource)
+                    .await?
+                    .item(Some(&id))?;
+                Ok(result("通知を既読にしました", vec![item]))
+            }
+            _ => Err(AppError::InvalidInput),
+        }
+    }
+
     pub(super) async fn autonomous_operation(
         &self,
         op: WorkspaceOperation,

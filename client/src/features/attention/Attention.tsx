@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { Command } from "../../tauri/commands";
 import { errorText, type Project } from "../../entities/models";
+import { AutonomousNotices } from "../autonomous/AutonomousNotices";
 import type {
   WorkspaceOperation,
   WorkspaceResult,
@@ -13,11 +14,13 @@ export function Attention({
   serverId,
   projects,
   sessionId,
+  onOpenAutonomousDraft,
 }: {
   sessionId?: string;
   call: Command;
   serverId: string | null;
   projects: Project[];
+  onOpenAutonomousDraft?: (serverId: string, draftId: string) => void;
 }) {
   const [project, setProject] = useState(projects[0]?.id ?? "");
   const [snapshot, setSnapshot] = useState<{
@@ -118,6 +121,13 @@ export function Attention({
   return (
     <section className="page narrow attention-pane" aria-label="Inboxと承認">
       <h1>Inbox・承認</h1>
+      {onOpenAutonomousDraft && (
+        <AutonomousNotices
+          call={call}
+          serverId={serverId}
+          onOpenDraft={onOpenAutonomousDraft}
+        />
+      )}
       <label>
         Project
         <select

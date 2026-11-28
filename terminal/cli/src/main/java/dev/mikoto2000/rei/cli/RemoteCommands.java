@@ -2407,12 +2407,16 @@ public final class RemoteCommands {
       exact(words, 2);
       return new Request("POST", base + "/drafts/generate", Map.of(), Duration.ofSeconds(180));
     }
-    if (Set.of("drafts", "sources").contains(action)) {
+    if (Set.of("drafts", "sources", "notifications").contains(action)) {
       var parsed = parse(words, 2, Set.of("--limit"), Set.of());
       if (!parsed.arguments().isEmpty()) throw invalid();
       int limit = integer(parsed.options().getOrDefault("--limit", "20"));
       if (limit < 1 || limit > 200) throw invalid();
       return get(base + "/" + action + "?limit=" + limit);
+    }
+    if (action.equals("ack-notice")) {
+      exact(words, 3);
+      return post(base + "/notifications/" + autonomousId(words.get(2)) + "/ack", Map.of());
     }
     if (Set.of("draft", "hold", "source").contains(action)) {
       exact(words, 3);

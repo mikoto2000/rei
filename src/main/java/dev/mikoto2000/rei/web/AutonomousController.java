@@ -2,6 +2,7 @@ package dev.mikoto2000.rei.web;
 
 import dev.mikoto2000.rei.autonomous.AutonomousConflictException;
 import dev.mikoto2000.rei.autonomous.AutonomousDraft;
+import dev.mikoto2000.rei.autonomous.AutonomousDraftNotifications;
 import dev.mikoto2000.rei.autonomous.AutonomousDraftStore;
 import dev.mikoto2000.rei.autonomous.AutonomousGenerationService;
 import dev.mikoto2000.rei.autonomous.AutonomousPublicSources;
@@ -35,19 +36,42 @@ public final class AutonomousController {
   private final AutonomousPublicSources sources;
   private final Supplier<AutonomousGenerationService> generation;
   private final Supplier<AutonomousPublicationService> publication;
+  private final Supplier<AutonomousDraftNotifications> notifications;
 
   public AutonomousController(
       AutonomousDraftStore drafts,
       AutonomousPublicSources sources,
       ObjectProvider<AutonomousGenerationService> generation,
-      ObjectProvider<AutonomousPublicationService> publication) {
+      ObjectProvider<AutonomousPublicationService> publication,
+      ObjectProvider<AutonomousDraftNotifications> notifications) {
     this.drafts = drafts;
     this.sources = sources;
     this.generation = generation::getIfAvailable;
     this.publication = publication::getIfAvailable;
+    this.notifications = notifications::getIfAvailable;
   }
 
   public record GenerationRequest() implements StrictApiRequest {}
+
+  public record NoticeAcknowledgment() implements StrictApiRequest {}
+
+  @GetMapping("/notifications")
+  public List<AutonomousDraftNotifications.Item> notifications(
+      @RequestParam(name = "limit", defaultValue = "20") int limit) {
+    return notifications().listNotices(limit);
+  }
+
+  @PostMapping("/notifications/{id}/ack")
+  public AutonomousDraftNotifications.Item acknowledgeNotice(
+      @PathVariable("id") String id, @RequestBody(required = false) NoticeAcknowledgment request) {
+    return notifications().acknowledgeNotice(id);
+  }
+
+  private AutonomousDraftNotifications notifications() {
+    var service = notifications.get();
+    if (service == null) throw new NoSuchElementException("Notifications are unavailable");
+    return service;
+  }
 
   public record Revision(int expectedRevision) implements StrictApiRequest {}
 

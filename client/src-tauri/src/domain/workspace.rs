@@ -25,6 +25,12 @@ pub struct BackgroundReceipt {
     deny_unknown_fields
 )]
 pub enum WorkspaceOperation {
+    AutonomousNotifications {
+        limit: i32,
+    },
+    AutonomousNoticeAck {
+        id: String,
+    },
     AutonomousDrafts {
         limit: i32,
     },

@@ -4,6 +4,39 @@ import { afterEach, it, expect, vi } from "vitest";
 import type { Command } from "../../tauri/commands";
 import { Attention } from "./Attention";
 afterEach(cleanup);
+it("shows global draft notices without inventing a Project or Session", async () => {
+  const open = vi.fn();
+  const call = vi.fn().mockResolvedValue({
+    title: "通知",
+    items: [
+      {
+        id: "notice",
+        title: "投稿案の確認待ち",
+        fields: [
+          ["DraftId", "draft-one"],
+          ["Status", "OPEN"],
+        ],
+      },
+    ],
+  });
+  render(
+    <Attention
+      call={call as Command}
+      serverId="s"
+      projects={[]}
+      onOpenAutonomousDraft={open}
+    />,
+  );
+  await userEvent.click(
+    await screen.findByRole("button", { name: "投稿案の詳細を開く" }),
+  );
+  expect(open).toHaveBeenCalledWith("s", "draft-one");
+  expect(call).toHaveBeenCalledTimes(1);
+  expect(call).toHaveBeenCalledWith("workspace_execute", {
+    serverId: "s",
+    operation: { operation: "autonomousNotifications", limit: 100 },
+  });
+});
 it("continues only the reviewed saved invocation and suppresses duplicate clicks", async () => {
   let release: (() => void) | undefined;
   const saved = {

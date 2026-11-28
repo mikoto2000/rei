@@ -20,9 +20,11 @@ type View = {
 export function AutonomousDrafts({
   call,
   serverId,
+  initialDraftId,
 }: {
   call: Command;
   serverId: string | null;
+  initialDraftId?: string;
 }) {
   const [view, setView] = useState<View | null>(null);
   const [pending, setPending] = useState(false);
@@ -67,14 +69,23 @@ export function AutonomousDrafts({
           serverId,
           operation: { operation: "autonomousSources", limit: 100 },
         }),
+        initialDraftId
+          ? call("workspace_execute", {
+              serverId,
+              operation: { operation: "autonomousDraft", id: initialDraftId },
+            })
+          : Promise.resolve(null),
       ])
-        .then(([drafts, sources]) => {
+        .then(([drafts, sources, selected]) => {
           if (epoch === generation.current)
             setView({
               owner: serverId,
               drafts: drafts.items,
               sources: sources.items,
-              draft: null,
+              draft:
+                selected?.items.find(
+                  (item) => field(item, "Type") === "AutonomousDraft",
+                ) ?? null,
               source: null,
             });
         })
@@ -91,7 +102,7 @@ export function AutonomousDrafts({
     return () => {
       generation.current++;
     };
-  }, [call, serverId, refresh]);
+  }, [call, serverId, initialDraftId, refresh]);
   const visible = view?.owner === serverId ? view : null;
   const run = async (operation: WorkspaceOperation) => {
     if (!serverId || !visible || busy.current) return;

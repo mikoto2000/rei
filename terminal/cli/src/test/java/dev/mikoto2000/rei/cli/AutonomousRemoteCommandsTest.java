@@ -8,6 +8,26 @@ import java.util.Map;
 import org.junit.jupiter.api.Test;
 
 class AutonomousRemoteCommandsTest {
+  @Test
+  void notificationsAreGlobalAndAcknowledgmentHasNoDraftMutationBody() {
+    assertEquals(
+        "/api/v1/autonomous/notifications?limit=20", route("/autonomous", "notifications").path());
+    var request = route("/autonomous", "ack-notice", "notice-id");
+    assertEquals("POST", request.method());
+    assertEquals("/api/v1/autonomous/notifications/notice-id/ack", request.path());
+    assertEquals(Map.of(), request.body());
+    assertEquals(Duration.ofSeconds(30), request.mutationTimeout());
+    for (var option : List.of("--revision", "--text", "--reason", "--actor")) {
+      assertThrows(
+          IllegalArgumentException.class,
+          () -> route("/autonomous", "ack-notice", "id", option, "1"));
+    }
+    assertThrows(
+        IllegalArgumentException.class,
+        () -> route("/autonomous", "notifications", "--limit", "201"));
+    assertThrows(IllegalArgumentException.class, () -> route("/autonomous", "ack-notice"));
+  }
+
   private RemoteCommands.Request route(String... words) {
     return RemoteCommands.route(List.of(words), "private-project", "private-session");
   }

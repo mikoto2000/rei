@@ -85,6 +85,10 @@ export function App({
   const [page, setPage] = useState<Page>("conversations");
   const [artifactSelection, setArtifactSelection] =
     useState<ArtifactSelection | null>(null);
+  const [autonomousSelection, setAutonomousSelection] = useState<{
+    serverId: string;
+    draftId: string;
+  } | null>(null);
   const [ready, setReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [chatErrors, setChatErrors] = useState<Record<string, string | null>>(
@@ -110,6 +114,7 @@ export function App({
   const opening = useSessionSelection(call);
   const navigate = (destination: Page) => {
     opening.selection.clear();
+    setAutonomousSelection(null);
     setPage(destination);
     setMoreNavigation(false);
   };
@@ -575,12 +580,24 @@ export function App({
                 call={call}
                 serverId={data.unlocked ? data.selectedServer : null}
                 projects={projects[data.selectedServer ?? ""] ?? noProjects}
+                onOpenAutonomousDraft={(serverId, draftId) => {
+                  if (!data.unlocked || serverId !== data.selectedServer)
+                    return;
+                  navigate("autonomous");
+                  setAutonomousSelection({ serverId, draftId });
+                }}
               />
             )}
             {page === "autonomous" && (
               <AutonomousDrafts
                 call={call}
                 serverId={data.unlocked ? data.selectedServer : null}
+                initialDraftId={
+                  data.unlocked &&
+                  autonomousSelection?.serverId === data.selectedServer
+                    ? autonomousSelection.draftId
+                    : undefined
+                }
               />
             )}
             {page === "activity" && (

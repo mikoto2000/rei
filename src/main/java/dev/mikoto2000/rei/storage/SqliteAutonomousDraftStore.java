@@ -5,7 +5,9 @@ import dev.mikoto2000.rei.autonomous.AutonomousActionPolicy;
 import dev.mikoto2000.rei.autonomous.AutonomousActionProperties;
 import dev.mikoto2000.rei.autonomous.AutonomousConflictException;
 import dev.mikoto2000.rei.autonomous.AutonomousDraft;
+import dev.mikoto2000.rei.autonomous.AutonomousDraftNotice;
 import dev.mikoto2000.rei.autonomous.AutonomousDraftStore;
+import dev.mikoto2000.rei.autonomous.AutonomousNotificationStore;
 import dev.mikoto2000.rei.autonomous.AutonomousPostRecord;
 import dev.mikoto2000.rei.autonomous.AutonomousPublicationStore;
 import dev.mikoto2000.rei.autonomous.AutonomousTidGenerator;
@@ -34,7 +36,7 @@ import org.springframework.stereotype.Component;
 @Component
 @DependsOn("storageMigrationLease")
 public final class SqliteAutonomousDraftStore
-    implements AutonomousDraftStore, AutonomousPublicationStore {
+    implements AutonomousDraftStore, AutonomousPublicationStore, AutonomousNotificationStore {
   private final StorageDatabase database;
   private final Clock clock;
   private final AutonomousActionProperties settings;
@@ -48,6 +50,7 @@ public final class SqliteAutonomousDraftStore
     this(new StorageDatabase(registry.root()), clock, settings);
     recoverInterruptedConsiderations();
     recoverInterruptedPublications();
+    recoverNotices();
   }
 
   public SqliteAutonomousDraftStore(
@@ -75,6 +78,115 @@ public final class SqliteAutonomousDraftStore
 
   public boolean isStopping() {
     return stopping.get() || Thread.currentThread().isInterrupted();
+  }
+
+  public List<AutonomousDraftNotice> pendingNotices(int limit) {
+    if (limit < 1 || limit > 200) throw new IllegalArgumentException("Invalid notice page size");
+    if (isStopping()) return List.of();
+    return database.transaction(db -> {
+      if (isStopping()) return List.of();
+      var now = clock.instant();
+      expire(db, now);
+      var ids = new ArrayList<String>();
+      try (var query =
+              prepared(
+                  db,
+                  "SELECT draft_id FROM autonomous_notification_outbox WHERE pending=1 ORDER BY created,draft_id LIMIT ?",
+                  limit);
+          var rows = query.executeQuery()) {
+        while (rows.next()) ids.add(rows.getString(1));
+      }
+      var notices = new ArrayList<AutonomousDraftNotice>();
+      for (var id : ids) {
+        var draft = expireIfDue(db, find(db, id), now);
+        var notice = notice(draft);
+        queueNotice(db, notice);
+        notices.add(notice);
+      }
+      return List.copyOf(notices);
+    });
+  }
+
+  public boolean noticeDelivered(AutonomousDraftNotice notice) {
+    if (notice == null) throw new IllegalArgumentException("Notice is required");
+    if (isStopping()) return false;
+    return database.transaction(db -> {
+      if (isStopping()) return false;
+      try (var sql =
+          prepared(
+              db,
+              "UPDATE autonomous_notification_outbox SET pending=0,delivered_at=? WHERE draft_id=? AND review_required=? AND created=? AND pending=1",
+              clock.instant().toEpochMilli(),
+              notice.draftId(),
+              notice.reviewRequired() ? 1 : 0,
+              notice.createdAt().toEpochMilli())) {
+        return sql.executeUpdate() == 1;
+      }
+    });
+  }
+
+  public void recoverNotices() {
+    String cursor = "";
+    while (!isStopping()) {
+      var after = cursor;
+      var batch =
+          database.transaction(db -> {
+            var notices = new ArrayList<AutonomousDraftNotice>();
+            var now = clock.instant().toEpochMilli();
+            try (var query =
+                    prepared(
+                        db,
+                        "SELECT id,state,created,expires FROM autonomous_drafts WHERE id>? ORDER BY id LIMIT 256",
+                        after);
+                var rows = query.executeQuery()) {
+              while (rows.next())
+                notices.add(
+                    new AutonomousDraftNotice(
+                        rows.getString("id"),
+                        "PENDING_REVIEW".equals(rows.getString("state"))
+                            && rows.getLong("expires") > now,
+                        Instant.ofEpochMilli(rows.getLong("created"))));
+            }
+            for (var notice : notices) {
+              queueNotice(db, notice);
+              try (var sql =
+                  prepared(
+                      db,
+                      "UPDATE autonomous_notification_outbox SET pending=1,delivered_at=NULL WHERE draft_id=?",
+                      notice.draftId())) {
+                sql.executeUpdate();
+              }
+            }
+            return notices;
+          });
+      if (batch.size() < 256) return;
+      cursor = batch.getLast().draftId();
+    }
+  }
+
+  private static AutonomousDraftNotice notice(AutonomousDraft draft) {
+    return new AutonomousDraftNotice(
+        draft.id(), draft.state() == AutonomousDraft.State.PENDING_REVIEW, draft.createdAt());
+  }
+
+  private static void queueNotice(Connection db, AutonomousDraftNotice notice) throws SQLException {
+    try (var sql =
+        prepared(
+            db,
+            """
+            INSERT INTO autonomous_notification_outbox VALUES(?,?,?,1,NULL)
+            ON CONFLICT(draft_id) DO UPDATE SET
+              review_required=excluded.review_required,
+              pending=CASE WHEN autonomous_notification_outbox.review_required<>excluded.review_required
+                THEN 1 ELSE autonomous_notification_outbox.pending END,
+              delivered_at=CASE WHEN autonomous_notification_outbox.review_required<>excluded.review_required
+                THEN NULL ELSE autonomous_notification_outbox.delivered_at END
+            """,
+            notice.draftId(),
+            notice.reviewRequired() ? 1 : 0,
+            notice.createdAt().toEpochMilli())) {
+      sql.executeUpdate();
+    }
   }
 
   public PublishClaim beginPublication(String id, int expectedRevision, String actor) {
@@ -869,6 +981,7 @@ public final class SqliteAutonomousDraftStore
             StorageDatabase.JSON.writeValueAsString(draft))) {
       sql.executeUpdate();
     }
+    queueNotice(db, notice(draft));
   }
 
   private void update(Connection db, AutonomousDraft draft, int expected)
@@ -893,6 +1006,7 @@ public final class SqliteAutonomousDraftStore
             prior.name())) {
       if (sql.executeUpdate() != 1) throw new AutonomousConflictException();
     }
+    queueNotice(db, notice(draft));
   }
 
   private void revision(Connection db, AutonomousDraft draft) throws SQLException, IOException {

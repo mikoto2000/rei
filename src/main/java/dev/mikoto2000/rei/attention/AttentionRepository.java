@@ -18,6 +18,60 @@ import org.springframework.stereotype.Repository;
  */
 @Repository
 public class AttentionRepository {
+  private static final String AUTONOMOUS_SCOPE = "@autonomous-global";
+  private static final String AUTONOMOUS_KIND = "AUTONOMOUS_DRAFT_REVIEW";
+
+  /** Idempotent local projection; a closed tombstone always wins over a late open notice. */
+  public Item applyAutonomous(dev.mikoto2000.rei.autonomous.AutonomousDraftNotice notice) {
+    return transactions.execute(status -> {
+      db.sql("INSERT OR IGNORE INTO agent_attention VALUES(?,?,?,?,?,?,?,?,?)")
+          .params(
+              notice.notificationId(),
+              AUTONOMOUS_SCOPE,
+              "",
+              "",
+              AUTONOMOUS_KIND,
+              notice.draftId(),
+              "Bluesky 投稿案があります。全文と投稿先を確認してください。",
+              notice.reviewRequired() ? "OPEN" : "RESOLVED",
+              notice.createdAt().toEpochMilli())
+          .update();
+      if (!notice.reviewRequired()) {
+        db.sql("UPDATE agent_attention SET status='RESOLVED' WHERE project=? AND kind=? AND id=?")
+            .params(AUTONOMOUS_SCOPE, AUTONOMOUS_KIND, notice.notificationId())
+            .update();
+      }
+      return autonomousNotice(notice.notificationId());
+    });
+  }
+
+  public List<Item> autonomousNotices(int limit) {
+    return db.sql(
+            "SELECT * FROM agent_attention WHERE project=? AND kind=? AND status IN ('OPEN','HELD') ORDER BY created,id LIMIT ?")
+        .params(AUTONOMOUS_SCOPE, AUTONOMOUS_KIND, limit)
+        .query(ROW)
+        .list();
+  }
+
+  public Item acknowledgeAutonomous(String id) {
+    return transactions.execute(status -> {
+      autonomousNotice(id);
+      db.sql(
+              "UPDATE agent_attention SET status='ACKNOWLEDGED' WHERE project=? AND kind=? AND id=? AND status IN ('OPEN','HELD')")
+          .params(AUTONOMOUS_SCOPE, AUTONOMOUS_KIND, id)
+          .update();
+      return autonomousNotice(id);
+    });
+  }
+
+  private Item autonomousNotice(String id) {
+    return db.sql("SELECT * FROM agent_attention WHERE project=? AND kind=? AND id=?")
+        .params(AUTONOMOUS_SCOPE, AUTONOMOUS_KIND, id)
+        .query(ROW)
+        .optional()
+        .orElseThrow(() -> new java.util.NoSuchElementException("Autonomous notice not found"));
+  }
+
   /** Idempotent local ingress; the existing delivery service keeps its policy and destination. */
   public Item createSecretary(dev.mikoto2000.rei.secretary.SecretaryNotifications.Notice notice) {
     String kind = notice.global() ? "SECRETARY_GLOBAL_INBOX" : "SECRETARY_" + notice.destination();
