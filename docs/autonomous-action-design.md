@@ -149,7 +149,7 @@ storage.db に専用テーブルを追加し、migration coordinator と object 
 | autonomous_drafts | id、type、opportunity unique、生成契機、生成/更新/期限、DID/handle、current revision/state、見送り理由と公開可否、再生成回数と最終試行。 |
 | autonomous_draft_revisions | draft/revision unique、本文、SHA-256、reason、source snapshot IDs、生成方式と日時。不変の過去 revision を保持。 |
 | autonomous_public_sources | 公開許可済み本文、許可主体・日時、失効。通常ナレッジとは分離。 |
-| autonomous_publish_attempts | draft、承認 revision/hash/DID、承認主体・証拠参照・日時、rkey、凍結した全 record JSON と hash、開始/結果/URI/CID/失敗分類。DID/collection/rkey unique。 |
+| autonomous_publications | draft、確認 revision/hash/DID、rkey、凍結した全 record JSON と hash、実行 token、日時。DID/rkey unique。操作元・公開結果・URI/CID は draft snapshot と監査にも記録する。 |
 | autonomous_attention_outbox | draft ID、通知 ID、配送/解消状態、再試行時刻。保存と同一 transaction に挿入。 |
 | autonomous_audit | 機会・状態遷移・承認拒否・照合を ID と reason code で記録。本文・秘密・system prompt は一般ログに出さない。 |
 
@@ -167,8 +167,10 @@ PENDING_REVIEW は編集・再生成・見送り・期限切れ・承認開始�
 FAILED の再試行は新しい明示承認が必要。REJECTED/EXPIRED/PUBLISHED は再投稿不可。
 PUBLISHING/UNKNOWN は編集・無条件再送不可。独立した APPROVED は追加しない。
 
-公開時は信頼できる人間の証拠を検証し、id/state/revision/hash/DID/期限/設定版を
-条件付き更新で照合する。同一 transaction に承認記録・rkey・全レコードと
+公開時は既存認証の下で選択した revision の明示的な公開要求を受け、
+id/state/revision/hash/DID/期限を条件付き更新で照合する。設定・権限は開始前と送信直前に再確認する。
+操作元は監査用であり、人間の存在や個人の真正性を証明するものではない。
+同一 transaction に確認記録・rkey・全レコードと
 PUBLISHING を保存してから一度だけ送る。承認後に LLM を呼ばず、レコードを再構築しない。
 送信セッションの DID が一致しない場合は送らない。資格情報の更新で宛先を変えない。
 
@@ -179,7 +181,7 @@ transport の暗黙再試行を禁止し、接続例外・応答喪失は保守�
 送信前の検証失敗など、未送信が確定した場合だけ FAILED。
 成功応答の URI が DID/collection/rkey と一致し、CID が有効な場合だけ PUBLISHED。
 
-起動時の PUBLISHING は UNKNOWN に移して、getRecord のみで照合する。
+起動時の PUBLISHING は UNKNOWN に移す。明示的な照合要求では getRecord のみを使う。
 URI、DID、rkey、保存した全 record を比較し、一致すれば PUBLISHED。
 異なる record、RecordNotFound、削除、読み取り障害は UNKNOWN のまま保持する。
 未投稿が別の確かな証拠で確定しなければ FAILED にしない。
