@@ -1,5 +1,6 @@
 package dev.mikoto2000.rei.cli;
 
+import java.time.Duration;
 import java.util.*;
 
 /**
@@ -30,8 +31,21 @@ public final class RemoteCommands {
    * @param method メソッド
    * @param path パス
    * @param body 本文
+   * @param mutationTimeout 変更操作のHTTP待機上限
    */
-  public record Request(String method, String path, Object body) {}
+  public record Request(String method, String path, Object body, Duration mutationTimeout) {
+    public Request {
+      if (mutationTimeout == null
+          || mutationTimeout.isNegative()
+          || mutationTimeout.isZero()
+          || mutationTimeout.compareTo(Duration.ofSeconds(180)) > 0)
+        throw new IllegalArgumentException("Invalid mutation timeout");
+    }
+
+    public Request(String method, String path, Object body) {
+      this(method, path, body, Duration.ofSeconds(30));
+    }
+  }
 
   /** 名前一覧。 */
   public static final Set<String> NAMES =
@@ -40,6 +54,7 @@ public final class RemoteCommands {
           "/dot",
           "/llm",
           "/bsky",
+          "/autonomous",
           "/activity",
           "/storage",
           "/embed",
@@ -172,6 +187,7 @@ public final class RemoteCommands {
           "Unsupported CLI command: "
               + name
               + ". Use legacy-shell; this input was not sent to the model.");
+    if (name.equals("/autonomous")) return autonomous(words);
     if (name.equals("/checkpoint") && Set.of("status", "cleanup").contains(action)) {
       String base = "/api/v1/checkpoints/history";
       if (action.equals("status")) {
@@ -2383,7 +2399,79 @@ public final class RemoteCommands {
     return BackendClient.segment(value);
   }
 
-  /** 指定された対象の情報を、呼び出し元が参照できる形で返す。 */
+  /** 自発投稿案の入力を、固定された確認・編集APIへ変換する。 */
+  private static Request autonomous(List<String> words) {
+    String action = words.size() == 1 ? "sources" : words.get(1);
+    String base = "/api/v1/autonomous";
+    if (action.equals("generate")) {
+      exact(words, 2);
+      return new Request("POST", base + "/drafts/generate", Map.of(), Duration.ofSeconds(180));
+    }
+    if (Set.of("drafts", "sources").contains(action)) {
+      var parsed = parse(words, 2, Set.of("--limit"), Set.of());
+      if (!parsed.arguments().isEmpty()) throw invalid();
+      int limit = integer(parsed.options().getOrDefault("--limit", "20"));
+      if (limit < 1 || limit > 200) throw invalid();
+      return get(base + "/" + action + "?limit=" + limit);
+    }
+    if (Set.of("draft", "hold", "source").contains(action)) {
+      exact(words, 3);
+      return get(
+          base + (action.equals("source") ? "/sources/" : "/drafts/") + autonomousId(words.get(2)));
+    }
+    if (action.equals("add-source")) {
+      var parsed = parse(words, 2, Set.of("--text"), Set.of("--public-use"));
+      if (!parsed.arguments().isEmpty() || !parsed.options().containsKey("--text")) throw invalid();
+      return post(
+          base + "/sources",
+          Map.of(
+              "text",
+              parsed.options().get("--text"),
+              "publicUseAllowed",
+              Boolean.parseBoolean(parsed.options().getOrDefault("--public-use", "false"))));
+    }
+    Set<String> options =
+        switch (action) {
+          case "edit", "edit-source" -> Set.of("--revision", "--text");
+          case "reject" -> Set.of("--revision", "--reason");
+          case "regenerate", "permit-source", "revoke-source" -> Set.of("--revision");
+          default -> throw invalid();
+        };
+    var parsed = parse(words, 2, options, Set.of());
+    if (parsed.arguments().size() != 1) throw invalid();
+    int revision = integer(parsed.options().getOrDefault("--revision", "0"));
+    if (revision < 1) throw invalid();
+    var body = new LinkedHashMap<String, Object>();
+    body.put("expectedRevision", revision);
+    if (Set.of("edit", "edit-source").contains(action)) {
+      if (!parsed.options().containsKey("--text")) throw invalid();
+      body.put("text", parsed.options().get("--text"));
+    }
+    if (action.equals("reject")) body.put("reason", parsed.options().getOrDefault("--reason", ""));
+    String operation =
+        switch (action) {
+          case "edit-source" -> "edit";
+          case "permit-source" -> "permit";
+          case "revoke-source" -> "revoke";
+          default -> action;
+        };
+    String path =
+        base
+            + (action.endsWith("-source") ? "/sources/" : "/drafts/")
+            + autonomousId(parsed.arguments().getFirst())
+            + "/"
+            + operation;
+    return action.equals("regenerate")
+        ? new Request("POST", path, body, Duration.ofSeconds(180))
+        : post(path, body);
+  }
+
+  private static String autonomousId(String value) {
+    if (".".equals(value) || "..".equals(value)) throw invalid();
+    return id(value);
+  }
+
+  /** 固定された照会先への要求を作る。 */
   private static Request get(String path) {
     return new Request("GET", path, null);
   }

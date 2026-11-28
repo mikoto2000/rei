@@ -13,6 +13,53 @@ import org.junit.jupiter.api.Test;
 
 /** バックエンドクライアントの結果と状態の契約を検証するテスト。 */
 class BackendClientTest {
+  @Test
+  void autonomousMutationUsesItsSuppliedWholeResponseDeadline() throws Exception {
+    var release = new CountDownLatch(1);
+    var bodyStarted = new CountDownLatch(1);
+    var requests = new AtomicInteger();
+    var server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+    server.createContext(
+        "/api/v1/autonomous/drafts/generate",
+        exchange -> {
+          try (exchange) {
+            exchange.getRequestBody().readAllBytes();
+            requests.incrementAndGet();
+            exchange.getResponseHeaders().set("Content-Type", "application/json");
+            exchange.sendResponseHeaders(200, 100);
+            exchange.getResponseBody().write('{');
+            exchange.getResponseBody().flush();
+            bodyStarted.countDown();
+            release.await();
+          } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+          } catch (java.io.IOException expectedAfterTimeout) {
+            // The response deadline closes the client's socket while this body is incomplete.
+          }
+        });
+    server.start();
+    try (var client =
+        new BackendClient(
+            URI.create("http://127.0.0.1:" + server.getAddress().getPort()), "test-key")) {
+      assertTimeoutPreemptively(
+          Duration.ofSeconds(3),
+          () ->
+              assertThrows(
+                  HttpTimeoutException.class,
+                  () ->
+                      client.mutation(
+                          "POST",
+                          "/api/v1/autonomous/drafts/generate",
+                          java.util.Map.of(),
+                          Duration.ofMillis(500))));
+      assertTrue(bodyStarted.await(1, java.util.concurrent.TimeUnit.SECONDS));
+      assertEquals(1, requests.get());
+    } finally {
+      release.countDown();
+      server.stop(0);
+    }
+  }
+
   @org.junit.jupiter.params.ParameterizedTest
   @org.junit.jupiter.params.provider.ValueSource(strings = {"json-body", "sse-headers", "sse-idle"})
   void stalledResponsesReachTheirDeadline(String scenario) throws Exception {

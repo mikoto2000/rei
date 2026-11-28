@@ -1015,7 +1015,8 @@ public final class TerminalClient implements AutoCloseable {
       var response =
           request.method().equals("GET")
               ? backend.get(request.path())
-              : backend.mutation(request.method(), request.path(), request.body());
+              : backend.mutation(
+                  request.method(), request.path(), request.body(), request.mutationTimeout());
       if (name.equals("/secretary") && !words.contains("--json")) {
         var meetingText = SecretaryMeetingOutput.text(response);
         if (meetingText != null) {
