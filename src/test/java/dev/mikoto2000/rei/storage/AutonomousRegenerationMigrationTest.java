@@ -80,7 +80,7 @@ class AutonomousRegenerationMigrationTest {
       sql.execute("PRAGMA user_version=24");
     }
     var upgraded = prepare();
-    assertThat(upgraded.schemaVersion()).isEqualTo(25);
+    assertThat(upgraded.schemaVersion()).isEqualTo(StorageMigrationCoordinator.SCHEMA_VERSION);
     assertThat(upgraded.backup()).isNotNull();
     try (var db = connection();
         var sql = db.createStatement()) {
