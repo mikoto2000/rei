@@ -55,7 +55,11 @@ public final class AutonomousOpportunityScheduler implements SecretaryTick, Auto
         settings,
         clock,
         drafts::isStopping,
-        id -> generation.consider(id, AutonomousDraft.Trigger.SCHEDULED),
+        id -> {
+          var result = generation.consider(id, AutonomousDraft.Trigger.SCHEDULED);
+          if (result.status() == AutonomousGenerationService.Status.FAILED)
+            log.warn("Autonomous consideration failed for opportunity {}", id);
+        },
         newWorker());
   }
 

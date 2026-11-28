@@ -9,6 +9,10 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import dev.mikoto2000.rei.autonomous.AutonomousActionProperties;
 import dev.mikoto2000.rei.autonomous.AutonomousDraft;
 import dev.mikoto2000.rei.autonomous.AutonomousDraftStore;
@@ -30,6 +34,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
+import org.slf4j.LoggerFactory;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.context.annotation.ComponentScan;
@@ -267,6 +272,45 @@ class AutonomousOpportunityWorkerTest {
       assertThat(Thread.currentThread().isInterrupted()).isTrue();
     } finally {
       Thread.interrupted();
+    }
+  }
+
+  @Test
+  void aReturnedFailureIsObservableByOpportunityIdWithoutLeakingResultDetails() throws Exception {
+    var logger = (Logger) LoggerFactory.getLogger(AutonomousOpportunityScheduler.class);
+    var previous = logger.getLevel();
+    var output = new ListAppender<ILoggingEvent>();
+    output.start();
+    logger.setLevel(Level.WARN);
+    logger.addAppender(output);
+    var started = new CountDownLatch(1);
+    when(generation.consider(anyString(), eq(AutonomousDraft.Trigger.SCHEDULED)))
+        .thenAnswer(invocation -> {
+          started.countDown();
+          return new AutonomousGenerationService.Result(
+              AutonomousGenerationService.Status.FAILED, "PRIVATE_PROVIDER_TEXT", null);
+        });
+    clock.at("2026-11-28T12:41:59Z");
+    try {
+      try (var scheduler =
+          new AutonomousOpportunityScheduler(settings(), clock, generation, drafts)) {
+        clock.at("2026-11-28T12:42:00Z");
+        scheduler.tick();
+        assertThat(started.await(5, TimeUnit.SECONDS)).isTrue();
+      }
+      assertThat(output.list)
+          .anySatisfy(event ->
+              assertThat(event.getFormattedMessage())
+                  .contains("scheduled:bluesky:2026-11-28T12:42:00Z"));
+      assertThat(output.list)
+          .allSatisfy(event -> {
+            assertThat(event.getFormattedMessage()).doesNotContain("PRIVATE_PROVIDER_TEXT");
+            assertThat(event.getThrowableProxy()).isNull();
+          });
+    } finally {
+      logger.detachAppender(output);
+      logger.setLevel(previous);
+      output.stop();
     }
   }
 
