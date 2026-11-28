@@ -47,8 +47,9 @@ final class ChatStreamTimeoutInterceptor implements Interceptor {
       return chain.proceed(chain.request());
     }
     // Spring AI supplies a per-request timeout that overrides the client defaults.
-    // Legacy callers clear the whole-call deadline; accepted named profiles retain it.
-    if (!preserveRequestDeadline) {
+    // Legacy callers clear the whole-call deadline; named profiles and autonomous calls retain it.
+    var autonomousDeadline = AutonomousCallDeadline.current();
+    if (!preserveRequestDeadline && autonomousDeadline == null) {
       var timeout = chain.call().timeout();
       // OkHttp enters its AsyncTimeout before application interceptors run.
       // Remove the already scheduled watchdog as well as clearing its duration.
@@ -57,6 +58,12 @@ final class ChatStreamTimeoutInterceptor implements Interceptor {
       }
       timeout.clearTimeout().clearDeadline();
     }
-    return chain.withReadTimeout(readTimeoutMillis, TimeUnit.MILLISECONDS).proceed(chain.request());
+    int effectiveReadTimeout =
+        autonomousDeadline == null
+            ? readTimeoutMillis
+            : Math.min(readTimeoutMillis, validatedReadTimeoutMillis(autonomousDeadline));
+    return chain
+        .withReadTimeout(effectiveReadTimeout, TimeUnit.MILLISECONDS)
+        .proceed(chain.request());
   }
 }

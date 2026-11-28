@@ -74,10 +74,8 @@ public final class IsolatedAutonomousPostGenerator implements AutonomousPostGene
     var options = ModelOptions.singleRequest(requestOptions.get());
     options = ModelOptions.capOutputLimit(options, 1024);
     var timeout = readTimeout.get();
-    options =
-        ModelOptions.withTimeout(
-            options,
-            timeout.compareTo(Duration.ofSeconds(60)) < 0 ? timeout : Duration.ofSeconds(60));
+    var deadline = timeout.compareTo(Duration.ofSeconds(60)) < 0 ? timeout : Duration.ofSeconds(60);
+    options = ModelOptions.withTimeout(options, deadline);
     if (!(options instanceof OpenAiChatOptions chat))
       throw new IllegalArgumentException("Unsupported autonomous inference protocol");
     options = chat.mutate().store(false).n(1).build();
@@ -87,7 +85,7 @@ public final class IsolatedAutonomousPostGenerator implements AutonomousPostGene
                 new SystemMessage(settings.bluesky().systemPrompt() + "\n" + RULES),
                 new UserMessage(data)),
             options);
-    var response = model.call(prompt);
+    var response = AutonomousCallDeadline.call(deadline, () -> model.call(prompt));
     if (response == null || response.getResults().size() != 1)
       throw new IllegalArgumentException("Invalid autonomous model response");
     var generation = response.getResult();
