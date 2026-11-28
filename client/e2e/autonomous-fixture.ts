@@ -8,6 +8,8 @@ let text =
   "公開用に登録した話題から作った投稿案です。\n本文の全文を確認してください。";
 let state = "PENDING_REVIEW";
 let noticeRead = false;
+let rejectionReason = "";
+let feedback: Item | null = null;
 const item = (): Item => ({
   id: "draft-one",
   title: "投稿案",
@@ -25,10 +27,77 @@ const item = (): Item => ({
     ["ExpiresAt", "2026-12-01T03:00:00Z"],
     ["Trigger", "MANUAL"],
     ["RegenerationAttempts", "0"],
+    ["RejectionReason", rejectionReason],
+  ],
+});
+
+const source = (revision: number, text: string, allowed: boolean): Item => ({
+  id: "feedback-one",
+  title: "公開用資料",
+  fields: [
+    ["Type", "AutonomousSource"],
+    ["Revision", String(revision)],
+    ["Text", text],
+    ["PublicUseAllowed", String(allowed)],
+    ["UpdatedAt", "2026-11-28T03:00:00Z"],
   ],
 });
 export function autonomousFixture(op: WorkspaceOperation): WorkspaceResult {
   switch (op.operation) {
+    case "autonomousPublished":
+      return {
+        title: "公開済み履歴",
+        items: [
+          {
+            id: "published-one",
+            title: "公開済み",
+            fields: [
+              ["Type", "AutonomousDraft"],
+              ["Status", "PUBLISHED"],
+              ["Text", "以前に公開した話題です。\nこちらは履歴の本文です。"],
+              ["Account", "rei.example"],
+              ["DID", "did:plc:fixture"],
+              ["UpdatedAt", "2026-11-27T03:00:00Z"],
+              ["URI", "at://did:plc:fixture/app.bsky.feed.post/aaaaaaaaaaaaa"],
+              [
+                "CID",
+                "bafyreidfayvfuwqa7qlnopdjiqrxzs6blmoeu4rujcjtnci5beludirz2a",
+              ],
+            ],
+          },
+        ],
+      };
+    case "autonomousHistory":
+      return {
+        title: "生成履歴",
+        items: [
+          {
+            id: "manual:first",
+            title: "生成",
+            fields: [
+              ["Type", "AutonomousHistory"],
+              ["Status", "GENERATED"],
+              ["Trigger", "MANUAL"],
+              ["Kind", "NEW"],
+              ["Reason", "投稿案を作成しました。"],
+              ["DraftId", "draft-one"],
+              ["CreatedAt", "2026-11-28T03:00:00Z"],
+            ],
+          },
+          {
+            id: "scheduled:skip",
+            title: "見送り",
+            fields: [
+              ["Type", "AutonomousHistory"],
+              ["Status", "SKIPPED"],
+              ["Trigger", "SCHEDULED"],
+              ["Kind", "NEW"],
+              ["Reason", "duplicate_publication"],
+              ["CreatedAt", "2026-11-28T04:00:00Z"],
+            ],
+          },
+        ],
+      };
     case "autonomousNotifications":
       return {
         title: "投稿案の通知",
@@ -54,7 +123,29 @@ export function autonomousFixture(op: WorkspaceOperation): WorkspaceResult {
       noticeRead = true;
       return { title: "既読", items: [] };
     case "autonomousSources":
-      return { title: "話題", items: [] };
+      return { title: "話題", items: feedback ? [feedback] : [] };
+    case "autonomousAddSource":
+      feedback = source(1, op.text, op.publicUseAllowed);
+      return { title: "資料を登録", items: [feedback] };
+    case "autonomousSource":
+      if (!feedback || op.id !== feedback.id) throw "NotFound";
+      return { title: "資料", items: [feedback] };
+    case "autonomousPermitSource":
+    case "autonomousRevokeSource": {
+      if (
+        !feedback ||
+        op.id !== feedback.id ||
+        Number(feedback.fields.find(([name]) => name === "Revision")?.[1]) !==
+          op.expectedRevision
+      )
+        throw "ResourceConflict";
+      feedback = source(
+        op.expectedRevision + 1,
+        feedback.fields.find(([name]) => name === "Text")?.[1] ?? "",
+        op.operation === "autonomousPermitSource",
+      );
+      return { title: "資料の利用許可", items: [feedback] };
+    }
     case "autonomousDrafts":
     case "autonomousDraft":
       break;
@@ -67,6 +158,7 @@ export function autonomousFixture(op: WorkspaceOperation): WorkspaceResult {
     case "autonomousReject":
       if (op.expectedRevision !== revision) throw "ResourceConflict";
       state = "REJECTED";
+      rejectionReason = op.reason;
       break;
     case "autonomousRegenerate":
       if (op.expectedRevision !== revision) throw "ResourceConflict";
