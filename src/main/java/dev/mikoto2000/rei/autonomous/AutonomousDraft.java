@@ -119,7 +119,7 @@ public record AutonomousDraft(
       String result,
       String failureReason) {}
 
-  AutonomousDraft reviewed(State next, String rejection, Instant updated) {
+  public AutonomousDraft reviewed(State next, String rejection, Instant updated) {
     return new AutonomousDraft(
         id,
         actionType,
@@ -139,7 +139,7 @@ public record AutonomousDraft(
         null);
   }
 
-  AutonomousDraft edited(Content revised, Instant updated) {
+  public AutonomousDraft edited(Content revised, Instant updated) {
     return new AutonomousDraft(
         id,
         actionType,

@@ -8,6 +8,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import com.sun.net.httpserver.HttpServer;
 import dev.mikoto2000.rei.event.AgentEventFactory;
 import dev.mikoto2000.rei.event.AgentEventPublisher;
+import dev.mikoto2000.rei.llm.IsolatedAutonomousPostGenerator;
 import dev.mikoto2000.rei.llm.LlmModelProvider;
 import dev.mikoto2000.rei.llm.LlmProperties;
 import dev.mikoto2000.rei.storage.StorageDatabase;
@@ -129,14 +130,18 @@ class IsolatedAutonomousPostGeneratorTest {
     context()
         .withUserConfiguration(
             dev.mikoto2000.rei.storage.StorageMigrationConfiguration.class,
-            AutonomousActionConfiguration.class)
+            AutonomousActionConfiguration.class,
+            dev.mikoto2000.rei.storage.SqliteAutonomousDraftStore.class,
+            dev.mikoto2000.rei.storage.SqliteAutonomousPublicSources.class,
+            dev.mikoto2000.rei.event.AutonomousDraftLifecycle.class,
+            dev.mikoto2000.rei.bluesky.BlueskyAutonomousTargetResolver.class)
         .withBean(java.time.Clock.class, java.time.Clock::systemUTC)
         .withBean(
             dev.mikoto2000.rei.event.AgentEventBus.class,
             dev.mikoto2000.rei.event.InMemoryAgentEventBus::new)
         .withBean(dev.mikoto2000.rei.bluesky.BlueskyProperties.class, () -> bluesky)
         .withBean(dev.mikoto2000.rei.bluesky.BlueskyApiClient.class, () -> api)
-        .withPropertyValues("rei.data-dir=" + root)
+        .withPropertyValues("rei.data-dir=" + root, "rei.bluesky.handle=rei.example")
         .run(context -> {
           assertThat(context)
               .hasNotFailed()
@@ -150,7 +155,9 @@ class IsolatedAutonomousPostGeneratorTest {
                   + source.id()
                   + ":1\"]}}";
           var result = context.getBean(AutonomousGenerationService.class).manual();
-          assertThat(result.status()).isEqualTo(AutonomousGenerationService.Status.DRAFT_CREATED);
+          assertThat(result.status())
+              .as(result.toString())
+              .isEqualTo(AutonomousGenerationService.Status.DRAFT_CREATED);
           var draft = context.getBean(AutonomousDraftStore.class).get(result.draftId());
           assertThat(draft.state()).isEqualTo(AutonomousDraft.State.PENDING_REVIEW);
           assertThat(draft.approval()).isNull();

@@ -50,8 +50,8 @@ class AutonomousGenerationServiceTest {
                 defaults.regenerationCooldown(),
                 defaults.systemPrompt()));
     var database = new StorageDatabase(root);
-    drafts = new AutonomousDraftStore(database, clock, settings);
-    sources = new AutonomousPublicSources(database, clock);
+    drafts = new dev.mikoto2000.rei.storage.SqliteAutonomousDraftStore(database, clock, settings);
+    sources = new dev.mikoto2000.rei.storage.SqliteAutonomousPublicSources(database, clock);
     when(targets.resolve())
         .thenReturn(new AutonomousDraft.Target("did:plc:example", "rei.example"));
   }

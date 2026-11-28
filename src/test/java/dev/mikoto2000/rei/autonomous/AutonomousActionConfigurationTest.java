@@ -3,8 +3,8 @@ package dev.mikoto2000.rei.autonomous;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import dev.mikoto2000.rei.application.state.OperationConflictException;
 import dev.mikoto2000.rei.event.AgentEventBus;
+import dev.mikoto2000.rei.event.AutonomousDraftLifecycle;
 import dev.mikoto2000.rei.event.InMemoryAgentEventBus;
 import dev.mikoto2000.rei.storage.StorageDatabase;
 import dev.mikoto2000.rei.storage.StorageMigrationConfiguration;
@@ -26,7 +26,11 @@ class AutonomousActionConfigurationTest {
   private ApplicationContextRunner context() {
     return new ApplicationContextRunner()
         .withUserConfiguration(
-            StorageMigrationConfiguration.class, AutonomousActionConfiguration.class)
+            StorageMigrationConfiguration.class,
+            AutonomousActionConfiguration.class,
+            dev.mikoto2000.rei.storage.SqliteAutonomousDraftStore.class,
+            dev.mikoto2000.rei.storage.SqliteAutonomousPublicSources.class,
+            AutonomousDraftLifecycle.class)
         .withBean(Clock.class, Clock::systemUTC)
         .withBean(AgentEventBus.class, InMemoryAgentEventBus::new)
         .withPropertyValues("rei.data-dir=" + root);
@@ -95,7 +99,9 @@ class AutonomousActionConfigurationTest {
                 defaults.maxRegenerations(),
                 defaults.regenerationCooldown(),
                 defaults.systemPrompt()));
-    var old = new AutonomousDraftStore(new StorageDatabase(root), Clock.systemUTC(), settings);
+    var old =
+        new dev.mikoto2000.rei.storage.SqliteAutonomousDraftStore(
+            new StorageDatabase(root), Clock.systemUTC(), settings);
     var claim =
         old.reserve(
                 "interrupted-startup",
@@ -109,7 +115,7 @@ class AutonomousActionConfigurationTest {
           var restored = context.getBean(AutonomousDraftStore.class);
           assertThat(restored.list(20)).isEmpty();
           assertThatThrownBy(() -> restored.complete(claim, "自動再開しない本文", "reason", List.of()))
-              .isInstanceOf(OperationConflictException.class);
+              .isInstanceOf(AutonomousConflictException.class);
         });
   }
 }

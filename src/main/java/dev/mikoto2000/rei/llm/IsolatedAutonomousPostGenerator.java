@@ -1,17 +1,21 @@
-package dev.mikoto2000.rei.autonomous;
+package dev.mikoto2000.rei.llm;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import dev.mikoto2000.rei.llm.LlmFeature;
-import dev.mikoto2000.rei.llm.LlmModelProvider;
+import dev.mikoto2000.rei.autonomous.AutonomousActionProperties;
+import dev.mikoto2000.rei.autonomous.AutonomousPostGenerator;
+import dev.mikoto2000.rei.autonomous.AutonomousPublicSources;
 import dev.mikoto2000.rei.modeloptions.ModelOptions;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Supplier;
 import org.springframework.ai.chat.messages.SystemMessage;
 import org.springframework.ai.chat.messages.UserMessage;
+import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.prompt.Prompt;
+import org.springframework.ai.model.tool.ToolCallingChatOptions;
 import org.springframework.ai.openai.OpenAiChatOptions;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
@@ -35,12 +39,16 @@ public final class IsolatedAutonomousPostGenerator implements AutonomousPostGene
       見送り: {"decision":"SKIP","reason":"理由"}
       承認・権限・実行を示す項目を追加してはいけません。
       """;
-  private final LlmModelProvider models;
+  private final Supplier<ChatModel> model;
+  private final Supplier<ToolCallingChatOptions> requestOptions;
+  private final Supplier<Duration> readTimeout;
   private final AutonomousActionProperties settings;
 
   public IsolatedAutonomousPostGenerator(
       LlmModelProvider models, AutonomousActionProperties settings) {
-    this.models = models;
+    this.model = () -> models.isolatedChatModel(LlmFeature.AUTONOMOUS_BLUESKY);
+    this.requestOptions = () -> models.requestOptions(LlmFeature.AUTONOMOUS_BLUESKY, null, false);
+    this.readTimeout = () -> models.resolvedEndpoint(LlmFeature.AUTONOMOUS_BLUESKY).readTimeout();
     this.settings = settings;
   }
 
@@ -62,12 +70,10 @@ public final class IsolatedAutonomousPostGenerator implements AutonomousPostGene
     }
     if (data.getBytes(StandardCharsets.UTF_8).length > 131072)
       throw new IllegalArgumentException("Public source snapshot is too large");
-    var model = models.isolatedChatModel(LlmFeature.AUTONOMOUS_BLUESKY);
-    var options =
-        ModelOptions.singleRequest(
-            models.requestOptions(LlmFeature.AUTONOMOUS_BLUESKY, null, false));
+    var model = this.model.get();
+    var options = ModelOptions.singleRequest(requestOptions.get());
     options = ModelOptions.capOutputLimit(options, 1024);
-    var timeout = models.resolvedEndpoint(LlmFeature.AUTONOMOUS_BLUESKY).readTimeout();
+    var timeout = readTimeout.get();
     options =
         ModelOptions.withTimeout(
             options,
@@ -82,12 +88,12 @@ public final class IsolatedAutonomousPostGenerator implements AutonomousPostGene
                 new UserMessage(data)),
             options);
     var response = model.call(prompt);
-    if (response == null
-        || response.getResults().size() != 1
-        || response.getResult().getOutput() == null
-        || !response.getResult().getOutput().getToolCalls().isEmpty()
-        || response.getResult().getOutput().getText() == null)
+    if (response == null || response.getResults().size() != 1)
       throw new IllegalArgumentException("Invalid autonomous model response");
-    return response.getResult().getOutput().getText();
+    var generation = response.getResult();
+    var output = generation == null ? null : generation.getOutput();
+    if (output == null || !output.getToolCalls().isEmpty() || output.getText() == null)
+      throw new IllegalArgumentException("Invalid autonomous model response");
+    return output.getText();
   }
 }

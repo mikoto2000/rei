@@ -3,7 +3,6 @@ package dev.mikoto2000.rei.autonomous;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import dev.mikoto2000.rei.application.state.OperationConflictException;
 import dev.mikoto2000.rei.storage.StorageDatabase;
 import dev.mikoto2000.rei.storage.StorageMigrationCoordinator;
 import java.nio.charset.StandardCharsets;
@@ -32,7 +31,9 @@ class AutonomousPublicSourcesTest {
     try (var migration = new StorageMigrationCoordinator(root)) {
       migration.prepare();
     }
-    sources = new AutonomousPublicSources(new StorageDatabase(root), clock);
+    sources =
+        new dev.mikoto2000.rei.storage.SqliteAutonomousPublicSources(
+            new StorageDatabase(root), clock);
   }
 
   @Test
@@ -147,15 +148,19 @@ class AutonomousPublicSourcesTest {
     var initial = sources.register("candidate topic", false, "operator");
     var permitted = sources.permission(initial.id(), 1, true, "reviewer");
     assertThat(permitted.revision()).isEqualTo(2);
-    sources = new AutonomousPublicSources(new StorageDatabase(root), clock);
+    sources =
+        new dev.mikoto2000.rei.storage.SqliteAutonomousPublicSources(
+            new StorageDatabase(root), clock);
     assertThat(sources.publicSnapshot())
         .singleElement()
         .satisfies(item -> assertThat(item.id()).isEqualTo("topic:" + initial.id() + ":2"));
     assertThatThrownBy(() -> sources.permission(initial.id(), 1, false, "stale reviewer"))
-        .isInstanceOf(OperationConflictException.class);
+        .isInstanceOf(AutonomousConflictException.class);
     var revoked = sources.permission(initial.id(), 2, false, "reviewer");
     assertThat(revoked.revision()).isEqualTo(3);
-    sources = new AutonomousPublicSources(new StorageDatabase(root), clock);
+    sources =
+        new dev.mikoto2000.rei.storage.SqliteAutonomousPublicSources(
+            new StorageDatabase(root), clock);
     assertThat(sources.publicSnapshot()).isEmpty();
     assertThat(sources.version(initial.id(), 2).publicUseAllowed()).isTrue();
   }
@@ -165,7 +170,7 @@ class AutonomousPublicSourcesTest {
     var initial = sources.register("original", true, "operator");
     var edited = sources.edit(initial.id(), 1, "latest", "editor");
     assertThatThrownBy(() -> sources.edit(initial.id(), 1, "stale", "other editor"))
-        .isInstanceOf(OperationConflictException.class);
+        .isInstanceOf(AutonomousConflictException.class);
     assertThat(sources.get(initial.id())).isEqualTo(edited);
   }
 
@@ -185,7 +190,9 @@ class AutonomousPublicSourcesTest {
   @Test
   void concurrentRepositoriesCannotReplaceTheSameVersionTwice() throws Exception {
     var initial = sources.register("original", true, "operator");
-    var other = new AutonomousPublicSources(new StorageDatabase(root), clock);
+    var other =
+        new dev.mikoto2000.rei.storage.SqliteAutonomousPublicSources(
+            new StorageDatabase(root), clock);
     try (var pool = Executors.newFixedThreadPool(2)) {
       var gate = new CountDownLatch(1);
       var edits =
@@ -196,7 +203,7 @@ class AutonomousPublicSourcesTest {
                     try {
                       repository.edit(initial.id(), 1, "concurrent change", "editor");
                       return "changed";
-                    } catch (OperationConflictException stale) {
+                    } catch (AutonomousConflictException stale) {
                       return "conflict";
                     }
                   }))

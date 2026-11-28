@@ -29,7 +29,9 @@ class AutonomousCommandTest {
     try (var migration = new StorageMigrationCoordinator(root)) {
       migration.prepare();
     }
-    sources = new AutonomousPublicSources(new StorageDatabase(root), Clock.systemUTC());
+    sources =
+        new dev.mikoto2000.rei.storage.SqliteAutonomousPublicSources(
+            new StorageDatabase(root), Clock.systemUTC());
   }
 
   private int execute(String... arguments) {

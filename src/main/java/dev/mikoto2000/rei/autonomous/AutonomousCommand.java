@@ -13,6 +13,11 @@ import picocli.CommandLine.Spec;
 @Component
 @Command(name = "autonomous", description = "自発投稿案の手動生成と公開用話題の管理", mixinStandardHelpOptions = true)
 public final class AutonomousCommand implements java.util.concurrent.Callable<Integer> {
+  private static final com.fasterxml.jackson.databind.ObjectMapper JSON =
+      new com.fasterxml.jackson.databind.ObjectMapper()
+          .registerModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule())
+          .disable(com.fasterxml.jackson.databind.SerializationFeature.WRITE_DATES_AS_TIMESTAMPS)
+          .enable(com.fasterxml.jackson.databind.SerializationFeature.ORDER_MAP_ENTRIES_BY_KEYS);
   private final AutonomousPublicSources sources;
   private final Supplier<AutonomousGenerationService> generation;
 
@@ -84,12 +89,12 @@ public final class AutonomousCommand implements java.util.concurrent.Callable<In
                 throw new IllegalArgumentException(
                     "Unknown autonomous command; use /autonomous --help");
           };
-      out.println(dev.mikoto2000.rei.storage.StorageDatabase.JSON.writeValueAsString(result));
+      out.println(JSON.writeValueAsString(result));
       return result instanceof AutonomousGenerationService.Result generated
               && generated.status() == AutonomousGenerationService.Status.FAILED
           ? 2
           : 0;
-    } catch (Exception failed) {
+    } catch (java.io.IOException | RuntimeException failed) {
       // Topic bodies and provider errors may contain private data or terminal control characters.
       out.println("[error] 自発投稿案の操作に失敗しました。引数と現在のリビジョンを確認してください。");
       return 2;

@@ -86,7 +86,8 @@ tool context 等の周辺情報がある場合は送信前に拒否します。
 
 - `AutonomousActionPolicy` は現在の事実だけを評価し、生成を検討してよいかを返します。
   LLM・投稿サービス・承認処理を持ちません。
-- `AutonomousDraftStore` は既存 `StorageDatabase` の transaction を利用し、機会 ID、
+- `AutonomousDraftStore` の保存操作を `SqliteAutonomousDraftStore` が実装し、
+  既存 `StorageDatabase` の transaction を利用します。機会 ID、
   実行中 claim、日付境界、pending 上限、試行 cooldown を永続状態で検証します。
   手動・定期の契機は同じ制約を通ります。
 - 本文・SHA-256・reason・source IDs は immutable な revision として保存します。
@@ -95,6 +96,10 @@ tool context 等の周辺情報がある場合は送信前に拒否します。
 - 期限切れと見送りは編集できません。古い revision による操作を拒否します。
 - 起動時に残った実行中の検討は ABORTED とし、監査を残します。自動で再生成しません。
   既存 `application.shutdown.started` で新規受付を停止し、停止後の生成結果は保存しません。
+
+行動判断・生成サービスは保存操作と公開情報源・宛先解決のインターフェースだけに依存します。
+SQLite 実装は `storage`、モデル接続は `llm`、公開 handle 解決は `bluesky`、
+停止イベントの接続は `event` に置き、既存パッケージから自発的行動への循環依存を作りません。
 
 ## 保存と移行
 

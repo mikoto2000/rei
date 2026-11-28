@@ -19,7 +19,8 @@ class AutonomousTargetResolverTest {
     var api = mock(BlueskyApiClient.class);
     when(settings.getHandle()).thenReturn("rei.example");
     when(api.resolveHandle("rei.example")).thenReturn("did:plc:example");
-    assertThat(new AutonomousTargetResolver(settings, api).resolve())
+    assertThat(
+            new dev.mikoto2000.rei.bluesky.BlueskyAutonomousTargetResolver(settings, api).resolve())
         .isEqualTo(new AutonomousDraft.Target("did:plc:example", "rei.example"));
     verify(settings).getHandle();
     verify(api).resolveHandle("rei.example");
@@ -31,7 +32,9 @@ class AutonomousTargetResolverTest {
     var settings = mock(BlueskyProperties.class);
     var api = mock(BlueskyApiClient.class);
     when(settings.getHandle()).thenReturn("");
-    assertThat(new AutonomousTargetResolver(settings, api).resolve()).isNull();
+    assertThat(
+            new dev.mikoto2000.rei.bluesky.BlueskyAutonomousTargetResolver(settings, api).resolve())
+        .isNull();
     verifyNoInteractions(api);
   }
 
@@ -41,7 +44,8 @@ class AutonomousTargetResolverTest {
     var api = mock(BlueskyApiClient.class);
     when(settings.getHandle()).thenReturn("rei.example");
     when(api.resolveHandle("rei.example")).thenReturn("not-a-did");
-    assertThatThrownBy(() -> new AutonomousTargetResolver(settings, api).resolve())
+    assertThatThrownBy(() ->
+            new dev.mikoto2000.rei.bluesky.BlueskyAutonomousTargetResolver(settings, api).resolve())
         .isInstanceOf(IllegalArgumentException.class);
   }
 }
