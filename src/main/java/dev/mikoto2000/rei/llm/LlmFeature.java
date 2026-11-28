@@ -29,6 +29,9 @@ public final class LlmFeature {
   /** Bluesky返信。 */
   public static final String BLUESKY_REPLY = "bluesky-reply";
 
+  /** Public-context autonomous Bluesky draft generation. */
+  public static final String AUTONOMOUS_BLUESKY = "autonomous-bluesky";
+
   /** フィード要約。 */
   public static final String FEED_SUMMARY = "feed-summary";
 

@@ -118,6 +118,10 @@ class FallbackChatModel implements ChatModel {
 
   /** 用途に応じたモデル利用に関するログ機能失敗情報を処理する。 */
   private void logFeatureFailure(String operation, Throwable error) {
+    if (LlmFeature.AUTONOMOUS_BLUESKY.equals(feature)) {
+      log.warn("Autonomous inference failed; using configured fallback: operation={}", operation);
+      return;
+    }
     WebClientResponseException responseException = findResponseException(error);
     if (responseException == null) {
       log.warn(
