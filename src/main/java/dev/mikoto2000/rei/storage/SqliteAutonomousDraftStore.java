@@ -10,6 +10,7 @@ import dev.mikoto2000.rei.autonomous.AutonomousDraftStore;
 import dev.mikoto2000.rei.autonomous.AutonomousHistory;
 import dev.mikoto2000.rei.autonomous.AutonomousNotificationStore;
 import dev.mikoto2000.rei.autonomous.AutonomousPostRecord;
+import dev.mikoto2000.rei.autonomous.AutonomousPostText;
 import dev.mikoto2000.rei.autonomous.AutonomousPublicationStore;
 import dev.mikoto2000.rei.autonomous.AutonomousTidGenerator;
 import dev.mikoto2000.rei.autonomous.DefaultAutonomousActionPolicy;
@@ -259,6 +260,8 @@ public final class SqliteAutonomousDraftStore
               && current.state() != AutonomousDraft.State.FAILED)
           || current.content().revision() != expectedRevision
           || !clock.instant().isBefore(current.expiresAt()))
+        throw new AutonomousConflictException();
+      if (duplicatePublication(db, current.target().did(), current.content(), id))
         throw new AutonomousConflictException();
       var prior = publicationJournal(db, current);
       boolean retry = current.state() == AutonomousDraft.State.FAILED;
@@ -627,6 +630,10 @@ public final class SqliteAutonomousDraftStore
         finish(db, claim, "ABORTED", decision.reason(), null, now);
         return Optional.empty();
       }
+      if (duplicatePublication(db, held.target().did(), content, null)) {
+        finish(db, claim, "SKIPPED", "duplicate_publication", null, now);
+        return Optional.empty();
+      }
       var draft =
           new AutonomousDraft(
               UUID.randomUUID().toString(),
@@ -750,6 +757,10 @@ public final class SqliteAutonomousDraftStore
       var content =
           AutonomousDraft.Content.create(
               Math.incrementExact(held.expectedRevision()), text, reason, sourceIds);
+      if (duplicatePublication(db, held.target().did(), content, current.id())) {
+        finish(db, claim, "SKIPPED", "duplicate_publication", null, now);
+        return Optional.empty();
+      }
       var changed = current.edited(content, now);
       update(db, changed, held.expectedRevision());
       revision(db, changed);
@@ -932,6 +943,26 @@ public final class SqliteAutonomousDraftStore
             excluding);
     return new AutonomousActionContext.Regeneration(
         attempts, attempted < 0 ? null : Instant.ofEpochMilli(attempted), targetMatches);
+  }
+
+  private static boolean duplicatePublication(
+      Connection db, String did, AutonomousDraft.Content content, String excludedDraft)
+      throws SQLException {
+    String key = AutonomousPostText.duplicateKey(content.text());
+    try (var query =
+            prepared(
+                db,
+                "SELECT body_hash,json_extract(snapshot,'$.content.text') AS body FROM autonomous_drafts WHERE target_did=? AND state IN ('PUBLISHED','PUBLISHING','UNKNOWN') AND (? IS NULL OR id<>?)",
+                did,
+                excludedDraft,
+                excludedDraft);
+        var rows = query.executeQuery()) {
+      while (rows.next()) {
+        if (content.bodyHash().equals(rows.getString("body_hash"))
+            || key.equals(AutonomousPostText.duplicateKey(rows.getString("body")))) return true;
+      }
+      return false;
+    }
   }
 
   private static void validateOpportunityId(String opportunityId) {
