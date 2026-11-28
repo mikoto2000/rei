@@ -7,6 +7,7 @@ let revision = 1;
 let text =
   "公開用に登録した話題から作った投稿案です。\n本文の全文を確認してください。";
 let state = "PENDING_REVIEW";
+let noticeRead = false;
 const item = (): Item => ({
   id: "draft-one",
   title: "投稿案",
@@ -28,6 +29,30 @@ const item = (): Item => ({
 });
 export function autonomousFixture(op: WorkspaceOperation): WorkspaceResult {
   switch (op.operation) {
+    case "autonomousNotifications":
+      return {
+        title: "投稿案の通知",
+        items:
+          noticeRead || state !== "PENDING_REVIEW"
+            ? []
+            : [
+                {
+                  id: "a8203063-d97c-4e26-a601-745217152952",
+                  title: "投稿案の確認待ち",
+                  fields: [
+                    ["Type", "AutonomousNotice"],
+                    ["DraftId", "draft-one"],
+                    ["Status", "OPEN"],
+                    ["CreatedAt", "2026-11-28T03:00:00Z"],
+                  ],
+                },
+              ],
+      };
+    case "autonomousNoticeAck":
+      if (op.id !== "a8203063-d97c-4e26-a601-745217152952")
+        throw "InvalidInput";
+      noticeRead = true;
+      return { title: "既読", items: [] };
     case "autonomousSources":
       return { title: "話題", items: [] };
     case "autonomousDrafts":

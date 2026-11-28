@@ -8,6 +8,8 @@ export interface CoachingSettings {
   cooldownDays: number;
 }
 export type WorkspaceOperation =
+  | { operation: "autonomousNotifications"; limit: number }
+  | { operation: "autonomousNoticeAck"; id: string }
   | { operation: "autonomousDrafts"; limit: number }
   | { operation: "autonomousDraft"; id: string }
   | { operation: "autonomousGenerate" }

@@ -708,7 +708,9 @@ const call = (async (
       nextCursor: args?.cursor ? null : "opaque-next",
     };
   if (name === "projects_list")
-    return [{ id: "p", name: "rei", path: "F:\\project\\rei" }];
+    return new URLSearchParams(window.location.search).has("no-projects")
+      ? []
+      : [{ id: "p", name: "rei", path: "F:\\project\\rei" }];
   if (name === "run_cancel") {
     if (args?.runId !== "r") throw "RunNotFound";
     data.runs[0] = {
