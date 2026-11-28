@@ -357,6 +357,11 @@ public class LlmModelProvider implements dev.mikoto2000.rei.secretary.SecretaryP
   /** Isolated extraction validates both the selected endpoint and any default fallback. */
   public ChatModel isolatedChatModel(String feature) {
     dev.mikoto2000.rei.core.chat.ToolLoopSupport.requireNoDefaultTools(defaultChatModel);
+    if (LlmFeature.AUTONOMOUS_BLUESKY.equals(feature)) {
+      var server = resolvedServer(feature);
+      if (server == null || !server.hasCustomServer() || server.isFallbackToDefault())
+        AutonomousModelDefaults.requirePublicOnly(defaultChatModel);
+    }
     var model = chatModel(feature);
     dev.mikoto2000.rei.core.chat.ToolLoopSupport.requireNoDefaultTools(model);
     return model;
@@ -436,6 +441,8 @@ public class LlmModelProvider implements dev.mikoto2000.rei.secretary.SecretaryP
               ? primary
               : new FallbackChatModel(feature, primary, model, primary.getOptions().getModel());
     }
+    // Public-only generation must not publish request/response bodies through Agent events.
+    if (LlmFeature.AUTONOMOUS_BLUESKY.equals(feature)) return model;
     return eventFactory == null || eventPublisher == null
         ? model
         : new AgentEventChatModel(

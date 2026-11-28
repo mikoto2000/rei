@@ -3,7 +3,7 @@ package dev.mikoto2000.rei.autonomous;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import dev.mikoto2000.rei.application.state.OperationConflictException;
+import dev.mikoto2000.rei.event.AutonomousDraftLifecycle;
 import dev.mikoto2000.rei.storage.StorageDatabase;
 import dev.mikoto2000.rei.storage.StorageMigrationCoordinator;
 import java.nio.file.Path;
@@ -47,7 +47,9 @@ class AutonomousDraftStoreTest {
     try (var migration = new StorageMigrationCoordinator(root)) {
       migration.prepare();
     }
-    var store = new AutonomousDraftStore(new StorageDatabase(root), clock, enabled());
+    var store =
+        new dev.mikoto2000.rei.storage.SqliteAutonomousDraftStore(
+            new StorageDatabase(root), clock, enabled());
     var opportunity =
         store.reserve("manual-1", AutonomousDraft.Trigger.MANUAL, "did:plc:example", "rei.example");
     assertThat(opportunity.decision().shouldConsider()).isTrue();
@@ -57,7 +59,9 @@ class AutonomousDraftStoreTest {
     assertThat(saved.orElseThrow().approval()).isNull();
     assertThat(saved.orElseThrow().publication()).isNull();
     assertThat(saved.orElseThrow().content().revision()).isEqualTo(1);
-    var restored = new AutonomousDraftStore(new StorageDatabase(root), clock, enabled());
+    var restored =
+        new dev.mikoto2000.rei.storage.SqliteAutonomousDraftStore(
+            new StorageDatabase(root), clock, enabled());
     assertThat(restored.get(saved.orElseThrow().id())).isEqualTo(saved.orElseThrow());
     assertThat(restored.list(20)).containsExactly(saved.orElseThrow());
   }
@@ -66,7 +70,8 @@ class AutonomousDraftStoreTest {
     try (var migration = new StorageMigrationCoordinator(root)) {
       migration.prepare();
     }
-    return new AutonomousDraftStore(new StorageDatabase(root), clock, enabled());
+    return new dev.mikoto2000.rei.storage.SqliteAutonomousDraftStore(
+        new StorageDatabase(root), clock, enabled());
   }
 
   private AutonomousDraftStore.Consideration reserve(AutonomousDraftStore store, String id) {
@@ -89,7 +94,7 @@ class AutonomousDraftStoreTest {
     assertThat(edited.publication()).isNull();
     assertThat(store.revisions(saved.id())).containsExactly(saved.content(), edited.content());
     assertThatThrownBy(() -> store.edit(saved.id(), 1, "古い画面からの編集"))
-        .isInstanceOf(OperationConflictException.class);
+        .isInstanceOf(AutonomousConflictException.class);
     assertThat(store.get(saved.id())).isEqualTo(edited);
   }
 
@@ -102,16 +107,18 @@ class AutonomousDraftStoreTest {
     assertThat(rejected.rejectionReason()).isEqualTo("非公開の見送り理由");
     assertThat(rejected.rejectionReasonPublic()).isFalse();
     assertThatThrownBy(() -> store.edit(saved.id(), 1, "編集不可"))
-        .isInstanceOf(OperationConflictException.class);
+        .isInstanceOf(AutonomousConflictException.class);
     assertThatThrownBy(() -> store.reject(saved.id(), 1, "重複見送り"))
-        .isInstanceOf(OperationConflictException.class);
+        .isInstanceOf(AutonomousConflictException.class);
   }
 
   @Test
   void pendingAndDailyLimitsSurviveNewRepositoryInstances() throws Exception {
     var store = store();
     var saved = draft(store);
-    var restarted = new AutonomousDraftStore(new StorageDatabase(root), clock, enabled());
+    var restarted =
+        new dev.mikoto2000.rei.storage.SqliteAutonomousDraftStore(
+            new StorageDatabase(root), clock, enabled());
     assertThat(reserve(restarted, "pending-block").decision().reason()).isEqualTo("pending_limit");
     store.reject(saved.id(), 1, "");
     clock.advance(Duration.ofHours(2));
@@ -126,13 +133,15 @@ class AutonomousDraftStoreTest {
     var consideration = reserve(store, "skip");
     store.skip(consideration.claim(), "今回は共有する話題がない");
     assertThat(store.list(20)).isEmpty();
-    var restarted = new AutonomousDraftStore(new StorageDatabase(root), clock, enabled());
+    var restarted =
+        new dev.mikoto2000.rei.storage.SqliteAutonomousDraftStore(
+            new StorageDatabase(root), clock, enabled());
     clock.advance(Duration.ofMinutes(59));
     assertThat(reserve(restarted, "early").decision().reason()).isEqualTo("cooldown");
     clock.advance(Duration.ofMinutes(1));
     assertThat(reserve(restarted, "boundary").decision().shouldConsider()).isTrue();
     assertThatThrownBy(() -> store.complete(consideration.claim(), "再利用不可", "", List.of()))
-        .isInstanceOf(OperationConflictException.class);
+        .isInstanceOf(AutonomousConflictException.class);
   }
 
   @Test
@@ -149,10 +158,12 @@ class AutonomousDraftStoreTest {
   void restartAbortsOutstandingClaimsInsteadOfAutomaticallyResuming() throws Exception {
     var store = store();
     var claim = reserve(store, "old-run").claim();
-    var restarted = new AutonomousDraftStore(new StorageDatabase(root), clock, enabled());
+    var restarted =
+        new dev.mikoto2000.rei.storage.SqliteAutonomousDraftStore(
+            new StorageDatabase(root), clock, enabled());
     restarted.recoverInterruptedConsiderations();
     assertThatThrownBy(() -> restarted.complete(claim, "再開しない", "", List.of()))
-        .isInstanceOf(OperationConflictException.class);
+        .isInstanceOf(AutonomousConflictException.class);
     assertThat(reserve(restarted, "old-run").decision().reason())
         .isEqualTo("duplicate_opportunity");
     assertThat(restarted.list(20)).isEmpty();
@@ -167,9 +178,10 @@ class AutonomousDraftStoreTest {
     clock.advance(Duration.ofHours(72));
     assertThat(store.get(saved.id()).state()).isEqualTo(AutonomousDraft.State.EXPIRED);
     assertThatThrownBy(() -> store.edit(saved.id(), 1, "期限切れ"))
-        .isInstanceOf(OperationConflictException.class);
+        .isInstanceOf(AutonomousConflictException.class);
     assertThat(
-            new AutonomousDraftStore(new StorageDatabase(root), clock, enabled())
+            new dev.mikoto2000.rei.storage.SqliteAutonomousDraftStore(
+                    new StorageDatabase(root), clock, enabled())
                 .get(saved.id())
                 .state())
         .isEqualTo(AutonomousDraft.State.EXPIRED);
@@ -178,7 +190,9 @@ class AutonomousDraftStoreTest {
   @Test
   void concurrentManualAndScheduledRequestsReserveOnlyOneOpportunity() throws Exception {
     var first = store();
-    var second = new AutonomousDraftStore(new StorageDatabase(root), clock, enabled());
+    var second =
+        new dev.mikoto2000.rei.storage.SqliteAutonomousDraftStore(
+            new StorageDatabase(root), clock, enabled());
     var start = new CountDownLatch(1);
     try (var tasks = Executors.newVirtualThreadPerTaskExecutor()) {
       var a =
@@ -213,7 +227,7 @@ class AutonomousDraftStoreTest {
     var saved = store.complete(claim, "一度だけ保存", "", List.of()).orElseThrow();
     assertThat(reserve(store, "same-id").decision().reason()).isEqualTo("duplicate_opportunity");
     assertThatThrownBy(() -> store.complete(claim, "二度目", "", List.of()))
-        .isInstanceOf(OperationConflictException.class);
+        .isInstanceOf(AutonomousConflictException.class);
     assertThat(store.list(20)).containsExactly(saved);
   }
 

@@ -1,5 +1,8 @@
 package dev.mikoto2000.rei.autonomous;
 
+import java.nio.CharBuffer;
+import java.nio.charset.CharacterCodingException;
+import java.nio.charset.CodingErrorAction;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -71,6 +74,7 @@ public record AutonomousDraft(
           || text.getBytes(StandardCharsets.UTF_8).length > 3000
           || GRAPHEME.matcher(text).results().limit(301).count() > 300)
         throw new IllegalArgumentException("Invalid Bluesky draft text");
+      AutonomousPostText.validate(text);
       if (!hash(text).equals(bodyHash)) throw new IllegalArgumentException("Draft hash mismatch");
       if (reason == null || reason.length() > 2048 || sourceIds == null || sourceIds.size() > 64)
         throw new IllegalArgumentException("Invalid draft evidence");
@@ -87,9 +91,17 @@ public record AutonomousDraft(
 
     private static String hash(String text) {
       try {
-        return HexFormat.of()
-            .formatHex(
-                MessageDigest.getInstance("SHA-256").digest(text.getBytes(StandardCharsets.UTF_8)));
+        var encoded =
+            StandardCharsets.UTF_8
+                .newEncoder()
+                .onMalformedInput(CodingErrorAction.REPORT)
+                .onUnmappableCharacter(CodingErrorAction.REPORT)
+                .encode(CharBuffer.wrap(text));
+        var digest = MessageDigest.getInstance("SHA-256");
+        digest.update(encoded);
+        return HexFormat.of().formatHex(digest.digest());
+      } catch (CharacterCodingException malformed) {
+        throw new IllegalArgumentException("Invalid Unicode draft text", malformed);
       } catch (NoSuchAlgorithmException unavailable) {
         throw new IllegalStateException(unavailable);
       }
@@ -107,7 +119,7 @@ public record AutonomousDraft(
       String result,
       String failureReason) {}
 
-  AutonomousDraft reviewed(State next, String rejection, Instant updated) {
+  public AutonomousDraft reviewed(State next, String rejection, Instant updated) {
     return new AutonomousDraft(
         id,
         actionType,
@@ -127,7 +139,7 @@ public record AutonomousDraft(
         null);
   }
 
-  AutonomousDraft edited(Content revised, Instant updated) {
+  public AutonomousDraft edited(Content revised, Instant updated) {
     return new AutonomousDraft(
         id,
         actionType,

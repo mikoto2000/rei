@@ -272,6 +272,22 @@
     "allPublicMethods" : true
   },
   {
+    "name" : "dev.mikoto2000.rei.autonomous.AutonomousCommand",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true,
+    "fields" : [
+      { "name" : "action" },
+      { "name" : "id" },
+      { "name" : "limit" },
+      { "name" : "publicUse" },
+      { "name" : "revision" },
+      { "name" : "spec" },
+      { "name" : "text" }
+    ]
+  },
+  {
     "name" : "dev.mikoto2000.rei.bluesky.command.BskyCommand",
     "allDeclaredConstructors" : true,
     "allPublicConstructors" : true,

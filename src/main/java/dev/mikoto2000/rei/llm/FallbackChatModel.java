@@ -96,6 +96,17 @@ class FallbackChatModel implements ChatModel {
     if (options instanceof OpenAiChatOptions openAiOptions && fallbackModel != null) {
       var builder = openAiOptions.mutate();
       builder.model(fallbackModel);
+      if (LlmFeature.AUTONOMOUS_BLUESKY.equals(feature)
+          && fallback.getOptions() instanceof OpenAiChatOptions defaults) {
+        var requested = dev.mikoto2000.rei.modeloptions.ModelOptions.outputLimit(openAiOptions);
+        var configured = dev.mikoto2000.rei.modeloptions.ModelOptions.outputLimit(defaults);
+        int tokens = requested == null ? 1024 : requested;
+        if (configured != null) tokens = Math.min(tokens, configured);
+        return defaults.getMaxCompletionTokens() != null
+            ? dev.mikoto2000.rei.modeloptions.ModelOptions.withCompletionLimit(
+                builder.build(), tokens)
+            : dev.mikoto2000.rei.modeloptions.ModelOptions.withTokenLimit(builder.build(), tokens);
+      }
       return builder.build();
     }
     if (options instanceof org.springframework.ai.model.tool.ToolCallingChatOptions toolOptions) {
@@ -118,6 +129,10 @@ class FallbackChatModel implements ChatModel {
 
   /** 用途に応じたモデル利用に関するログ機能失敗情報を処理する。 */
   private void logFeatureFailure(String operation, Throwable error) {
+    if (LlmFeature.AUTONOMOUS_BLUESKY.equals(feature)) {
+      log.warn("Autonomous inference failed; using configured fallback: operation={}", operation);
+      return;
+    }
     WebClientResponseException responseException = findResponseException(error);
     if (responseException == null) {
       log.warn(
