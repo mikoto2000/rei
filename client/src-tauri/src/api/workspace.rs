@@ -316,6 +316,20 @@ impl HttpReiClient {
         op: WorkspaceOperation,
     ) -> Result<WorkspaceResult> {
         match op {
+            op @ (WorkspaceOperation::AutonomousDrafts { .. }
+            | WorkspaceOperation::AutonomousDraft { .. }
+            | WorkspaceOperation::AutonomousGenerate
+            | WorkspaceOperation::AutonomousEdit { .. }
+            | WorkspaceOperation::AutonomousRegenerate { .. }
+            | WorkspaceOperation::AutonomousReject { .. }
+            | WorkspaceOperation::AutonomousSources { .. }
+            | WorkspaceOperation::AutonomousSource { .. }
+            | WorkspaceOperation::AutonomousAddSource { .. }
+            | WorkspaceOperation::AutonomousEditSource { .. }
+            | WorkspaceOperation::AutonomousPermitSource { .. }
+            | WorkspaceOperation::AutonomousRevokeSource { .. }) => {
+                self.autonomous_operation(op).await
+            }
             WorkspaceOperation::ActivityObservationContext { project_id, date } => {
                 let valid_date = |value: &str| {
                     value.len() == 10

@@ -25,6 +25,50 @@ pub struct BackgroundReceipt {
     deny_unknown_fields
 )]
 pub enum WorkspaceOperation {
+    AutonomousDrafts {
+        limit: i32,
+    },
+    AutonomousDraft {
+        id: String,
+    },
+    AutonomousGenerate,
+    AutonomousEdit {
+        id: String,
+        expected_revision: i32,
+        text: String,
+    },
+    AutonomousRegenerate {
+        id: String,
+        expected_revision: i32,
+    },
+    AutonomousReject {
+        id: String,
+        expected_revision: i32,
+        reason: String,
+    },
+    AutonomousSources {
+        limit: i32,
+    },
+    AutonomousSource {
+        id: String,
+    },
+    AutonomousAddSource {
+        text: String,
+        public_use_allowed: bool,
+    },
+    AutonomousEditSource {
+        id: String,
+        expected_revision: i32,
+        text: String,
+    },
+    AutonomousPermitSource {
+        id: String,
+        expected_revision: i32,
+    },
+    AutonomousRevokeSource {
+        id: String,
+        expected_revision: i32,
+    },
     ActivityObservationContext {
         project_id: String,
         date: Option<String>,
