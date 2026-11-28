@@ -14,6 +14,7 @@ import picocli.CommandLine.Spec;
 @Component
 @RegisterReflectionForBinding({
   AutonomousDraft.class,
+  AutonomousDraftNotifications.Item.class,
   AutonomousPublicSources.Source.class,
   AutonomousGenerationService.Result.class
 })
@@ -31,6 +32,7 @@ public final class AutonomousCommand implements java.util.concurrent.Callable<In
   private final AutonomousDraftStore drafts;
   private final Supplier<AutonomousGenerationService> generation;
   private final Supplier<AutonomousPublicationService> publication;
+  private final Supplier<AutonomousDraftNotifications> notifications;
 
   @Spec picocli.CommandLine.Model.CommandSpec spec;
 
@@ -39,7 +41,7 @@ public final class AutonomousCommand implements java.util.concurrent.Callable<In
       arity = "0..1",
       defaultValue = "sources",
       paramLabel =
-          "generate|drafts|draft|edit|regenerate|reject|hold|publish|reconcile|sources|source|add-source|edit-source|permit-source|revoke-source")
+          "notifications|ack-notice|generate|drafts|draft|edit|regenerate|reject|hold|publish|reconcile|sources|source|add-source|edit-source|permit-source|revoke-source")
   String action;
 
   @Parameters(index = "1", arity = "0..1", paramLabel = "id")
@@ -81,8 +83,14 @@ public final class AutonomousCommand implements java.util.concurrent.Callable<In
       AutonomousPublicSources sources,
       AutonomousDraftStore drafts,
       ObjectProvider<AutonomousGenerationService> generation,
-      ObjectProvider<AutonomousPublicationService> publication) {
-    this(sources, drafts, generation::getIfAvailable, publication::getIfAvailable);
+      ObjectProvider<AutonomousPublicationService> publication,
+      ObjectProvider<AutonomousDraftNotifications> notifications) {
+    this(
+        sources,
+        drafts,
+        generation::getIfAvailable,
+        publication::getIfAvailable,
+        notifications::getIfAvailable);
   }
 
   AutonomousCommand(
@@ -102,16 +110,29 @@ public final class AutonomousCommand implements java.util.concurrent.Callable<In
       AutonomousDraftStore drafts,
       Supplier<AutonomousGenerationService> generation,
       Supplier<AutonomousPublicationService> publication) {
+    this(sources, drafts, generation, publication, () -> null);
+  }
+
+  AutonomousCommand(
+      AutonomousPublicSources sources,
+      AutonomousDraftStore drafts,
+      Supplier<AutonomousGenerationService> generation,
+      Supplier<AutonomousPublicationService> publication,
+      Supplier<AutonomousDraftNotifications> notifications) {
     this.sources = sources;
     this.drafts = drafts;
     this.generation = generation;
     this.publication = publication;
+    this.notifications = notifications;
   }
 
   @Override
   public Integer call() {
     var out = spec.commandLine().getOut();
     try {
+      if (("ack-notice".equals(action) || "notifications".equals(action))
+          && (text != null || revision != null || reason != null || publicUse))
+        throw new IllegalArgumentException("Notification operations do not change drafts");
       if (publicUse && !"add-source".equals(action))
         throw new IllegalArgumentException("--public-use is only valid for add-source");
       if (reason != null && !"reject".equals(action))
@@ -120,6 +141,11 @@ public final class AutonomousCommand implements java.util.concurrent.Callable<In
         throw new IllegalArgumentException("Publication uses only the saved draft text");
       Object result =
           switch (action) {
+            case "notifications" -> {
+              if (id != null) throw new IllegalArgumentException("No ID for notification listing");
+              yield notifications().listNotices(limit);
+            }
+            case "ack-notice" -> notifications().acknowledgeNotice(requiredId());
             case "generate" -> {
               var service = generation.get();
               yield service == null
@@ -176,6 +202,12 @@ public final class AutonomousCommand implements java.util.concurrent.Callable<In
   private String requiredId() {
     if (id == null || id.isBlank()) throw new IllegalArgumentException("sourceId is required");
     return id;
+  }
+
+  private AutonomousDraftNotifications notifications() {
+    var service = notifications.get();
+    if (service == null) throw new IllegalStateException("Notifications are unavailable");
+    return service;
   }
 
   private AutonomousPublicationService publication() {
