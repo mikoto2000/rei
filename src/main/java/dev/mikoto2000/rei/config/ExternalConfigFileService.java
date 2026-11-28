@@ -509,6 +509,7 @@ public class ExternalConfigFileService {
         enabled: false
         bluesky:
           enabled: false
+          scheduled-enabled: true
       bluesky:
         enabled: false
         handle: ${REI_BLUESKY_HANDLE:}
