@@ -105,6 +105,22 @@ class AutonomousRemoteCommandsTest {
   }
 
   @Test
+  void explicitPublicationAndReconciliationOnlyTransmitTheReviewedRevision() {
+    for (var action : List.of("publish", "reconcile")) {
+      var request = route("/autonomous", action, "id", "--revision", "3");
+      assertEquals("POST", request.method());
+      assertEquals("/api/v1/autonomous/drafts/id/" + action, request.path());
+      assertEquals(Map.of("expectedRevision", 3), request.body());
+      assertEquals(
+          Duration.ofSeconds(action.equals("publish") ? 180 : 90), request.mutationTimeout());
+      for (var option : List.of("--text", "--actor", "--did", "--approved"))
+        assertThrows(
+            IllegalArgumentException.class,
+            () -> route("/autonomous", action, "id", "--revision", "3", option, "unexpected"));
+    }
+  }
+
+  @Test
   void unknownPublicationCommandsAndAuthorityOptionsNeverBecomeRequests() {
     for (var action : List.of("publish", "approve", "authorize", "shell", "../publish"))
       assertThrows(IllegalArgumentException.class, () -> route("/autonomous", action, "id"));
