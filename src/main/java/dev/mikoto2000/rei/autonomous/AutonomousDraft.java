@@ -119,6 +119,26 @@ public record AutonomousDraft(
       String result,
       String failureReason) {}
 
+  public AutonomousDraft regenerationAttempted(Instant attemptedAt) {
+    return new AutonomousDraft(
+        id,
+        actionType,
+        opportunityId,
+        trigger,
+        createdAt,
+        attemptedAt,
+        target,
+        content,
+        state,
+        expiresAt,
+        rejectionReason,
+        rejectionReasonPublic,
+        Math.incrementExact(regenerationAttempts),
+        attemptedAt,
+        null,
+        null);
+  }
+
   public AutonomousDraft reviewed(State next, String rejection, Instant updated) {
     return new AutonomousDraft(
         id,
