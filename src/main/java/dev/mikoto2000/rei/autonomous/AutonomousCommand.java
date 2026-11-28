@@ -15,6 +15,7 @@ import picocli.CommandLine.Spec;
 @RegisterReflectionForBinding({
   AutonomousDraft.class,
   AutonomousDraftNotifications.Item.class,
+  AutonomousHistory.Opportunity.class,
   AutonomousPublicSources.Source.class,
   AutonomousGenerationService.Result.class
 })
@@ -33,6 +34,7 @@ public final class AutonomousCommand implements java.util.concurrent.Callable<In
   private final Supplier<AutonomousGenerationService> generation;
   private final Supplier<AutonomousPublicationService> publication;
   private final Supplier<AutonomousDraftNotifications> notifications;
+  private final Supplier<AutonomousHistory> history;
 
   @Spec picocli.CommandLine.Model.CommandSpec spec;
 
@@ -41,7 +43,7 @@ public final class AutonomousCommand implements java.util.concurrent.Callable<In
       arity = "0..1",
       defaultValue = "sources",
       paramLabel =
-          "notifications|ack-notice|generate|drafts|draft|edit|regenerate|reject|hold|publish|reconcile|sources|source|add-source|edit-source|permit-source|revoke-source")
+          "published|history|notifications|ack-notice|generate|drafts|draft|edit|regenerate|reject|hold|publish|reconcile|sources|source|add-source|edit-source|permit-source|revoke-source")
   String action;
 
   @Parameters(index = "1", arity = "0..1", paramLabel = "id")
@@ -78,7 +80,6 @@ public final class AutonomousCommand implements java.util.concurrent.Callable<In
     this(sources, drafts, generation::getIfAvailable);
   }
 
-  @Autowired
   public AutonomousCommand(
       AutonomousPublicSources sources,
       AutonomousDraftStore drafts,
@@ -91,6 +92,23 @@ public final class AutonomousCommand implements java.util.concurrent.Callable<In
         generation::getIfAvailable,
         publication::getIfAvailable,
         notifications::getIfAvailable);
+  }
+
+  @Autowired
+  public AutonomousCommand(
+      AutonomousPublicSources sources,
+      AutonomousDraftStore drafts,
+      ObjectProvider<AutonomousGenerationService> generation,
+      ObjectProvider<AutonomousPublicationService> publication,
+      ObjectProvider<AutonomousDraftNotifications> notifications,
+      ObjectProvider<AutonomousHistory> history) {
+    this(
+        sources,
+        drafts,
+        generation::getIfAvailable,
+        publication::getIfAvailable,
+        notifications::getIfAvailable,
+        history::getIfAvailable);
   }
 
   AutonomousCommand(
@@ -119,18 +137,32 @@ public final class AutonomousCommand implements java.util.concurrent.Callable<In
       Supplier<AutonomousGenerationService> generation,
       Supplier<AutonomousPublicationService> publication,
       Supplier<AutonomousDraftNotifications> notifications) {
+    this(sources, drafts, generation, publication, notifications, () -> null);
+  }
+
+  AutonomousCommand(
+      AutonomousPublicSources sources,
+      AutonomousDraftStore drafts,
+      Supplier<AutonomousGenerationService> generation,
+      Supplier<AutonomousPublicationService> publication,
+      Supplier<AutonomousDraftNotifications> notifications,
+      Supplier<AutonomousHistory> history) {
     this.sources = sources;
     this.drafts = drafts;
     this.generation = generation;
     this.publication = publication;
     this.notifications = notifications;
+    this.history = history;
   }
 
   @Override
   public Integer call() {
     var out = spec.commandLine().getOut();
     try {
-      if (("ack-notice".equals(action) || "notifications".equals(action))
+      if (("ack-notice".equals(action)
+              || "notifications".equals(action)
+              || "published".equals(action)
+              || "history".equals(action))
           && (text != null || revision != null || reason != null || publicUse))
         throw new IllegalArgumentException("Notification operations do not change drafts");
       if (publicUse && !"add-source".equals(action))
@@ -141,6 +173,12 @@ public final class AutonomousCommand implements java.util.concurrent.Callable<In
         throw new IllegalArgumentException("Publication uses only the saved draft text");
       Object result =
           switch (action) {
+            case "published", "history" -> {
+              if (id != null) throw new IllegalArgumentException("No ID for history listing");
+              yield "published".equals(action)
+                  ? history().published(limit)
+                  : history().considerations(limit);
+            }
             case "notifications" -> {
               if (id != null) throw new IllegalArgumentException("No ID for notification listing");
               yield notifications().listNotices(limit);
@@ -207,6 +245,12 @@ public final class AutonomousCommand implements java.util.concurrent.Callable<In
   private AutonomousDraftNotifications notifications() {
     var service = notifications.get();
     if (service == null) throw new IllegalStateException("Notifications are unavailable");
+    return service;
+  }
+
+  private AutonomousHistory history() {
+    var service = history.get();
+    if (service == null) throw new IllegalStateException("History is unavailable");
     return service;
   }
 

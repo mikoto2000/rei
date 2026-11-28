@@ -7,8 +7,10 @@ import dev.mikoto2000.rei.autonomous.AutonomousConflictException;
 import dev.mikoto2000.rei.autonomous.AutonomousDraft;
 import dev.mikoto2000.rei.autonomous.AutonomousDraftNotice;
 import dev.mikoto2000.rei.autonomous.AutonomousDraftStore;
+import dev.mikoto2000.rei.autonomous.AutonomousHistory;
 import dev.mikoto2000.rei.autonomous.AutonomousNotificationStore;
 import dev.mikoto2000.rei.autonomous.AutonomousPostRecord;
+import dev.mikoto2000.rei.autonomous.AutonomousPostText;
 import dev.mikoto2000.rei.autonomous.AutonomousPublicationStore;
 import dev.mikoto2000.rei.autonomous.AutonomousTidGenerator;
 import dev.mikoto2000.rei.autonomous.DefaultAutonomousActionPolicy;
@@ -36,7 +38,10 @@ import org.springframework.stereotype.Component;
 @Component
 @DependsOn("storageMigrationLease")
 public final class SqliteAutonomousDraftStore
-    implements AutonomousDraftStore, AutonomousPublicationStore, AutonomousNotificationStore {
+    implements AutonomousDraftStore,
+        AutonomousPublicationStore,
+        AutonomousNotificationStore,
+        AutonomousHistory {
   private final StorageDatabase database;
   private final Clock clock;
   private final AutonomousActionProperties settings;
@@ -78,6 +83,53 @@ public final class SqliteAutonomousDraftStore
 
   public boolean isStopping() {
     return stopping.get() || Thread.currentThread().isInterrupted();
+  }
+
+  public List<AutonomousDraft> published(int limit) {
+    validateHistoryLimit(limit);
+    return database.read(db -> {
+      var result = new ArrayList<AutonomousDraft>();
+      try (var query =
+              prepared(
+                  db,
+                  "SELECT d.* FROM autonomous_drafts d JOIN autonomous_publications p ON p.draft_id=d.id WHERE d.state='PUBLISHED' ORDER BY d.updated DESC,d.id LIMIT ?",
+                  limit);
+          var rows = query.executeQuery()) {
+        while (rows.next()) result.add(row(rows));
+      }
+      for (var draft : result) publicationJournal(db, draft);
+      return List.copyOf(result);
+    });
+  }
+
+  public List<AutonomousHistory.Opportunity> considerations(int limit) {
+    validateHistoryLimit(limit);
+    return database.read(db -> {
+      var result = new ArrayList<AutonomousHistory.Opportunity>();
+      try (var query =
+              prepared(
+                  db,
+                  "SELECT id,trigger,kind,status,created,updated,reason,draft_id FROM autonomous_opportunities ORDER BY created DESC,id LIMIT ?",
+                  limit);
+          var rows = query.executeQuery()) {
+        while (rows.next())
+          result.add(
+              new AutonomousHistory.Opportunity(
+                  rows.getString("id"),
+                  AutonomousDraft.Trigger.valueOf(rows.getString("trigger")),
+                  AutonomousHistory.Kind.valueOf(rows.getString("kind")),
+                  AutonomousHistory.Status.valueOf(rows.getString("status")),
+                  Instant.ofEpochMilli(rows.getLong("created")),
+                  Instant.ofEpochMilli(rows.getLong("updated")),
+                  rows.getString("reason"),
+                  rows.getString("draft_id")));
+      }
+      return List.copyOf(result);
+    });
+  }
+
+  private static void validateHistoryLimit(int limit) {
+    if (limit < 1 || limit > 200) throw new IllegalArgumentException("Invalid history page size");
   }
 
   public List<AutonomousDraftNotice> pendingNotices(int limit) {
@@ -208,6 +260,8 @@ public final class SqliteAutonomousDraftStore
               && current.state() != AutonomousDraft.State.FAILED)
           || current.content().revision() != expectedRevision
           || !clock.instant().isBefore(current.expiresAt()))
+        throw new AutonomousConflictException();
+      if (duplicatePublication(db, current.target().did(), current.content(), id))
         throw new AutonomousConflictException();
       var prior = publicationJournal(db, current);
       boolean retry = current.state() == AutonomousDraft.State.FAILED;
@@ -576,6 +630,10 @@ public final class SqliteAutonomousDraftStore
         finish(db, claim, "ABORTED", decision.reason(), null, now);
         return Optional.empty();
       }
+      if (duplicatePublication(db, held.target().did(), content, null)) {
+        finish(db, claim, "SKIPPED", "duplicate_publication", null, now);
+        return Optional.empty();
+      }
       var draft =
           new AutonomousDraft(
               UUID.randomUUID().toString(),
@@ -699,6 +757,10 @@ public final class SqliteAutonomousDraftStore
       var content =
           AutonomousDraft.Content.create(
               Math.incrementExact(held.expectedRevision()), text, reason, sourceIds);
+      if (duplicatePublication(db, held.target().did(), content, current.id())) {
+        finish(db, claim, "SKIPPED", "duplicate_publication", null, now);
+        return Optional.empty();
+      }
       var changed = current.edited(content, now);
       update(db, changed, held.expectedRevision());
       revision(db, changed);
@@ -881,6 +943,26 @@ public final class SqliteAutonomousDraftStore
             excluding);
     return new AutonomousActionContext.Regeneration(
         attempts, attempted < 0 ? null : Instant.ofEpochMilli(attempted), targetMatches);
+  }
+
+  private static boolean duplicatePublication(
+      Connection db, String did, AutonomousDraft.Content content, String excludedDraft)
+      throws SQLException {
+    String key = AutonomousPostText.duplicateKey(content.text());
+    try (var query =
+            prepared(
+                db,
+                "SELECT body_hash,json_extract(snapshot,'$.content.text') AS body FROM autonomous_drafts WHERE target_did=? AND state IN ('PUBLISHED','PUBLISHING','UNKNOWN') AND (? IS NULL OR id<>?)",
+                did,
+                excludedDraft,
+                excludedDraft);
+        var rows = query.executeQuery()) {
+      while (rows.next()) {
+        if (content.bodyHash().equals(rows.getString("body_hash"))
+            || key.equals(AutonomousPostText.duplicateKey(rows.getString("body")))) return true;
+      }
+      return false;
+    }
   }
 
   private static void validateOpportunityId(String opportunityId) {

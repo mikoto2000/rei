@@ -69,6 +69,98 @@ struct NoticeDto {
     created_at: String,
 }
 
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct OpportunityDto {
+    id: String,
+    trigger: String,
+    kind: String,
+    status: String,
+    created_at: String,
+    updated_at: String,
+    reason: String,
+    draft_id: Option<String>,
+}
+
+fn valid_draft_reference(value: &str) -> bool {
+    !value.is_empty()
+        && value.len() <= 256
+        && value
+            .bytes()
+            .enumerate()
+            .all(|(i, b)| b.is_ascii_alphanumeric() || (i > 0 && [b'-', b'_'].contains(&b)))
+}
+
+impl OpportunityDto {
+    fn item(self) -> Result<WorkspaceItem> {
+        let valid_id = !self.id.is_empty()
+            && self.id.len() <= 128
+            && self.id.bytes().enumerate().all(|(i, b)| {
+                b.is_ascii_alphanumeric() || (i > 0 && [b':', b'_', b'.', b'/', b'-'].contains(&b))
+            });
+        if !valid_id
+            || !["MANUAL", "SCHEDULED"].contains(&self.trigger.as_str())
+            || !["NEW", "REGENERATE"].contains(&self.kind.as_str())
+            || ![
+                "RUNNING",
+                "POLICY_SKIPPED",
+                "SKIPPED",
+                "GENERATED",
+                "FAILED",
+                "ABORTED",
+            ]
+            .contains(&self.status.as_str())
+            || !valid_time(&self.created_at)
+            || !valid_time(&self.updated_at)
+            || self.reason.len() > 8192
+            || self
+                .draft_id
+                .as_deref()
+                .is_some_and(|id| !valid_draft_reference(id))
+            || ((self.status == "GENERATED" || self.kind == "REGENERATE")
+                && self.draft_id.is_none())
+        {
+            return Err(AppError::InvalidResponse);
+        }
+        Ok(WorkspaceItem {
+            id: Some(self.id),
+            title: "生成の検討履歴".into(),
+            fields: vec![
+                ("Type".into(), "AutonomousHistory".into()),
+                ("Status".into(), self.status),
+                ("Trigger".into(), self.trigger),
+                ("Kind".into(), self.kind),
+                ("CreatedAt".into(), self.created_at),
+                ("UpdatedAt".into(), self.updated_at),
+                ("Reason".into(), self.reason),
+                ("DraftId".into(), self.draft_id.unwrap_or_default()),
+            ],
+        })
+    }
+}
+
+fn confirmed_publication(dto: &DraftDto) -> bool {
+    if dto.state != "PUBLISHED" || !valid_draft_reference(&dto.id) {
+        return false;
+    }
+    dto.publication.as_ref().is_some_and(|publication| {
+        let prefix = format!("at://{}/app.bsky.feed.post/", dto.target.did);
+        publication.result.as_deref() == Some("PUBLISHED")
+            && publication
+                .cid
+                .as_deref()
+                .is_some_and(|cid| nonblank(cid, 256))
+            && publication.uri.as_deref().is_some_and(|uri| {
+                uri.strip_prefix(&prefix).is_some_and(|key| {
+                    key.len() == 13
+                        && key
+                            .bytes()
+                            .all(|b| b.is_ascii_lowercase() || (b'2'..=b'7').contains(&b))
+                })
+            })
+    })
+}
+
 impl NoticeDto {
     fn item(self, expected: Option<&str>) -> Result<WorkspaceItem> {
         let valid_draft =
@@ -242,6 +334,42 @@ fn page(items: Vec<WorkspaceItem>, limit: i32) -> Result<WorkspaceResult> {
 }
 
 impl HttpReiClient {
+    pub(super) async fn autonomous_history(
+        &self,
+        op: WorkspaceOperation,
+    ) -> Result<WorkspaceResult> {
+        let (published, limit) = match op {
+            WorkspaceOperation::AutonomousPublished { limit } => (true, limit),
+            WorkspaceOperation::AutonomousHistory { limit } => (false, limit),
+            _ => return Err(AppError::InvalidInput),
+        };
+        require_input((1..=200).contains(&limit))?;
+        let path = format!(
+            "/api/v1/autonomous/history/{}?limit={limit}",
+            if published { "published" } else { "generation" }
+        );
+        let request = self.request(Method::GET, &path, true)?;
+        let items = if published {
+            Self::json::<Vec<DraftDto>>(request, Operation::Resource)
+                .await?
+                .into_iter()
+                .map(|dto| {
+                    if !confirmed_publication(&dto) {
+                        return Err(AppError::InvalidResponse);
+                    }
+                    dto.item(None)
+                })
+                .collect::<Result<Vec<_>>>()?
+        } else {
+            Self::json::<Vec<OpportunityDto>>(request, Operation::Resource)
+                .await?
+                .into_iter()
+                .map(OpportunityDto::item)
+                .collect::<Result<Vec<_>>>()?
+        };
+        page(items, limit)
+    }
+
     pub(super) async fn autonomous_notifications(
         &self,
         op: WorkspaceOperation,

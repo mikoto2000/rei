@@ -316,6 +316,8 @@ impl HttpReiClient {
         op: WorkspaceOperation,
     ) -> Result<WorkspaceResult> {
         match op {
+            op @ (WorkspaceOperation::AutonomousPublished { .. }
+            | WorkspaceOperation::AutonomousHistory { .. }) => self.autonomous_history(op).await,
             op @ (WorkspaceOperation::AutonomousNotifications { .. }
             | WorkspaceOperation::AutonomousNoticeAck { .. }) => {
                 self.autonomous_notifications(op).await

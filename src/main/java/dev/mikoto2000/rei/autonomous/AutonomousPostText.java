@@ -5,7 +5,8 @@ import java.util.regex.Pattern;
 import java.util.stream.Stream;
 
 /** Text-only draft rules; no handle lookup, facets, link preview, or network access. */
-final class AutonomousPostText {
+public final class AutonomousPostText {
+  private static final Pattern SPACING = Pattern.compile("\\s+", Pattern.UNICODE_CHARACTER_CLASS);
   private static final Pattern URL = Pattern.compile("https?://\\S+", Pattern.CASE_INSENSITIVE);
   private static final Pattern EMAIL =
       Pattern.compile(
@@ -14,6 +15,14 @@ final class AutonomousPostText {
       Pattern.compile("@[\\p{Cf}]*[A-Za-z0-9](?:[A-Za-z0-9.\\p{Cf}_-]*[A-Za-z0-9])?");
 
   private AutonomousPostText() {}
+
+  /** Comparison only: never replace the reviewed body or its publication hash with this key. */
+  public static String duplicateKey(String text) {
+    return SPACING
+        .matcher(Normalizer.normalize(text, Normalizer.Form.NFKC))
+        .replaceAll(" ")
+        .strip();
+  }
 
   static void validate(String text) {
     requireReadable(text);

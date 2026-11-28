@@ -8,6 +8,130 @@ use serde_json::{json, Value};
 use std::sync::{Arc, Mutex};
 
 type Captured = Arc<Mutex<Vec<(String, String, Value)>>>;
+
+fn published_post() -> Value {
+    let mut post = draft("draft-one", 1, "公開した本文");
+    post["state"] = json!("PUBLISHED");
+    post["publication"] = json!({"result":"PUBLISHED","uri":"at://did:plc:example/app.bsky.feed.post/aaaaaaaaaaaaa","cid":"bafyreidfayvfuwqa7qlnopdjiqrxzs6blmoeu4rujcjtnci5beludirz2a","failureReason":""});
+    post
+}
+
+fn consideration() -> Value {
+    json!({"id":"scheduled:bluesky:2026-11-28T03:00:00Z","trigger":"SCHEDULED","kind":"NEW",
+        "status":"SKIPPED","createdAt":"2026-11-28T03:00:00Z","updatedAt":"2026-11-28T03:00:01Z",
+        "reason":"no_suitable_topic","draftId":null})
+}
+
+#[tokio::test]
+async fn autonomous_history_uses_authenticated_global_gets_and_typed_results() {
+    for (op, response, path, item_type) in [
+        (
+            WorkspaceOperation::AutonomousPublished { limit: 7 },
+            json!([published_post()]),
+            "/api/v1/autonomous/history/published?limit=7",
+            "AutonomousDraft",
+        ),
+        (
+            WorkspaceOperation::AutonomousHistory { limit: 20 },
+            json!([consideration()]),
+            "/api/v1/autonomous/history/generation?limit=20",
+            "AutonomousHistory",
+        ),
+    ] {
+        let (api, task, captured) = server(response).await;
+        let result = api.workspace(op).await.unwrap();
+        assert_eq!(result.items.len(), 1);
+        assert_eq!(field(&result.items[0], "Type"), item_type);
+        let requests = captured.lock().unwrap();
+        assert_eq!(requests.len(), 1);
+        assert_eq!(requests[0], ("GET".into(), path.into(), Value::Null));
+        task.abort();
+    }
+}
+
+#[tokio::test]
+async fn autonomous_history_rejects_unconfirmed_or_malformed_publication_receipts() {
+    let mut unknown = published_post();
+    unknown["state"] = json!("UNKNOWN");
+    let mut missing = published_post();
+    missing["publication"] = Value::Null;
+    let mut wrong_result = published_post();
+    wrong_result["publication"]["result"] = json!("FAILED");
+    let mut wrong_target = published_post();
+    wrong_target["publication"]["uri"] =
+        json!("at://did:plc:other/app.bsky.feed.post/aaaaaaaaaaaaa");
+    let mut empty_cid = published_post();
+    empty_cid["publication"]["cid"] = json!("");
+    for response in [
+        json!([unknown]),
+        json!([missing]),
+        json!([wrong_result]),
+        json!([wrong_target]),
+        json!([empty_cid]),
+        json!([published_post(), published_post()]),
+    ] {
+        let (api, task, _) = server(response).await;
+        assert!(matches!(
+            api.workspace(WorkspaceOperation::AutonomousPublished { limit: 1 })
+                .await,
+            Err(AppError::InvalidResponse)
+        ));
+        task.abort();
+    }
+}
+
+#[tokio::test]
+async fn autonomous_history_rejects_claim_tokens_unknown_states_and_invalid_draft_links() {
+    let mut token = consideration();
+    token["token"] = json!("PRIVATE_CLAIM_TOKEN");
+    let mut state = consideration();
+    state["status"] = json!("APPROVED");
+    let mut link = consideration();
+    link["draftId"] = json!("../escape");
+    let mut generated = consideration();
+    generated["status"] = json!("GENERATED");
+    let mut time = consideration();
+    time["updatedAt"] = json!("invalid");
+    for response in [
+        json!([token]),
+        json!([state]),
+        json!([link]),
+        json!([generated]),
+        json!([time]),
+        json!([consideration(), consideration()]),
+    ] {
+        let (api, task, _) = server(response).await;
+        assert!(matches!(
+            api.workspace(WorkspaceOperation::AutonomousHistory { limit: 1 })
+                .await,
+            Err(AppError::InvalidResponse)
+        ));
+        task.abort();
+    }
+}
+
+#[tokio::test]
+async fn autonomous_history_input_cannot_choose_a_route_or_mutation_and_limits_are_bounded() {
+    let (api, task, captured) = server(json!([])).await;
+    for op in [
+        WorkspaceOperation::AutonomousPublished { limit: 0 },
+        WorkspaceOperation::AutonomousHistory { limit: 201 },
+    ] {
+        assert!(matches!(
+            api.workspace(op).await,
+            Err(AppError::InvalidInput)
+        ));
+    }
+    for name in ["autonomousPublished", "autonomousHistory"] {
+        for field in ["path", "text", "expectedRevision", "approved", "actor"] {
+            let mut value = json!({"operation":name,"limit":20});
+            value[field] = json!("forged");
+            assert!(serde_json::from_value::<WorkspaceOperation>(value).is_err());
+        }
+    }
+    assert!(captured.lock().unwrap().is_empty());
+    task.abort();
+}
 #[derive(Clone)]
 struct Fixture {
     response: Value,

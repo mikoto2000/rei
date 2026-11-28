@@ -9,6 +9,30 @@ import org.junit.jupiter.api.Test;
 
 class AutonomousRemoteCommandsTest {
   @Test
+  void publicationAndGenerationHistoryUseFixedReadOnlyGlobalRoutes() {
+    var published = route("/autonomous", "published", "--limit", "7");
+    assertEquals("GET", published.method());
+    assertEquals("/api/v1/autonomous/history/published?limit=7", published.path());
+    assertNull(published.body());
+    var history = RemoteCommands.route(List.of("/autonomous", "history"), null, null);
+    assertEquals("GET", history.method());
+    assertEquals("/api/v1/autonomous/history/generation?limit=20", history.path());
+    assertNull(history.body());
+  }
+
+  @Test
+  void historyCannotCarryIdentifiersDraftChangesOrUnboundedLimits() {
+    for (String action : List.of("published", "history")) {
+      assertThrows(IllegalArgumentException.class, () -> route("/autonomous", action, "id"));
+      for (String flag : List.of("--text", "--reason", "--revision", "--actor", "--public-use"))
+        assertThrows(IllegalArgumentException.class, () -> route("/autonomous", action, flag, "1"));
+      for (String limit : List.of("0", "201", "2147483648"))
+        assertThrows(
+            IllegalArgumentException.class, () -> route("/autonomous", action, "--limit", limit));
+    }
+  }
+
+  @Test
   void notificationsAreGlobalAndAcknowledgmentHasNoDraftMutationBody() {
     assertEquals(
         "/api/v1/autonomous/notifications?limit=20", route("/autonomous", "notifications").path());

@@ -70,7 +70,7 @@ class AutonomousHttpSmokeTest {
   }
 
   @Configuration(proxyBeanMethods = false)
-  @Import({AutonomousController.class, SecurityConfig.class})
+  @Import({AutonomousController.class, AutonomousHistoryController.class, SecurityConfig.class})
   @ImportAutoConfiguration({
     org.springframework.boot.tomcat.autoconfigure.servlet.TomcatServletWebServerAutoConfiguration
         .class,
@@ -112,7 +112,7 @@ class AutonomousHttpSmokeTest {
     }
 
     @Bean
-    AutonomousDraftStore drafts(
+    SqliteAutonomousDraftStore drafts(
         @Value("${rei.data-dir}") String directory,
         @Value("${rei.autonomous-action.enabled:false}") boolean enabled,
         @Value("${rei.autonomous-action.bluesky.enabled:false}") boolean bluesky) {
@@ -227,6 +227,87 @@ class AutonomousHttpSmokeTest {
   private com.fasterxml.jackson.databind.JsonNode json(HttpResponse<String> response)
       throws Exception {
     return StorageDatabase.JSON.readTree(response.body());
+  }
+
+  @Test
+  void authenticatedHistoryListsConfirmedPostsAndPolicySkipsWithoutExecutionTokens()
+      throws Exception {
+    try (var context = start(true, root);
+        var client = HttpClient.newHttpClient()) {
+      for (String path : List.of("/history/published", "/history/generation")) {
+        assertThat(request(client, context, "GET", path, null, false).statusCode()).isEqualTo(401);
+      }
+      var published =
+          context.getBean(AutonomousPublicationService.class).publish(initial.id(), 1, "operator");
+      context.getBean(AutonomousGenerationService.class).manual();
+      var posts = request(client, context, "GET", "/history/published?limit=20", null, true);
+      assertThat(posts.statusCode()).isEqualTo(200);
+      assertThat(json(posts)).hasSize(1);
+      assertThat(json(posts).get(0).path("id").asText()).isEqualTo(initial.id());
+      assertThat(json(posts).get(0).path("content").path("text").asText())
+          .isEqualTo(initial.content().text());
+      assertThat(json(posts).get(0).path("publication").path("uri").asText())
+          .isEqualTo(published.publication().uri());
+      var attempts = request(client, context, "GET", "/history/generation?limit=20", null, true);
+      assertThat(attempts.statusCode()).isEqualTo(200);
+      assertThat(json(attempts)).hasSize(2);
+      assertThat(attempts.body())
+          .contains("GENERATED", "POLICY_SKIPPED")
+          .doesNotContain("token", "targetDid", "targetHandle");
+      assertThat(context.getBean(FixturePublisher.class).writes).isEqualTo(1);
+      assertThat(context.getBean(FixturePublisher.class).reads).isZero();
+    }
+  }
+
+  @Test
+  void historyRemainsReadableWhenGenerationIsDisabledAndRejectsUnboundedLimits() throws Exception {
+    var before =
+        new SqliteAutonomousDraftStore(new StorageDatabase(root), clock(), settings(true, true));
+    var claim = before.beginPublication(initial.id(), 1, "operator");
+    before.finishPublication(
+        claim,
+        AutonomousPublicationStore.Outcome.PUBLISHED,
+        claim.record().uri(),
+        FixturePublisher.CID,
+        "");
+    try (var context = start(false, root);
+        var client = HttpClient.newHttpClient()) {
+      assertThat(json(request(client, context, "GET", "/history/published", null, true)))
+          .hasSize(1);
+      assertThat(json(request(client, context, "GET", "/history/generation", null, true)))
+          .hasSize(1);
+      for (String path : List.of("/history/published", "/history/generation")) {
+        assertThat(request(client, context, "GET", path + "?limit=0", null, true).statusCode())
+            .isEqualTo(400);
+        assertThat(request(client, context, "GET", path + "?limit=201", null, true).statusCode())
+            .isEqualTo(400);
+        assertThat(
+                request(client, context, "POST", path, Map.of("approved", true), true).statusCode())
+            .isEqualTo(405);
+      }
+      assertThat(context.getBean(FixturePublisher.class).writes).isZero();
+      assertThat(context.getBean(FixturePublisher.class).reads).isZero();
+    }
+  }
+
+  @Test
+  void readingUnknownHistoryDoesNotReconcileOrResendUntilTheUserRequestsLookup() throws Exception {
+    try (var context = start(true, root);
+        var client = HttpClient.newHttpClient()) {
+      var publisher = context.getBean(FixturePublisher.class);
+      publisher.uncertain = true;
+      context.getBean(AutonomousPublicationService.class).publish(initial.id(), 1, "operator");
+      assertThat(json(request(client, context, "GET", "/history/published", null, true))).isEmpty();
+      assertThat(json(request(client, context, "GET", "/history/generation", null, true)))
+          .hasSize(1);
+      assertThat(publisher.reads).isZero();
+      assertThat(publisher.writes).isEqualTo(1);
+      context.getBean(AutonomousPublicationService.class).reconcile(initial.id(), 1, "operator");
+      assertThat(json(request(client, context, "GET", "/history/published", null, true)))
+          .hasSize(1);
+      assertThat(publisher.reads).isEqualTo(1);
+      assertThat(publisher.writes).isEqualTo(1);
+    }
   }
 
   @Test

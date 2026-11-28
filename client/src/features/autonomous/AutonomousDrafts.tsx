@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { Command } from "../../tauri/commands";
 import { errorText } from "../../entities/models";
+import { AutonomousHistory } from "./AutonomousHistory";
 import type {
   WorkspaceOperation,
   WorkspaceResult,
@@ -31,6 +32,7 @@ export function AutonomousDrafts({
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [topics, setTopics] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
   const [editing, setEditing] = useState(false);
   const [text, setText] = useState("");
   const [reason, setReason] = useState("");
@@ -42,12 +44,14 @@ export function AutonomousDrafts({
   const [refresh, setRefresh] = useState(0);
   const generation = useRef(0);
   const busy = useRef(false);
+  const detailRef = useRef<HTMLElement>(null);
   useEffect(() => {
     const epoch = ++generation.current;
     setView(null);
     setError(null);
     setNotice(null);
     setTopics(false);
+    setShowHistory(false);
     setEditing(false);
     setText("");
     setReason("");
@@ -179,6 +183,11 @@ export function AutonomousDrafts({
     }
   };
   const draft = visible?.draft;
+  const selectedDraftId = draft?.id;
+  useEffect(() => {
+    if (selectedDraftId)
+      detailRef.current?.scrollIntoView?.({ block: "start" });
+  }, [selectedDraftId]);
   const source = visible?.source;
   const revision = draft ? Number(field(draft, "Revision")) : 0;
   const sourceRevision = source ? Number(field(source, "Revision")) : 0;
@@ -217,7 +226,27 @@ export function AutonomousDrafts({
         >
           公開用の話題を管理
         </button>
+        <button
+          disabled={!visible || pending}
+          onClick={() => {
+            setConfirming(false);
+            setShowHistory((value) => !value);
+          }}
+        >
+          {showHistory ? "投稿・生成履歴を閉じる" : "投稿・生成履歴を表示"}
+        </button>
       </div>
+      {showHistory && visible && (
+        <AutonomousHistory
+          call={call}
+          serverId={serverId}
+          disabled={pending}
+          onDraft={(id) => {
+            setShowHistory(false);
+            void run({ operation: "autonomousDraft", id });
+          }}
+        />
+      )}
       {pending && <p role="status">処理中…</p>}
       {error && <p role="alert">{error}</p>}
       {notice && <p role="status">{notice}</p>}
@@ -246,7 +275,7 @@ export function AutonomousDrafts({
         </article>
       ))}
       {draft && (
-        <section className="card" aria-label="投稿案の詳細">
+        <section ref={detailRef} className="card" aria-label="投稿案の詳細">
           <h2>投稿案の詳細</h2>
           <dl>
             {[
@@ -277,6 +306,31 @@ export function AutonomousDrafts({
           <pre className="autonomous-body" aria-label="投稿本文の全文">
             {field(draft, "Text")}
           </pre>
+          {field(draft, "Status") === "REJECTED" &&
+            field(draft, "RejectionReason").trim() && (
+              <div>
+                <button
+                  disabled={pending}
+                  onClick={() => {
+                    setConfirming(false);
+                    setTopics(true);
+                    setNewText(field(draft, "RejectionReason"));
+                    setAllowed(false);
+                    setSourceText("");
+                    setView((current) =>
+                      current?.owner !== serverId
+                        ? current
+                        : { ...current, source: null },
+                    );
+                  }}
+                >
+                  見送り理由を資料の入力欄へコピー
+                </button>
+                <p>
+                  コピーだけでは生成に使いません。非公開部分を取り除き、別の資料として登録・利用許可してください。元の見送り理由は非公開のままです。
+                </p>
+              </div>
+            )}
           {mutable && (
             <>
               {editing ? (
@@ -446,7 +500,7 @@ export function AutonomousDrafts({
         <section aria-label="公開用の話題">
           <h2>公開用の話題</h2>
           <p>
-            利用を許可した話題の本文だけが生成に渡されます。本文の変更後は改めて利用許可が必要です。
+            利用を許可した話題・フィードバックの本文だけが生成に渡されます。本文の変更後は改めて利用許可が必要です。コピーした資料の許可・取消は元の見送り理由と独立しています。
           </p>
           {visible.sources.map((item) => (
             <article className="card" key={item.id}>
