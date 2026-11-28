@@ -16,10 +16,13 @@ Backend が Session と Run を所有します。軽量 CLI の Project / Sessio
 
 ## 機能別の設計資料
 
-Bluesky 自発投稿案の調査・詳細設計・未解決の承認境界は
-[自発的行動 Phase 0](docs/autonomous-action-design.md) を参照してください。
-行動判断・投稿案永続化・Shell 手動生成は [自発的行動の実装状況](docs/autonomous-action.md) を
-参照してください。公開経路の安全性ゲートは未通過で、有効化していません。
+Bluesky 自発投稿案の設定、定期検討、GUI/Shell、選択した版の明示公開、障害時の操作は
+[自発的行動の利用・検証ガイド](docs/autonomous-action.md) を参照してください。
+生成はドラフト保存までで、公開には既存の Bluesky 送信権限を使う別の明示操作が必要です。
+機能は既定で無効です。既存 API キー・同じ OS 権限を持つ任意プログラムからの
+人間の偽装を防ぐ保証は初期版の対象外です。当初設計との差分と調査は
+[Phase 0 設計](docs/autonomous-action-design.md)、フェーズ横断の検証と拡張点は
+[総合検証](docs/autonomous-action-verification.md) に記録しています。
 
 Responses API の段階実装は [設計と安全境界](docs/responses-api-design.md) と
 [進捗・検証記録](docs/responses-api-implementation-progress.md) を参照してください。

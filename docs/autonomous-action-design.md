@@ -25,7 +25,9 @@ Phase 3 完了時のユーザー確認により、この範囲で Phase 4 以降
 同じ OS 権限で任意コードを実行できるモデルに対し、Java の型、ThreadLocal、
 HTTP ヘッダー、秘密ファイル名だけでは境界にならない。
 初期版では既存の信頼境界を用い、通常 Tool の自動承認をドラフトの自動公開へ接続しない。
-Phase 4 の状態・リビジョン・宛先・送信結果の検証が完成するまで公開経路は無効にする。
+この資料の Phase 4 以降の計画は実装済みである。現行の利用手順・検証範囲は
+[利用ガイド](autonomous-action.md) と [総合検証](autonomous-action-verification.md) を参照。
+下記 S1〜S4 の強い保証を実現済みとする変更ではない。
 
 ## 調査範囲と既存実装
 
@@ -248,7 +250,7 @@ Phase 0 は本資料だけであり、製品コードの TDD 実施や新機能�
 
 policy の入力 context に将来の読み取り専用内部状態 snapshot を追加できる。
 同じ snapshot のうち公開利用を許可した表現情報だけを generator に渡せる。
-snapshot は上限・公開情報許可・承認・transport の判断入力にしない。
+snapshot により上限・公開情報許可・承認条件・transport の権限を緩和しない。
 将来のイベントは新しい trigger と opportunity ID で同じ検討 service を呼ぶ。
 Bluesky 以外の行動追加時は、その内容モデルと policy/generator/UI/transport を追加する。
 今は汎用 action framework、気分値、バイオリズム式、性格更新を導入しない。

@@ -138,6 +138,39 @@ SSE は sequence を処理し `Last-Event-ID` を付けて最大3回再接続、
 
 Goal create は現在選択した registered Project/Session を Backend で検証し、WEB の RequestSource で既存 GoalLoopService に渡す。`--file` と `--sha256`、または `--criteria-json` の一方を指定し、任意の `--completion-json`、`--max-runs`（既定3、1..10）、`--max-llm-calls`（既定20、1..100）を使用する。completion は `--completion-json` / `--proof-json` のどちらか一方。wait は `--dependency-id` と任意の `--wait-reason`、wait-activate/resume/cancel は観測した `--wait-version` が必要。重複 option、JSON の重複キー・末尾・過大入力は拒否する。
 
+## 自発投稿案の操作
+
+`/autonomous` は従来 Shell と同じ保存・生成・公開サービスを、既存 API キー認証付きの
+固定ルートから使います。Project/Session の選択は不要で、自然言語による承認には変換しません。
+
+```text
+/autonomous add-source --text "公開してよい話題"
+/autonomous sources --limit 20
+/autonomous source <sourceId>
+/autonomous permit-source <sourceId> --revision 1
+/autonomous generate
+/autonomous notifications --limit 20
+/autonomous ack-notice <noticeId>
+/autonomous drafts --limit 20
+/autonomous draft <draftId>
+/autonomous edit <draftId> --revision 1 --text "確認する全文"
+/autonomous publish <draftId> --revision 2
+/autonomous reconcile <draftId> --revision 2
+/autonomous published --limit 20
+/autonomous history --limit 20
+```
+
+例の ID・版は直前の結果に置き換えます。`publish` は最新の本文・投稿先・版を読んでから
+実行する公開操作です。通知 ACK は公開承認ではありません。`reconcile` は `UNKNOWN` の
+固定レコードを GET するだけで、再送しません。通信切断時は一覧・詳細から状態を確認します。
+`regenerate <draftId> --revision N`、`reject <draftId> --revision N --reason "理由"`、
+読取だけの `hold <draftId>` も利用できます。
+話題の `edit-source` は許可を外し、`permit-source`・`revoke-source` は確認版への明示操作です。
+見送り理由は非公開で、生成に使う場合は選別・編集したコピーを別資料として登録・許可します。
+
+有効化には二つの自発機能フラグが必要です。公開は既存の Bluesky 設定・送信権限を使います。
+追加の本人認証はありません。[設定と全操作](autonomous-action.md) を参照してください。
+
 ## 入力履歴と秘密
 
 入力履歴は Shell と同じくプロジェクトごとに切り替わり、↑・↓ キーで現在のプロジェクトの入力を呼び出す。保存先は `${user.home}/.rei-cli/history/projects/<Project ID の UTF-8 十六進表記>/cli-UUID.history`。プロジェクト未選択時と旧版の履歴は従来の `history/cli-UUID.history` に残し、プロジェクト別の履歴へ混ぜない。Backend データディレクトリとは別で、各 CLI が自身のファイルだけを exclusive lock して書く。起動・切替時は対象プロジェクトの最新の終了済みファイル一つから安全な行だけ読む。他の動作中 CLI の履歴を読み書き・merge しない。最大1,000行・1MiB、owner-only ACL / 600。過去ファイルの自動掃除は未実装。

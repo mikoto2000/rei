@@ -1,6 +1,6 @@
-# 自発的行動の実装状況
+# 自発的行動の利用・検証ガイド
 
-Phase 7 では、公開利用を明示的に許可した話題・フィードバックを使い、既存 Scheduler から定期的に投稿案を検討できます。
+公開利用を明示的に許可した話題・フィードバックを使い、既存 Scheduler から定期的に投稿案を検討できます。
 GUI・従来 Shell・軽量 CLI から
 投稿案を手動生成し、一覧・全文確認・編集・再生成・見送り・保留・明示公開・結果照合ができます。
 生成は未承認の `PENDING_REVIEW` ドラフトの保存で終了します。
@@ -91,6 +91,9 @@ LLM 接続失敗時も無限に再生成せず、次の機会で共通の制約�
 生成時は SQL で許可済みの現行本文・ID・リビジョンだけを選びます。未許可本文と操作元は
 取得しません。最大 32 件、各 8 KiB、合計 32 KiB の UTF-8 本文を利用し、超過分は使いません。
 通常の会話、Memory、Activity、ローカルファイル、非公開の見送り理由は生成コンテキストに入りません。
+許可取消は次回の公開用 snapshot 取得から反映します。取得済みの入力をモデルから回収したり、
+生成済みドラフトや過去の資料の版を削除したりする操作ではありません。
+取消と同時に進行中だった生成の結果も、公開前にユーザーが全文を確認します。
 公開可能な話題がない場合やモデルの `SKIP` は正常終了です。失敗時に再生成ループは行いません。
 機会 ID、保存済みの上限・クールダウン・排他は手動実行でも適用されます。
 
@@ -287,6 +290,8 @@ GUI・軽量 CLI は既存の API キー認証と固定ルートを使います�
 | 見送り | `POST /api/v1/autonomous/drafts/{id}/reject`（`expectedRevision`、任意の `reason`） |
 | 明示公開・未送信失敗の明示再試行 | `POST /api/v1/autonomous/drafts/{id}/publish`（`expectedRevision`） |
 | 結果不明の読取照合 | `POST /api/v1/autonomous/drafts/{id}/reconcile`（`expectedRevision`） |
+| 確認待ち通知 | `GET /api/v1/autonomous/notifications?limit=20`、`POST /api/v1/autonomous/notifications/{id}/ack`（空の JSON。公開承認ではない） |
+| 公開・生成履歴 | `GET /api/v1/autonomous/history/published?limit=20`、`GET /api/v1/autonomous/history/generation?limit=20` |
 | 話題一覧・詳細 | `GET /api/v1/autonomous/sources[?limit=20]`、`GET /api/v1/autonomous/sources/{id}` |
 | 話題登録 | `POST /api/v1/autonomous/sources`（`text`、任意の `publicUseAllowed`、既定 false） |
 | 話題編集 | `POST /api/v1/autonomous/sources/{id}/edit`（`expectedRevision`、`text`） |
@@ -321,8 +326,8 @@ tool context 等の周辺情報がある場合は送信前に拒否します。
 本文は 300 graphemes / 3000 UTF-8 bytes 以下で、通常の URL・メールは本文のまま保持し、
 メンション、無効な Unicode、空白・書式制御文字だけの本文、危険な制御文字を拒否します。
 空白や改行を含む元の本文をそのままハッシュ化し、無断で正規化しません。
-モデルの理由は非公開の確認資料として保存します。公開済み履歴・公開許可済みフィードバックの
-利用と類似投稿抑止は Phase 7 で接続します。
+モデルの理由は非公開の確認資料として保存します。公開済み履歴による重複抑止と、
+利用許可したフィードバック資料の入力は上記の専用経路で行います。
 
 ## 基盤の責務
 
@@ -357,6 +362,10 @@ schema 25 は検討機会に `expected_revision` を追加し、再生成対象�
 schema 26 は固定レコードと実行 token を `autonomous_publications` に保存し、
 draft と不変 revision の外部キー、DID/rkey の一意制約を設けます。
 公開開始・承認の監査・状態の更新は一つの transaction です。
+schema 27 は `autonomous_notification_outbox` を追加し、投稿案の確認待ち状態と
+同じ transaction に配送予定を保存します。通知配送と別 DB の Inbox 更新には固定 ID と
+再配送時の重複排除を使い、ネットワーク越しの exactly-once は主張しません。
+Phase 7 の履歴・本文比較、Phase 8 の結合検証に追加の schema 変更はありません。
 
 本文と revision は短い同一 transaction に保存します。Project/Run 所有の ArtifactStore に
 仮の Run を作成せず、今回の本文保存には使用していません。
@@ -373,6 +382,9 @@ draft と不変 revision の外部キー、DID/rkey の一意制約を設けま�
 
 内部状態の具体的なパラメータは追加していません。将来は policy の context と
 生成用の公開可能な表現情報に接続し、保存・上限・承認・送信の安全条件から分離します。
+通常の Bluesky Tool と `--fullauto` の既存動作は維持します。自発生成専用のモデルには
+それらの Tool、SubAgent、公開サービスを渡さないため、その生成経路に自動公開能力はありません。
+この隔離を、別の任意コード実行経路や同一 OS 権限に対する防壁とは扱いません。
 
 ## 検証
 
@@ -389,3 +401,6 @@ Phase 3 では、実際の認証付き HTTP、全クライアントの固定ル�
 競合・再起動・上限、GUI の二重送信・全文表示・サーバー切り替え、デスクトップ/モバイルの
 確認操作も模擬サーバーと fixture で検証します。ローカルで既定のテスト用ポート 1420 が
 使われている場合は、`REI_CLIENT_E2E_PORT` に別のポート番号を指定して E2E を実行できます。
+
+Phase 8 のフェーズ横断テスト、安全性の検証範囲、実行コマンドと将来の接続箇所は
+[総合検証・拡張方針](autonomous-action-verification.md) を参照してください。

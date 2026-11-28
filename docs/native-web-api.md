@@ -51,6 +51,34 @@ OAuthログインはサーバー側の既存コマンドで行う。
 切替と競合した場合は409として再取得する。既存のモデル名だけの変更要求も保持する。
 GUIでは表示・更新中の状態を検査し、古い一覧や応答による上書き、送信との競合を防ぐ。
 
+## 自発投稿案
+
+「投稿案」は接続先サーバー全体の機能で、Project/Session の選択は不要です。
+公開用の話題を登録して現行版の生成利用を許可すると、手動または定期的にドラフトを生成できます。
+生成・通知確認では公開しません。詳細で最新の全文・投稿先 DID・改訂番号を確認し、
+「この全文を公開」を明示的に選ぶと既存の Bluesky 送信設定・権限で公開します。
+編集・再生成の後は新しい全文を確認します。通信切断時に公開操作を自動で再送しません。
+
+| 操作 | 認証付き固定 API |
+| --- | --- |
+| 一覧・詳細 | `GET /api/v1/autonomous/drafts`、`GET /api/v1/autonomous/drafts/{id}` |
+| 手動生成 | `POST /api/v1/autonomous/drafts/generate`、本文 `{}` |
+| 編集・再生成・見送り | `POST /api/v1/autonomous/drafts/{id}/edit`・`/regenerate`・`/reject`。確認した `expectedRevision` が必須 |
+| 明示公開・読取照合 | `POST /api/v1/autonomous/drafts/{id}/publish`・`/reconcile`、本文 `{"expectedRevision":3}` |
+| 確認待ち通知 | `GET /api/v1/autonomous/notifications`、`POST /api/v1/autonomous/notifications/{id}/ack`（本文 `{}`、承認ではない） |
+| 公開・生成履歴 | `GET /api/v1/autonomous/history/published`・`/generation` |
+| 公開用話題 | `GET`・`POST /api/v1/autonomous/sources`、詳細 `GET /sources/{id}`、編集・許可・取消 `POST /sources/{id}/edit`・`/permit`・`/revoke`（いずれも prefix は `/api/v1/autonomous`） |
+
+一覧の `limit` は既定 20、1～200 件です。未知の更新項目、古い版、任意の actor・承認フラグを拒否します。
+話題の編集は必ず利用許可を外します。見送り理由のコピーも未許可の入力から始め、
+非公開部分を取り除いた別資料の現行版を明示許可します。
+`UNKNOWN` は再送せず「公開結果を照合」で固定キーを GET し、全内容の一致を確認します。
+履歴表示は外部投稿の現在の存在確認ではなく、保存済みの確認結果です。
+サーバー切り替え時は旧本文・入力を消し、古い応答を破棄します。
+
+機能は既定で無効です。API キーを持つ任意プログラムを人間と区別する新しい認証方式は追加していません。
+[設定・全操作・安全性の範囲](autonomous-action.md) と [検証・拡張方針](autonomous-action-verification.md) を参照してください。
+
 ## Workspace
 
 既存 UI に追加した Workspace パネルで操作を選択し、専用フォームから実行します。

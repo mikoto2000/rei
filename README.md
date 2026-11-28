@@ -230,6 +230,7 @@ Shell と Native Client は同じ Backend の Session History を利用します
 | URL 要約 | [要約の実行・再表示](docs/usage.md#url-の要約) |
 | 通知 | [興味に応じた情報の定期通知](docs/configuration.md#興味に応じた通知) |
 | Bluesky | [投稿・自動返信の設定](docs/configuration.md#bluesky-投稿自動返信) |
+| Bluesky の自発投稿案 | [公開用話題の許可・定期生成・ドラフト確認・明示公開](docs/autonomous-action.md)（既定で無効。生成だけでは公開しません） |
 | MCP | [外部 MCP ツールへの接続](docs/configuration.md#mcp)・[本人専用 MCP サーバーの設定と 6 ツール](docs/mcp-server.md)（サーバーは既定で無効） |
 | SubAgent | [作業を委譲する設定と使い方](docs/subagents.md) |
 | 外部レビュー | `/agent codex review [target]` または明示的な自然言語依頼で読み取り専用レビューを実行します。Claude Code CLI を使う場合は明示的に有効化して `/agent claude review [target]` を使います。[Codex・Claude の設定と権限](docs/external-agent-delegation.md)・[Claude Code の利用準備](docs/claude-code-reviews.md) |
