@@ -6,7 +6,11 @@ import dev.mikoto2000.rei.autonomous.AutonomousActionProperties;
 import dev.mikoto2000.rei.autonomous.AutonomousDraft;
 import dev.mikoto2000.rei.autonomous.AutonomousDraftStore;
 import dev.mikoto2000.rei.autonomous.AutonomousGenerationService;
+import dev.mikoto2000.rei.autonomous.AutonomousPostRecord;
 import dev.mikoto2000.rei.autonomous.AutonomousPublicSources;
+import dev.mikoto2000.rei.autonomous.AutonomousPublicationService;
+import dev.mikoto2000.rei.autonomous.AutonomousPublicationStore;
+import dev.mikoto2000.rei.autonomous.AutonomousPublicationTransport;
 import dev.mikoto2000.rei.storage.SqliteAutonomousDraftStore;
 import dev.mikoto2000.rei.storage.SqliteAutonomousPublicSources;
 import dev.mikoto2000.rei.storage.StorageDatabase;
@@ -73,6 +77,18 @@ class AutonomousHttpSmokeTest {
   })
   static class Config {
     @Bean
+    FixturePublisher publisher() {
+      return new FixturePublisher();
+    }
+
+    @Bean
+    AutonomousPublicationService publication(
+        AutonomousDraftStore drafts, FixturePublisher publisher) {
+      return new AutonomousPublicationService(
+          (AutonomousPublicationStore) drafts, () -> publisher.allowed, publisher);
+    }
+
+    @Bean
     AutonomousDraftStore drafts(
         @Value("${rei.data-dir}") String directory,
         @Value("${rei.autonomous-action.enabled:false}") boolean enabled,
@@ -101,6 +117,32 @@ class AutonomousHttpSmokeTest {
               "{\"decision\":\"PROPOSE_POST\",\"reason\":\"公開用の話題\",\"draft\":{\"text\":\"HTTPで生成した本文の全文\",\"sourceIds\":[\""
                   + snapshot.getFirst().id()
                   + "\"]}}");
+    }
+  }
+
+  static final class FixturePublisher implements AutonomousPublicationTransport {
+    private static final String CID = "bafyreidfayvfuwqa7qlnopdjiqrxzs6blmoeu4rujcjtnci5beludirz2a";
+    boolean allowed = true, uncertain;
+    int writes, reads;
+    AutonomousPostRecord sent;
+
+    public void validate(String text) {}
+
+    public Receipt send(AutonomousPostRecord record, java.util.function.BooleanSupplier gate) {
+      writes++;
+      sent = record;
+      return new Receipt(
+          uncertain
+              ? AutonomousPublicationStore.Outcome.UNKNOWN
+              : AutonomousPublicationStore.Outcome.PUBLISHED,
+          uncertain ? null : record.uri(),
+          uncertain ? null : CID,
+          uncertain ? "response_lost" : "");
+    }
+
+    public FoundRecord lookup(AutonomousPostRecord record) {
+      reads++;
+      return new FoundRecord(record.uri(), CID, record.recordJson());
     }
   }
 
@@ -162,6 +204,124 @@ class AutonomousHttpSmokeTest {
   private com.fasterxml.jackson.databind.JsonNode json(HttpResponse<String> response)
       throws Exception {
     return StorageDatabase.JSON.readTree(response.body());
+  }
+
+  @Test
+  void selectedPublicationUsesExistingAuthenticationAndOnlyTheReviewedRevision() throws Exception {
+    try (var context = start(true, root);
+        var client = HttpClient.newHttpClient()) {
+      var publisher = context.getBean(FixturePublisher.class);
+      var base = "/drafts/" + initial.id();
+      assertThat(
+              request(
+                      client,
+                      context,
+                      "POST",
+                      base + "/publish",
+                      Map.of("expectedRevision", 1),
+                      false)
+                  .statusCode())
+          .isEqualTo(401);
+      for (var bad :
+          List.of(
+              Map.of("expectedRevision", 1, "text", "差し替え"),
+              Map.of("expectedRevision", 1, "actor", "administrator"),
+              Map.of("expectedRevision", 1, "did", "did:plc:other"),
+              Map.of("expectedRevision", 0)))
+        assertThat(request(client, context, "POST", base + "/publish", bad, true).statusCode())
+            .isEqualTo(400);
+      assertThat(
+              request(
+                      client,
+                      context,
+                      "POST",
+                      base + "/publish",
+                      Map.of("expectedRevision", 2),
+                      true)
+                  .statusCode())
+          .isEqualTo(409);
+      assertThat(publisher.writes).isZero();
+      var published =
+          request(client, context, "POST", base + "/publish", Map.of("expectedRevision", 1), true);
+      assertThat(published.statusCode()).isEqualTo(200);
+      assertThat(json(published).path("state").asText()).isEqualTo("PUBLISHED");
+      assertThat(json(published).path("approval").path("approvedBy").asText())
+          .isEqualTo("api-client");
+      assertThat(publisher.sent.text()).isEqualTo(initial.content().text());
+      assertThat(publisher.sent.did()).isEqualTo(initial.target().did());
+      assertThat(
+              request(
+                      client,
+                      context,
+                      "POST",
+                      base + "/publish",
+                      Map.of("expectedRevision", 1),
+                      true)
+                  .statusCode())
+          .isEqualTo(409);
+      assertThat(publisher.writes).isEqualTo(1);
+    }
+  }
+
+  @Test
+  void unknownPublicationCanOnlyBeLookedUpAndExistingDenyRightsBlockPublishing() throws Exception {
+    try (var context = start(true, root);
+        var client = HttpClient.newHttpClient()) {
+      var publisher = context.getBean(FixturePublisher.class);
+      var base = "/drafts/" + initial.id();
+      publisher.allowed = false;
+      assertThat(
+              request(
+                      client,
+                      context,
+                      "POST",
+                      base + "/publish",
+                      Map.of("expectedRevision", 1),
+                      true)
+                  .statusCode())
+          .isEqualTo(403);
+      assertThat(publisher.writes).isZero();
+      publisher.allowed = true;
+      publisher.uncertain = true;
+      assertThat(
+              json(request(
+                      client,
+                      context,
+                      "POST",
+                      base + "/publish",
+                      Map.of("expectedRevision", 1),
+                      true))
+                  .path("state")
+                  .asText())
+          .isEqualTo("UNKNOWN");
+      assertThat(
+              request(
+                      client,
+                      context,
+                      "POST",
+                      base + "/publish",
+                      Map.of("expectedRevision", 1),
+                      true)
+                  .statusCode())
+          .isEqualTo(409);
+      assertThat(
+              request(
+                      client,
+                      context,
+                      "POST",
+                      base + "/reconcile",
+                      Map.of("expectedRevision", 1),
+                      false)
+                  .statusCode())
+          .isEqualTo(401);
+      var found =
+          request(
+              client, context, "POST", base + "/reconcile", Map.of("expectedRevision", 1), true);
+      assertThat(found.statusCode()).isEqualTo(200);
+      assertThat(json(found).path("state").asText()).isEqualTo("PUBLISHED");
+      assertThat(publisher.writes).isEqualTo(1);
+      assertThat(publisher.reads).isEqualTo(1);
+    }
   }
 
   @Test
@@ -255,7 +415,7 @@ class AutonomousHttpSmokeTest {
           .isEqualTo("HTTPで生成した本文の全文");
       assertThat(json(generated).path("draft").path("content").path("revision").asInt())
           .isEqualTo(2);
-      for (var action : List.of("publish", "approve"))
+      for (var action : List.of("approve"))
         assertThat(
                 request(
                         client,

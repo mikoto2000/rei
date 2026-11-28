@@ -5,6 +5,8 @@ import dev.mikoto2000.rei.autonomous.AutonomousDraft;
 import dev.mikoto2000.rei.autonomous.AutonomousDraftStore;
 import dev.mikoto2000.rei.autonomous.AutonomousGenerationService;
 import dev.mikoto2000.rei.autonomous.AutonomousPublicSources;
+import dev.mikoto2000.rei.autonomous.AutonomousPublicationService;
+import java.security.Principal;
 import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
@@ -23,7 +25,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-/** Authenticated draft review only. No publication or approval operations. */
+/** Draft review and explicitly selected publication under the existing API authentication. */
 @RestController
 @ConditionalOnProperty(name = "rei.web.enabled", havingValue = "true")
 @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
@@ -32,14 +34,17 @@ public final class AutonomousController {
   private final AutonomousDraftStore drafts;
   private final AutonomousPublicSources sources;
   private final Supplier<AutonomousGenerationService> generation;
+  private final Supplier<AutonomousPublicationService> publication;
 
   public AutonomousController(
       AutonomousDraftStore drafts,
       AutonomousPublicSources sources,
-      ObjectProvider<AutonomousGenerationService> generation) {
+      ObjectProvider<AutonomousGenerationService> generation,
+      ObjectProvider<AutonomousPublicationService> publication) {
     this.drafts = drafts;
     this.sources = sources;
     this.generation = generation::getIfAvailable;
+    this.publication = publication::getIfAvailable;
   }
 
   public record GenerationRequest() implements StrictApiRequest {}
@@ -95,6 +100,32 @@ public final class AutonomousController {
     var input = required(request);
     return drafts.reject(
         id, revision(input.expectedRevision()), input.reason() == null ? "" : input.reason());
+  }
+
+  @PostMapping("/drafts/{id}/publish")
+  public AutonomousDraft publish(
+      @PathVariable("id") String id, @RequestBody Revision request, Principal principal) {
+    int expected = revision(required(request).expectedRevision());
+    return publication().publish(id, expected, actor(principal));
+  }
+
+  @PostMapping("/drafts/{id}/reconcile")
+  public AutonomousDraft reconcile(
+      @PathVariable("id") String id, @RequestBody Revision request, Principal principal) {
+    int expected = revision(required(request).expectedRevision());
+    return publication().reconcile(id, expected, actor(principal));
+  }
+
+  private AutonomousPublicationService publication() {
+    var service = publication.get();
+    if (service == null) throw new SecurityException("Publication is unavailable");
+    return service;
+  }
+
+  private static String actor(Principal principal) {
+    if (principal == null || principal.getName() == null || principal.getName().isBlank())
+      throw new SecurityException("Authentication is required");
+    return principal.getName();
   }
 
   @GetMapping("/sources")
@@ -153,6 +184,12 @@ public final class AutonomousController {
   public ResponseEntity<Map<String, String>> missing() {
     return ResponseEntity.status(404)
         .body(Map.of("message", "Autonomous draft or topic not found"));
+  }
+
+  @ExceptionHandler(SecurityException.class)
+  public ResponseEntity<Map<String, String>> denied() {
+    return ResponseEntity.status(403)
+        .body(Map.of("message", "Autonomous publication is not allowed"));
   }
 
   @ExceptionHandler({IllegalArgumentException.class, HttpMessageNotReadableException.class})
