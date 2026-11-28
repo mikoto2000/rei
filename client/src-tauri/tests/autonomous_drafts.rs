@@ -71,6 +71,82 @@ fn field<'a>(item: &'a WorkspaceItem, name: &str) -> &'a str {
         .unwrap_or("")
 }
 
+fn notice(status: &str) -> Value {
+    json!({"id":"a8203063-d97c-4e26-a601-745217152952","draftId":"draft-one","status":status,"createdAt":"2026-11-28T03:00:00Z"})
+}
+
+#[tokio::test]
+async fn notifications_use_global_authenticated_routes_and_ack_never_sends_draft_authority() {
+    for ack in [false, true] {
+        let response = if ack {
+            notice("ACKNOWLEDGED")
+        } else {
+            json!([notice("OPEN")])
+        };
+        let (api, task, captured) = server(response).await;
+        let value = if ack {
+            json!({"operation":"autonomousNoticeAck","id":"a8203063-d97c-4e26-a601-745217152952"})
+        } else {
+            json!({"operation":"autonomousNotifications","limit":20})
+        };
+        let op: WorkspaceOperation = serde_json::from_value(value).unwrap();
+        let result = api.workspace(op).await.unwrap();
+        assert_eq!(result.items.len(), 1);
+        assert_eq!(field(&result.items[0], "DraftId"), "draft-one");
+        assert_eq!(field(&result.items[0], "Type"), "AutonomousNotice");
+        let requests = captured.lock().unwrap();
+        assert_eq!(requests.len(), 1);
+        assert_eq!(requests[0].0, if ack { "POST" } else { "GET" });
+        assert_eq!(
+            requests[0].1,
+            if ack {
+                "/api/v1/autonomous/notifications/a8203063-d97c-4e26-a601-745217152952/ack"
+            } else {
+                "/api/v1/autonomous/notifications?limit=20"
+            }
+        );
+        assert_eq!(requests[0].2, if ack { json!({}) } else { Value::Null });
+        task.abort();
+    }
+}
+
+#[tokio::test]
+async fn malformed_notification_references_states_and_receipts_are_rejected() {
+    for response in [
+        json!([notice("RESOLVED")]),
+        json!([notice("ACKNOWLEDGED")]),
+        json!([notice("OPEN"), notice("OPEN")]),
+        json!([{ "id":"id", "draftId":"../escape", "status":"OPEN", "createdAt":"invalid" }]),
+    ] {
+        let (api, task, _) = server(response).await;
+        let op: WorkspaceOperation =
+            serde_json::from_value(json!({"operation":"autonomousNotifications","limit":1}))
+                .unwrap();
+        assert!(api.workspace(op).await.is_err());
+        task.abort();
+    }
+    let (api, task, _) = server(notice("OPEN")).await;
+    let op: WorkspaceOperation = serde_json::from_value(
+        json!({"operation":"autonomousNoticeAck","id":"a8203063-d97c-4e26-a601-745217152952"}),
+    )
+    .unwrap();
+    assert!(api.workspace(op).await.is_err());
+    task.abort();
+    for extra in [
+        json!({"expectedRevision":1}),
+        json!({"text":"replace"}),
+        json!({"actor":"human"}),
+    ] {
+        let mut value =
+            json!({"operation":"autonomousNoticeAck","id":"a8203063-d97c-4e26-a601-745217152952"});
+        value
+            .as_object_mut()
+            .unwrap()
+            .extend(extra.as_object().unwrap().clone());
+        assert!(serde_json::from_value::<WorkspaceOperation>(value).is_err());
+    }
+}
+
 #[tokio::test]
 async fn selected_publication_and_reconciliation_use_only_the_reviewed_revision() {
     for (action, state) in [
