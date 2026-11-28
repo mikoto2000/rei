@@ -35,6 +35,8 @@ export function AutonomousDrafts({
   const [sourceText, setSourceText] = useState("");
   const [newText, setNewText] = useState("");
   const [allowed, setAllowed] = useState(false);
+  const [confirming, setConfirming] = useState(false);
+  const [needsRefresh, setNeedsRefresh] = useState(false);
   const [refresh, setRefresh] = useState(0);
   const generation = useRef(0);
   const busy = useRef(false);
@@ -50,6 +52,8 @@ export function AutonomousDrafts({
     setSourceText("");
     setNewText("");
     setAllowed(false);
+    setConfirming(false);
+    setNeedsRefresh(false);
     busy.current = false;
     setPending(Boolean(serverId));
     if (serverId) {
@@ -95,6 +99,7 @@ export function AutonomousDrafts({
     setPending(true);
     setError(null);
     setNotice(null);
+    setConfirming(false);
     const epoch = generation.current;
     try {
       const result = await call("workspace_execute", { serverId, operation });
@@ -130,6 +135,7 @@ export function AutonomousDrafts({
             },
       );
       if (draft) {
+        setNeedsRefresh(false);
         setEditing(false);
         setText("");
         setReason("");
@@ -145,6 +151,11 @@ export function AutonomousDrafts({
         else setNotice(message);
       }
     } catch (failure) {
+      if (
+        epoch === generation.current &&
+        operation.operation === "autonomousPublish"
+      )
+        setNeedsRefresh(true);
       if (epoch === generation.current)
         setError(
           `${errorText(failure)}。競合や通信切断の場合は更新して現在の内容を確認してください。`,
@@ -160,7 +171,14 @@ export function AutonomousDrafts({
   const source = visible?.source;
   const revision = draft ? Number(field(draft, "Revision")) : 0;
   const sourceRevision = source ? Number(field(source, "Revision")) : 0;
-  const mutable = draft && field(draft, "Status") === "PENDING_REVIEW";
+  const mutable =
+    draft && field(draft, "Status") === "PENDING_REVIEW" && !needsRefresh;
+  const publishable =
+    draft &&
+    draft.id &&
+    Number.isInteger(revision) &&
+    revision > 0 &&
+    ["PENDING_REVIEW", "FAILED"].includes(field(draft, "Status"));
   const sourceDirty = source && sourceText !== field(source, "Text");
   return (
     <section className="page narrow autonomous-pane" aria-label="自発投稿案">
@@ -283,6 +301,7 @@ export function AutonomousDrafts({
                 <button
                   disabled={pending}
                   onClick={() => {
+                    setConfirming(false);
                     setText(field(draft, "Text"));
                     setEditing(true);
                   }}
@@ -332,11 +351,79 @@ export function AutonomousDrafts({
               </button>
             </>
           )}
+          {publishable && (
+            <button
+              disabled={pending || editing || needsRefresh}
+              onClick={() => setConfirming(true)}
+            >
+              {field(draft, "Status") === "FAILED"
+                ? "同じ内容で再試行を確認"
+                : "公開内容を確認"}
+            </button>
+          )}
+          {confirming && publishable && !editing && !needsRefresh && (
+            <section role="dialog" aria-label="投稿の公開確認" className="card">
+              <h3>投稿の公開確認</h3>
+              <p>投稿先: {field(draft, "Account")}</p>
+              <p>DID: {field(draft, "DID")}</p>
+              <p>
+                改訂: {revision} · 有効期限: {field(draft, "ExpiresAt")}
+              </p>
+              <pre className="autonomous-body" aria-label="公開する本文の全文">
+                {field(draft, "Text")}
+              </pre>
+              <p>
+                この保存済みの本文を公開します。編集・再生成した場合は、新しい版を改めて確認してください。
+              </p>
+              <button
+                disabled={pending}
+                onClick={() =>
+                  draft.id &&
+                  void run({
+                    operation: "autonomousPublish",
+                    id: draft.id,
+                    expectedRevision: revision,
+                  })
+                }
+              >
+                この内容を公開する
+              </button>
+              <button disabled={pending} onClick={() => setConfirming(false)}>
+                公開を取り消す
+              </button>
+            </section>
+          )}
+          {needsRefresh && (
+            <p role="status">
+              公開結果を確認できませんでした。再操作する前に更新して現在の状態を確認してください。
+            </p>
+          )}
+          {field(draft, "Status") === "UNKNOWN" && (
+            <>
+              <p>
+                公開結果が不明です。再送せず、保存した投稿キーと本文で結果を照合します。
+              </p>
+              <button
+                disabled={pending}
+                onClick={() =>
+                  draft.id &&
+                  void run({
+                    operation: "autonomousReconcile",
+                    id: draft.id,
+                    expectedRevision: revision,
+                  })
+                }
+              >
+                公開結果を照合
+              </button>
+            </>
+          )}
           <button
             disabled={pending}
             onClick={() => {
               setView((current) => current && { ...current, draft: null });
               setEditing(false);
+              setConfirming(false);
               setReason("");
             }}
           >

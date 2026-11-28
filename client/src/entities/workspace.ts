@@ -18,6 +18,8 @@ export type WorkspaceOperation =
       text: string;
     }
   | { operation: "autonomousRegenerate"; id: string; expectedRevision: number }
+  | { operation: "autonomousPublish"; id: string; expectedRevision: number }
+  | { operation: "autonomousReconcile"; id: string; expectedRevision: number }
   | {
       operation: "autonomousReject";
       id: string;
