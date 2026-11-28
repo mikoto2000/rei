@@ -1,5 +1,9 @@
 package dev.mikoto2000.rei.bluesky;
 
+import com.fasterxml.jackson.core.JsonFactory;
+import com.fasterxml.jackson.core.StreamReadConstraints;
+import com.fasterxml.jackson.core.StreamReadFeature;
+import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -16,6 +20,9 @@ import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.function.Function;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -71,8 +78,23 @@ public class DefaultBlueskyApiClient implements BlueskyApiClient {
   /** 外部情報を取得するHTTP通信の窓口。 */
   private final HttpClient httpClient;
 
+  private final URI recordSessionUri;
+  private final URI recordCreateUri;
+
   /** 保存や受け渡しに用いるデータ形式の変換。 */
   private final ObjectMapper objectMapper = new ObjectMapper();
+
+  private final ObjectMapper recordMapper =
+      new ObjectMapper(
+              JsonFactory.builder()
+                  .enable(StreamReadFeature.STRICT_DUPLICATE_DETECTION)
+                  .streamReadConstraints(
+                      StreamReadConstraints.builder()
+                          .maxNestingDepth(16)
+                          .maxStringLength(65536)
+                          .build())
+                  .build())
+          .enable(DeserializationFeature.FAIL_ON_TRAILING_TOKENS);
 
   /** Blueskyとの連携を利用するため、指定を補って共通の初期化へ引き渡す。 */
   DefaultBlueskyApiClient() {
@@ -84,6 +106,108 @@ public class DefaultBlueskyApiClient implements BlueskyApiClient {
   DefaultBlueskyApiClient(BlueskyProperties properties) {
     this.properties = properties;
     this.httpClient = HttpClient.newBuilder().connectTimeout(requestTimeout()).build();
+    this.recordSessionUri = CREATE_SESSION_URI;
+    this.recordCreateUri = CREATE_RECORD_URI;
+  }
+
+  DefaultBlueskyApiClient(
+      BlueskyProperties properties,
+      HttpClient httpClient,
+      URI recordSessionUri,
+      URI recordCreateUri) {
+    this.properties = properties;
+    this.httpClient = httpClient;
+    this.recordSessionUri = recordSessionUri;
+    this.recordCreateUri = recordCreateUri;
+  }
+
+  @Override
+  public AuthResult authenticateForRecord(String handle, String appPassword)
+      throws IOException, InterruptedException {
+    ObjectNode body = recordMapper.createObjectNode();
+    body.put("identifier", handle);
+    body.put("password", appPassword);
+    JsonNode response = sendRecordRequest(recordRequest(recordSessionUri, body).build());
+    return new AuthResult(
+        true, requiredRecordText(response, "accessJwt"), requiredRecordText(response, "did"));
+  }
+
+  @Override
+  public RecordResult createRecord(
+      String accessJwt, String did, String recordKey, String recordJson)
+      throws IOException, InterruptedException {
+    JsonNode record;
+    try {
+      record = recordMapper.readTree(recordJson);
+    } catch (IOException e) {
+      throw new IOException("Invalid frozen Bluesky record");
+    }
+    if (record == null || !record.isObject()) {
+      throw new IOException("Invalid frozen Bluesky record");
+    }
+    ObjectNode body = recordMapper.createObjectNode();
+    body.put("repo", did);
+    body.put("collection", "app.bsky.feed.post");
+    body.put("rkey", recordKey);
+    body.put("validate", true);
+    body.set("record", record);
+    JsonNode response =
+        sendRecordRequest(
+            recordRequest(recordCreateUri, body)
+                .header("Authorization", "Bearer " + accessJwt)
+                .build());
+    return new RecordResult(
+        requiredRecordText(response, "uri"), requiredRecordText(response, "cid"));
+  }
+
+  private HttpRequest.Builder recordRequest(URI uri, ObjectNode body) throws IOException {
+    return HttpRequest.newBuilder(uri)
+        .timeout(recordTimeout())
+        .header("Content-Type", "application/json")
+        .POST(HttpRequest.BodyPublishers.ofByteArray(recordMapper.writeValueAsBytes(body)));
+  }
+
+  private Duration recordTimeout() {
+    return Duration.ofSeconds(Math.min(60, Math.max(1, properties.getTimeoutSeconds())));
+  }
+
+  private JsonNode sendRecordRequest(HttpRequest request) throws IOException, InterruptedException {
+    var pending =
+        httpClient.sendAsync(
+            request,
+            HttpResponse.BodyHandlers.limiting(HttpResponse.BodyHandlers.ofByteArray(), 65536));
+    HttpResponse<byte[]> response;
+    try {
+      response = pending.get(recordTimeout().toMillis(), TimeUnit.MILLISECONDS);
+    } catch (InterruptedException e) {
+      pending.cancel(true);
+      throw e;
+    } catch (TimeoutException | ExecutionException e) {
+      pending.cancel(true);
+      throw new IOException("Bluesky record request failed");
+    }
+    String mediaType =
+        response.headers().firstValue("Content-Type").orElse("").split(";", 2)[0].trim();
+    if (response.statusCode() / 100 != 2 || !"application/json".equalsIgnoreCase(mediaType)) {
+      throw new IOException("Bluesky record response rejected");
+    }
+    try {
+      JsonNode result = recordMapper.readTree(response.body());
+      if (result != null && result.isObject()) {
+        return result;
+      }
+    } catch (IOException e) {
+      throw new IOException("Invalid Bluesky record response");
+    }
+    throw new IOException("Invalid Bluesky record response");
+  }
+
+  private static String requiredRecordText(JsonNode body, String field) throws IOException {
+    JsonNode value = body.get(field);
+    if (value == null || !value.isTextual() || value.textValue().isBlank()) {
+      throw new IOException("Invalid Bluesky record response");
+    }
+    return value.textValue();
   }
 
   /** Blueskyとの連携で用いる認証を返す。 */
