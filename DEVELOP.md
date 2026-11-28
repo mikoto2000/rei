@@ -18,7 +18,7 @@ Backend が Session と Run を所有します。軽量 CLI の Project / Sessio
 
 Bluesky 自発投稿案の調査・詳細設計・未解決の承認境界は
 [自発的行動 Phase 0](docs/autonomous-action-design.md) を参照してください。
-行動判断・投稿案永続化の基盤は [自発的行動の実装状況](docs/autonomous-action.md) を
+行動判断・投稿案永続化・Shell 手動生成は [自発的行動の実装状況](docs/autonomous-action.md) を
 参照してください。公開経路の安全性ゲートは未通過で、有効化していません。
 
 Responses API の段階実装は [設計と安全境界](docs/responses-api-design.md) と

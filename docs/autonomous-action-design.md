@@ -110,8 +110,10 @@ cron/zone、正の件数、正の期間、prompt と source のサイズを起�
 見送り理由は既定非公開。別の明示的な公開許可を経た feedback だけを取得する。
 取得後に LLM に秘密を除外させる方式は使わない。
 
-generator は機能別 endpoint の素の model と tools を除いた options から
-新しい ChatClient を組む。通常の system/advisor/Run context を再利用しない。
+generator は機能別 endpoint の素の model と tools を除いた options を使う。
+Phase 2 の実装では、新しい ChatClient にも pinned Spring AI が既定のツール実行 advisor を
+追加することを否定テストで確認したため、`ChatModel.call(Prompt)` を直接一回呼ぶ。
+通常の system/advisor/Run context を再利用せず、応答内のツール呼び出しは実行前に拒否する。
 信頼しない source を JSON のデータとして渡し、固定の安全指示と変更可能な
 投稿用 system prompt を分離する。source が指示を含んでもツール・データ取得能力は増えない。
 
