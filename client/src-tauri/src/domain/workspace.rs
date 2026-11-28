@@ -41,6 +41,14 @@ pub enum WorkspaceOperation {
         id: String,
         expected_revision: i32,
     },
+    AutonomousPublish {
+        id: String,
+        expected_revision: i32,
+    },
+    AutonomousReconcile {
+        id: String,
+        expected_revision: i32,
+    },
     AutonomousReject {
         id: String,
         expected_revision: i32,
