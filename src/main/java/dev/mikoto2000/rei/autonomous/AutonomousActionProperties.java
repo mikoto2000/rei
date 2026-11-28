@@ -4,6 +4,7 @@ import java.time.Duration;
 import java.time.ZoneId;
 import java.util.Objects;
 import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.boot.context.properties.bind.ConstructorBinding;
 import org.springframework.boot.context.properties.bind.DefaultValue;
 import org.springframework.scheduling.support.CronExpression;
 
@@ -17,6 +18,7 @@ public record AutonomousActionProperties(
 
   public record Bluesky(
       @DefaultValue("false") boolean enabled,
+      @DefaultValue("true") boolean scheduledEnabled,
       @DefaultValue("0 0 12 * * *") String cron,
       @DefaultValue("") String zone,
       @DefaultValue("1") int maxDraftsPerDay,
@@ -27,6 +29,7 @@ public record AutonomousActionProperties(
       @DefaultValue("PT1H") Duration regenerationCooldown,
       @DefaultValue("あなたは AI 秘書のれいです。公開許可された話題から投稿案を考えてください。話題がなければ SKIP を返してください。")
           String systemPrompt) {
+    @ConstructorBinding
     public Bluesky {
       CronExpression.parse(Objects.requireNonNull(cron, "cron"));
       zone = Objects.requireNonNull(zone, "zone");
@@ -38,6 +41,31 @@ public record AutonomousActionProperties(
       requirePositive(regenerationCooldown);
       if (systemPrompt == null || systemPrompt.isBlank() || systemPrompt.length() > 16384)
         throw new IllegalArgumentException("Invalid autonomous system prompt");
+    }
+
+    public Bluesky(
+        boolean enabled,
+        String cron,
+        String zone,
+        int maxDraftsPerDay,
+        int maxPendingDrafts,
+        Duration cooldown,
+        Duration draftExpiration,
+        int maxRegenerations,
+        Duration regenerationCooldown,
+        String systemPrompt) {
+      this(
+          enabled,
+          true,
+          cron,
+          zone,
+          maxDraftsPerDay,
+          maxPendingDrafts,
+          cooldown,
+          draftExpiration,
+          maxRegenerations,
+          regenerationCooldown,
+          systemPrompt);
     }
 
     private static void requirePositive(Duration duration) {

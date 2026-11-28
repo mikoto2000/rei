@@ -487,6 +487,7 @@ rei:
     enabled: false
     bluesky:
       enabled: false
+      scheduled-enabled: true # false にすると手動生成のみ（上の二つは有効のまま）
   bluesky:
     enabled: ${REI_BLUESKY_ENABLED:false}
     handle: ${REI_BLUESKY_HANDLE:}

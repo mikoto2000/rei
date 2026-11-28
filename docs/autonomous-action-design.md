@@ -208,6 +208,11 @@ draft 保存と通知 outbox を同時 commit。通知は安定した draft ID �
 shutdown.started または context close で新 claim を止め、生成処理もキャンセルする。
 時刻判定には注入した Clock を使う。Scheduler から transport へ接続しない。
 
+Phase 6 は `temporal.AutonomousOpportunityScheduler` を既存の `SecretaryTick` の観測先として接続する。
+独立したタイマーを追加せず、モデル呼び出しは一件ずつの専用ワーカーで行う。
+`bluesky.scheduled-enabled` は既定 true とし、false なら機能を有効にしたまま手動生成を利用できる。
+共通 policy の enabled とは分け、生成サービス・公開権限の条件には使わない。
+
 ## テスト・段階実装の検証計画
 
 Phase 1 以降は短い Red/Green/Refactor と小さいコミットで進め、
