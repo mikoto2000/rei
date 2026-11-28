@@ -69,6 +69,23 @@ public final class AutonomousPublicSources {
         .orElseThrow(() -> new NoSuchElementException("Public source not found"));
   }
 
+  /** Operator-only management view; never used to build model context. */
+  public List<Source> list(int limit) {
+    if (limit < 1 || limit > 200) throw new IllegalArgumentException("Invalid source page size");
+    return database.read(db -> {
+      var result = new ArrayList<Source>();
+      try (var query =
+          db.prepareStatement(
+              "SELECT id FROM autonomous_public_sources WHERE is_current=1 ORDER BY updated DESC,id LIMIT ?")) {
+        query.setInt(1, limit);
+        try (var rows = query.executeQuery()) {
+          while (rows.next()) result.add(find(db, rows.getString(1), null).orElseThrow());
+        }
+      }
+      return List.copyOf(result);
+    });
+  }
+
   public Source version(String id, int revision) {
     return database
         .read(db -> find(db, id, revision))

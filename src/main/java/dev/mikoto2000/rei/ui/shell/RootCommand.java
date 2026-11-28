@@ -46,6 +46,7 @@ import picocli.CommandLine.Command;
       dev.mikoto2000.rei.reflection.ReflectionCommand.class,
       dev.mikoto2000.rei.goal.GoalCommand.class,
       dev.mikoto2000.rei.attention.AttentionCommand.class,
+      dev.mikoto2000.rei.autonomous.AutonomousCommand.class,
       dev.mikoto2000.rei.temporal.TimerCommand.class,
       dev.mikoto2000.rei.core.dependency.DependencyCommand.class,
       dev.mikoto2000.rei.core.policy.ApprovalCommand.class,

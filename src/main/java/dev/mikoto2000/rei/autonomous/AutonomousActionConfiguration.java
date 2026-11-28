@@ -10,5 +10,12 @@ import org.springframework.context.annotation.Import;
  */
 @Configuration(proxyBeanMethods = false)
 @EnableConfigurationProperties(AutonomousActionProperties.class)
-@Import({AutonomousDraftStore.class, AutonomousDraftLifecycle.class, AutonomousPublicSources.class})
+@Import({
+  AutonomousDraftStore.class,
+  AutonomousDraftLifecycle.class,
+  AutonomousPublicSources.class,
+  AutonomousGenerationService.class,
+  AutonomousTargetResolver.class,
+  IsolatedAutonomousPostGenerator.class
+})
 public class AutonomousActionConfiguration {}

@@ -37,6 +37,8 @@ Memory, consolidation, vector, Artifact and Checkpoint limits remain unchanged.
 
 Version 23 adds autonomous opportunity, draft, revision and audit rows. The migration
 does not enable generation or publication. See [autonomous draft foundation](autonomous-action.md).
+Version 24 adds versioned, explicitly permitted public topics for autonomous draft generation.
+Editing removes permission; past bodies and consent revisions remain immutable.
 
 `StorageMigrationConfiguration` exposes a static, highest-priority
 `BeanFactoryPostProcessor`. It prepares storage before ordinary beans are created,
