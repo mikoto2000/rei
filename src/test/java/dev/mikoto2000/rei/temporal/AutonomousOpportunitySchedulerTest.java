@@ -1,7 +1,12 @@
 package dev.mikoto2000.rei.temporal;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import dev.mikoto2000.rei.autonomous.AutonomousActionProperties;
 import java.time.Clock;
 import java.time.Instant;
@@ -11,6 +16,7 @@ import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.AbstractExecutorService;
+import java.util.concurrent.Future;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -18,6 +24,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
+import org.slf4j.LoggerFactory;
 
 class AutonomousOpportunitySchedulerTest {
   private final MutableClock clock =
@@ -184,12 +191,148 @@ class AutonomousOpportunitySchedulerTest {
     }
   }
 
+  @Test
+  void anUnfinishedConsiderationDropsFurtherDueSlotsWithoutBuildingABacklog() {
+    try (var scheduler = scheduler("0 * * * * *", "", clock)) {
+      clock.at("2026-11-28T12:00:00Z");
+      scheduler.tick();
+      clock.at("2026-11-28T12:30:00Z");
+      scheduler.tick();
+      assertThat(worker.pending).hasSize(1);
+      worker.runNext();
+      scheduler.tick();
+      assertThat(worker.pending).isEmpty();
+      clock.at("2026-11-28T12:31:00Z");
+      scheduler.tick();
+      worker.runNext();
+      assertThat(considered)
+          .containsExactly(
+              "scheduled:bluesky:2026-11-28T12:00:00Z", "scheduled:bluesky:2026-11-28T12:31:00Z");
+    }
+  }
+
+  @Test
+  void shutdownBetweenAdmissionAndExecutionDoesNotStartTheConsideration() {
+    try (var scheduler = scheduler("0 * * * * *", "", clock)) {
+      clock.at("2026-11-28T12:00:00Z");
+      scheduler.tick();
+      assertThat(worker.pending).hasSize(1);
+      stopping.set(true);
+      worker.runNext();
+      assertThat(considered).isEmpty();
+      clock.at("2026-11-29T12:00:00Z");
+      scheduler.tick();
+      assertThat(worker.pending).isEmpty();
+    }
+  }
+
+  @Test
+  void anAlreadyStoppingStoreDoesNotAdmitAnyWork() {
+    try (var scheduler = scheduler("0 * * * * *", "", clock)) {
+      stopping.set(true);
+      clock.at("2026-11-28T12:00:00Z");
+      scheduler.tick();
+      assertThat(worker.pending).isEmpty();
+      assertThat(considered).isEmpty();
+    }
+  }
+
+  @Test
+  void submissionFailureDoesNotBreakTheClockOrRetryTheSameOccurrence() {
+    try (var scheduler = scheduler("0 * * * * *", "", clock)) {
+      worker.reject = true;
+      clock.at("2026-11-28T12:00:00Z");
+      assertThatCode(scheduler::tick).doesNotThrowAnyException();
+      worker.reject = false;
+      scheduler.tick();
+      assertThat(worker.pending).isEmpty();
+      clock.at("2026-11-28T12:01:00Z");
+      scheduler.tick();
+      worker.runNext();
+      assertThat(considered).containsExactly("scheduled:bluesky:2026-11-28T12:01:00Z");
+    }
+  }
+
+  @Test
+  void unexpectedFailureIsObservableWithoutProviderTextAndDoesNotBlockTheNextOpportunity() {
+    var logger = (Logger) LoggerFactory.getLogger(AutonomousOpportunityScheduler.class);
+    var previous = logger.getLevel();
+    var output = new ListAppender<ILoggingEvent>();
+    output.start();
+    logger.setLevel(Level.WARN);
+    logger.addAppender(output);
+    var fail = new AtomicBoolean(true);
+    try (var scheduler =
+        new AutonomousOpportunityScheduler(
+            settings(true, true, true, "0 * * * * *", ""),
+            clock,
+            stopping::get,
+            id -> {
+              considered.add(id);
+              if (fail.getAndSet(false)) throw new IllegalStateException("PRIVATE_PROVIDER_TEXT");
+            },
+            worker)) {
+      clock.at("2026-11-28T12:00:00Z");
+      scheduler.tick();
+      worker.runNext();
+      assertThat(output.list).isNotEmpty();
+      assertThat(output.list)
+          .allSatisfy(event -> {
+            assertThat(event.getFormattedMessage()).doesNotContain("PRIVATE_PROVIDER_TEXT");
+            assertThat(event.getThrowableProxy()).isNull();
+          });
+      scheduler.tick();
+      assertThat(worker.pending).isEmpty();
+      clock.at("2026-11-28T12:01:00Z");
+      scheduler.tick();
+      worker.runNext();
+      assertThat(considered).hasSize(2);
+    } finally {
+      logger.detachAppender(output);
+      logger.setLevel(previous);
+      output.stop();
+    }
+  }
+
+  @Test
+  void closeCancelsAcceptedWorkAndIsIdempotentForLaterTicks() {
+    var scheduler = scheduler("0 * * * * *", "", clock);
+    clock.at("2026-11-28T12:00:00Z");
+    scheduler.tick();
+    assertThat(worker.pending).hasSize(1);
+    var accepted = worker.pending.getFirst();
+    scheduler.close();
+    scheduler.close();
+    assertThat(((Future<?>) accepted).isCancelled()).isTrue();
+    assertThat(worker.isShutdown()).isTrue();
+    assertThat(worker.shutdownCalls).isEqualTo(1);
+    accepted.run();
+    clock.at("2026-11-29T12:00:00Z");
+    assertThatCode(scheduler::tick).doesNotThrowAnyException();
+    assertThat(considered).isEmpty();
+    assertThat(worker.pending).isEmpty();
+  }
+
+  @Test
+  void closePreservesTheCallersInterruptStatus() {
+    var scheduler = scheduler("0 * * * * *", "", clock);
+    try {
+      Thread.currentThread().interrupt();
+      scheduler.close();
+      assertThat(Thread.currentThread().isInterrupted()).isTrue();
+    } finally {
+      Thread.interrupted();
+    }
+  }
+
   private static final class ManualWorker extends AbstractExecutorService {
     private final ArrayDeque<Runnable> pending = new ArrayDeque<>();
     private boolean closed;
+    private boolean reject;
+    private int shutdownCalls;
 
     public void execute(Runnable task) {
-      if (closed) throw new RejectedExecutionException();
+      if (closed || reject) throw new RejectedExecutionException("PRIVATE_WORKER_TEXT");
       pending.addLast(task);
     }
 
@@ -203,6 +346,7 @@ class AutonomousOpportunitySchedulerTest {
     }
 
     public List<Runnable> shutdownNow() {
+      shutdownCalls++;
       closed = true;
       var tasks = List.copyOf(pending);
       pending.clear();
