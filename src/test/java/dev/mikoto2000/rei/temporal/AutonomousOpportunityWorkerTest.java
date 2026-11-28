@@ -22,6 +22,7 @@ import dev.mikoto2000.rei.autonomous.AutonomousPublicSources;
 import dev.mikoto2000.rei.autonomous.AutonomousTargetResolver;
 import dev.mikoto2000.rei.core.policy.ToolPermissionProperties;
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
@@ -103,6 +104,7 @@ class AutonomousOpportunityWorkerTest {
       verify(generation)
           .consider("scheduled:bluesky:2026-11-28T12:00:00Z", AutonomousDraft.Trigger.SCHEDULED);
     }
+    assertThat(actualThread.get().join(Duration.ofSeconds(5))).isTrue();
     assertThat(actualThread.get().isAlive()).isFalse();
   }
 
@@ -181,6 +183,7 @@ class AutonomousOpportunityWorkerTest {
       release.countDown();
     }
     assertThat(interrupted.await(5, TimeUnit.SECONDS)).isTrue();
+    assertThat(actualThread.get().join(Duration.ofSeconds(5))).isTrue();
     assertThat(actualThread.get().isAlive()).isFalse();
   }
 
@@ -260,6 +263,7 @@ class AutonomousOpportunityWorkerTest {
           assertThat(started.await(5, TimeUnit.SECONDS)).isTrue();
         });
     assertThat(interrupted.await(5, TimeUnit.SECONDS)).isTrue();
+    assertThat(actualThread.get().join(Duration.ofSeconds(5))).isTrue();
     assertThat(actualThread.get().isAlive()).isFalse();
   }
 
