@@ -53,6 +53,51 @@ class AutonomousActionConfigurationTest {
   }
 
   @Test
+  void publicationIsAvailableOnlyWhenBothFeatureFlagsAreExplicitlyEnabled() {
+    for (boolean enabled : new boolean[] {false, true}) {
+      for (boolean bluesky : new boolean[] {false, true}) {
+        context()
+            .withUserConfiguration(AutonomousPublicationService.class)
+            .withPropertyValues(
+                "rei.autonomous-action.enabled=" + enabled,
+                "rei.autonomous-action.bluesky.enabled=" + bluesky)
+            .withBean(AutonomousPublicationPermissions.class, () -> () -> false)
+            .withBean(
+                AutonomousPublicationTransport.class,
+                () ->
+                    new AutonomousPublicationTransport() {
+                      public void validate(String text) {
+                        throw new AssertionError("Startup must not send");
+                      }
+
+                      public Receipt send(
+                          AutonomousPostRecord record, java.util.function.BooleanSupplier gate) {
+                        throw new AssertionError("Startup must not send");
+                      }
+                    })
+            .withBean(
+                AutonomousTargetResolver.class,
+                () ->
+                    () -> {
+                      throw new AssertionError("Startup must not resolve");
+                    })
+            .withBean(
+                AutonomousPostGenerator.class,
+                () ->
+                    sources -> {
+                      throw new AssertionError("Startup must not infer");
+                    })
+            .run(context -> {
+              assertThat(context).hasNotFailed();
+              if (enabled && bluesky)
+                assertThat(context).hasSingleBean(AutonomousPublicationService.class);
+              else assertThat(context).doesNotHaveBean(AutonomousPublicationService.class);
+            });
+      }
+    }
+  }
+
+  @Test
   void foundationIsAvailableWithoutAChatModelAndRemainsDisabled() {
     context()
         .run(context -> {

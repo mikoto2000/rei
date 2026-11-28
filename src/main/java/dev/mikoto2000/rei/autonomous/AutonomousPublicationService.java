@@ -2,10 +2,15 @@ package dev.mikoto2000.rei.autonomous;
 
 import java.util.Objects;
 import java.util.Set;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
 
 /** Explicit selected-draft publication, separate from autonomous consideration and generation. */
 @Service
+@ConditionalOnProperty(
+    prefix = "rei.autonomous-action",
+    name = {"enabled", "bluesky.enabled"},
+    havingValue = "true")
 public final class AutonomousPublicationService {
   private static final Set<String> SAFE_FAILURE_CODES =
       Set.of(
