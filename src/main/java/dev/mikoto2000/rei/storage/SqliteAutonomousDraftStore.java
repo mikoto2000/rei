@@ -7,6 +7,7 @@ import dev.mikoto2000.rei.autonomous.AutonomousConflictException;
 import dev.mikoto2000.rei.autonomous.AutonomousDraft;
 import dev.mikoto2000.rei.autonomous.AutonomousDraftNotice;
 import dev.mikoto2000.rei.autonomous.AutonomousDraftStore;
+import dev.mikoto2000.rei.autonomous.AutonomousHistory;
 import dev.mikoto2000.rei.autonomous.AutonomousNotificationStore;
 import dev.mikoto2000.rei.autonomous.AutonomousPostRecord;
 import dev.mikoto2000.rei.autonomous.AutonomousPublicationStore;
@@ -36,7 +37,10 @@ import org.springframework.stereotype.Component;
 @Component
 @DependsOn("storageMigrationLease")
 public final class SqliteAutonomousDraftStore
-    implements AutonomousDraftStore, AutonomousPublicationStore, AutonomousNotificationStore {
+    implements AutonomousDraftStore,
+        AutonomousPublicationStore,
+        AutonomousNotificationStore,
+        AutonomousHistory {
   private final StorageDatabase database;
   private final Clock clock;
   private final AutonomousActionProperties settings;
@@ -78,6 +82,53 @@ public final class SqliteAutonomousDraftStore
 
   public boolean isStopping() {
     return stopping.get() || Thread.currentThread().isInterrupted();
+  }
+
+  public List<AutonomousDraft> published(int limit) {
+    validateHistoryLimit(limit);
+    return database.read(db -> {
+      var result = new ArrayList<AutonomousDraft>();
+      try (var query =
+              prepared(
+                  db,
+                  "SELECT d.* FROM autonomous_drafts d JOIN autonomous_publications p ON p.draft_id=d.id WHERE d.state='PUBLISHED' ORDER BY d.updated DESC,d.id LIMIT ?",
+                  limit);
+          var rows = query.executeQuery()) {
+        while (rows.next()) result.add(row(rows));
+      }
+      for (var draft : result) publicationJournal(db, draft);
+      return List.copyOf(result);
+    });
+  }
+
+  public List<AutonomousHistory.Opportunity> considerations(int limit) {
+    validateHistoryLimit(limit);
+    return database.read(db -> {
+      var result = new ArrayList<AutonomousHistory.Opportunity>();
+      try (var query =
+              prepared(
+                  db,
+                  "SELECT id,trigger,kind,status,created,updated,reason,draft_id FROM autonomous_opportunities ORDER BY created DESC,id LIMIT ?",
+                  limit);
+          var rows = query.executeQuery()) {
+        while (rows.next())
+          result.add(
+              new AutonomousHistory.Opportunity(
+                  rows.getString("id"),
+                  AutonomousDraft.Trigger.valueOf(rows.getString("trigger")),
+                  AutonomousHistory.Kind.valueOf(rows.getString("kind")),
+                  AutonomousHistory.Status.valueOf(rows.getString("status")),
+                  Instant.ofEpochMilli(rows.getLong("created")),
+                  Instant.ofEpochMilli(rows.getLong("updated")),
+                  rows.getString("reason"),
+                  rows.getString("draft_id")));
+      }
+      return List.copyOf(result);
+    });
+  }
+
+  private static void validateHistoryLimit(int limit) {
+    if (limit < 1 || limit > 200) throw new IllegalArgumentException("Invalid history page size");
   }
 
   public List<AutonomousDraftNotice> pendingNotices(int limit) {
